@@ -1,0 +1,2535 @@
+import type { Express, Request, Response, NextFunction } from "express";
+import type { Server } from "http";
+import { storage } from "./storage";
+import { api } from "@shared/routes";
+import { insertCostConfigSchema } from "@shared/schema";
+import { z } from "zod";
+import bcrypt from "bcryptjs";
+
+const BCRYPT_ROUNDS = 10;
+
+// ─── Auth Middleware ─────────────────────────────────────────────────────────
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ message: "Não autenticado" });
+  }
+  next();
+}
+
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId) {
+    return res.status(401).json({ message: "Não autenticado" });
+  }
+  if (req.session.userRole !== "admin") {
+    return res.status(403).json({ message: "Acesso restrito. Apenas administradores." });
+  }
+  next();
+}
+
+export async function registerRoutes(
+  httpServer: Server,
+  app: Express
+): Promise<Server> {
+
+  // Seed data function
+  async function seedDatabase() {
+    const defaultSettings = [
+      { key: "monthlyFixedCosts", value: 30000 },
+      { key: "expectedMonthlyRevenue", value: 120000 },
+      { key: "taxPercentage", value: 0.15 },
+      { key: "commissionPercentage", value: 0.05 },
+      { key: "targetMarginPercentage", value: 0.30 },
+      { key: "cardFeePercentage", value: 0.03 },
+      { key: "fixedCostAllocation", value: 0.15 },
+      { key: "targetMargin", value: 0.20 },
+      { key: "taxRate", value: 0.10 },
+      { key: "contributionMargin", value: 0.40 },
+      { key: "regionBZonePercent", value: 0.15 },
+      { key: "regionCZonePercent", value: 0.25 }
+    ];
+
+    const currentSettings = await storage.getSettings();
+    if (currentSettings.length === 0) {
+      for (const setting of defaultSettings) {
+        await storage.updateSetting(setting.key, setting.value);
+      }
+    }
+    
+    const DEFAULT_USERNAME = process.env.DEFAULT_ADMIN_USERNAME || "Admin";
+    const DEFAULT_PASSWORD =
+      process.env.DEFAULT_ADMIN_PASSWORD ||
+      (process.env.NODE_ENV === "production" ? "" : "dev-admin-password-change-me");
+
+    if (!DEFAULT_PASSWORD) {
+      throw new Error("DEFAULT_ADMIN_PASSWORD must be set before seeding the first admin user in production.");
+    }
+
+    let adminUser =
+      (await storage.getUserByUsername(DEFAULT_USERNAME)) ||
+      (await storage.getUserByUsername("admin")); // migrate lowercase legacy
+
+    if (!adminUser) {
+      const hashed = await bcrypt.hash(DEFAULT_PASSWORD, BCRYPT_ROUNDS);
+      await storage.createUser({ username: DEFAULT_USERNAME, password: hashed, role: "admin" });
+    } else {
+      // Ensure role is admin, username is correct, and password is bcrypt-hashed
+      const isHashed = adminUser.password.startsWith("$2");
+      if (!isHashed || adminUser.role !== "admin" || adminUser.username !== DEFAULT_USERNAME) {
+        const hashed = await bcrypt.hash(DEFAULT_PASSWORD, BCRYPT_ROUNDS);
+        await storage.updateUser(adminUser.id, {
+          username: DEFAULT_USERNAME,
+          password: hashed,
+          role: "admin",
+        });
+      }
+    }
+
+    // Seed waterproofing services
+    const waterproofingServices = [
+      { name: "Impermeabilização piscina + prainha + hidro", description: "Aplicação de argamassa polimérica semi-flexível 4,0 + argamassa polimérica flexível consumo 3,50 Kg/M² - estruturado com tela de poliéster + selamento dos tubos com poliuretano.", pricePerUnit: 95.15, materialConsumptionPerM2: 1.2, laborCostPerM2: 25.5, transportCostPerM2: 5.0, defaultMargin: 0.40 },
+      { name: "Impermeabilização manta líquida + tela V50", description: "Aplicação de argamassa polimérica semi-flexível + manta líquida consumo 2,0 Kg/M² - estruturado com tela de poliéster V-50 + selamento dos tubos com poliuretano.", pricePerUnit: 104.50, materialConsumptionPerM2: 1.1, laborCostPerM2: 28.0, transportCostPerM2: 5.5, defaultMargin: 0.40 },
+      { name: "Impermeabilização manta líquida", description: "Aplicação de argamassa polimérica semi-flexível 2,0 kg/m² + manta líquida consumo 2,0 Kg/M² - estruturado com tela de poliéster + selamento dos tubos com poliuretano.", pricePerUnit: 97.10, materialConsumptionPerM2: 1.0, laborCostPerM2: 26.0, transportCostPerM2: 5.0, defaultMargin: 0.40 },
+      { name: "Macdrain + tubo dreno + mac pipe", description: "Estendido sobre toda a manta asfáltica e nos rodapés colocado o tubo dreno enrolado sobre o Macdrain, após colocado sobre o mesmo, uma camada de pedra, facilitando a passagem de água.", pricePerUnit: 91.74, materialConsumptionPerM2: 1.3, laborCostPerM2: 24.0, transportCostPerM2: 5.5, defaultMargin: 0.40 },
+      { name: "Manta asfáltica poliéster 3mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica sob o primer, aquecida com maçarico a gás.", pricePerUnit: 80.04, materialConsumptionPerM2: 0.9, laborCostPerM2: 22.0, transportCostPerM2: 4.5, defaultMargin: 0.40 },
+      { name: "Manta asfáltica poliéster 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 92.67, materialConsumptionPerM2: 1.1, laborCostPerM2: 24.5, transportCostPerM2: 5.0, defaultMargin: 0.40 },
+      { name: "Manta ardosiada 3mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica ardosiada 3mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 93.48, materialConsumptionPerM2: 0.95, laborCostPerM2: 24.0, transportCostPerM2: 5.0, defaultMargin: 0.40 },
+      { name: "Manta ardosiada 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica ardosiada 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 106.08, materialConsumptionPerM2: 1.15, laborCostPerM2: 27.0, transportCostPerM2: 5.5, defaultMargin: 0.40 },
+      { name: "Manta alumínio 3mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica com acabamento em alumínio 3mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 89.66, materialConsumptionPerM2: 0.88, laborCostPerM2: 23.0, transportCostPerM2: 4.8, defaultMargin: 0.40 },
+      { name: "Manta alumínio 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica com acabamento em alumínio 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 96.96, materialConsumptionPerM2: 1.05, laborCostPerM2: 25.5, transportCostPerM2: 5.2, defaultMargin: 0.40 },
+      { name: "Manta torodin 3mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta torodin 3mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 83.84, materialConsumptionPerM2: 0.92, laborCostPerM2: 22.5, transportCostPerM2: 4.6, defaultMargin: 0.40 },
+      { name: "Manta torodin 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta torodin 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 95.70, materialConsumptionPerM2: 1.08, laborCostPerM2: 25.0, transportCostPerM2: 5.0, defaultMargin: 0.40 },
+      { name: "Manta anti raiz 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica anti-raiz 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 98.41, materialConsumptionPerM2: 1.1, laborCostPerM2: 26.5, transportCostPerM2: 5.2, defaultMargin: 0.40 },
+    ];
+
+    const existingServices = await storage.getServices();
+    if (existingServices.length === 0) {
+      for (const service of waterproofingServices) {
+        await storage.createService(service);
+      }
+    } else {
+      // Always sync descriptions and prices for existing services
+      for (const service of waterproofingServices) {
+        const existing = existingServices.find(s => s.name === service.name);
+        if (existing) {
+          await storage.updateService(existing.id, {
+            description: service.description,
+            pricePerUnit: service.pricePerUnit,
+          });
+        }
+      }
+    }
+
+    // Seed cost config defaults on startup
+    const existingCostConfig = await storage.getCostConfig();
+    if (!existingCostConfig) {
+      await storage.updateCostConfig({
+        laborDailyRate: 800,
+        laborHourlyRate: 100,
+        transportCostPerKm: 1.5,
+        transportMinimumCost: 50,
+        minMarginPercent: 0.30,
+        idealMarginPercent: 0.40,
+        alertMarginPercent: 0.30,
+        prohibitedMarginPercent: 0.25,
+        minimumServiceValue: 1000,
+      });
+    }
+
+    // Seed default WhatsApp flows
+    const existingFlows = await storage.getWhatsappFlows();
+    if (existingFlows.length === 0) {
+      const atendimentoButtons = JSON.stringify([
+        { id: "1", text: "📋 Fazer um orçamento", responseMessage: "Ótimo! Posso te ajudar passo a passo. 😊\n\nQual é o problema de infiltração que você está enfrentando?\n\n• Laje / Terraço\n• Piscina\n• Parede / Fachada\n• Banheiro / Área molhada\n• Outro problema\n\nDescreva o que está acontecendo e enviaremos um orçamento rápido! 🏗️" },
+        { id: "2", text: "👨 Falar com atendente", responseMessage: "Entendido! Vou transferir você para um de nossos atendentes agora. 🔔\n\n⏰ Horário de atendimento:\nSegunda a Sexta: *8h às 18h*\nSábado: *8h às 13h*\n\nAguarde um instante, já vamos te atender! 😊" },
+        { id: "3", text: "❓ Tirar dúvida técnica", responseMessage: "Claro! Sobre qual assunto é a sua dúvida? 🤔\n\n🔵 *Manta Asfáltica* — para lajes e terraços\n🟢 *Impermeabilização Líquida* — para banheiros e áreas molhadas\n🔵 *Piscinas* — impermeabilização e reparos\n🔴 *Garantia* — sobre prazos e cobertura\n❓ *Outra dúvida* — pode perguntar à vontade!\n\nQual desses temas é o seu? 👇" },
+        { id: "4", text: "🏗️ Ver obras realizadas", responseMessage: "Amamos mostrar nosso trabalho! 😄\n\n📸 *Exemplos de obras recentes:*\n\n✅ Impermeabilização de laje residencial — Bairro Jardins (antes: infiltração severa | depois: totalmente seco)\n\n✅ Recuperação de piscina — Condomínio Alfa (antes: vazamento total | depois: estanque e funcional)\n\n✅ Impermeabilização de fachada — Ed. Central (antes: manchas e bolhas | depois: fachada nova)\n\nQuer um orçamento para seu projeto? É só pedir! 🏗️" },
+      ]);
+      const defaultFlows = [
+        { name: "Atendimento Inicial (Novo Contato)", trigger: "atendimento_inicial", messageType: "buttons", message: "Olá! 👋 Somos da *IMPPEL Impermeabilização*.\n\nTudo bem? Como podemos te ajudar hoje?", buttons: atendimentoButtons, includePdf: false, active: true, sortOrder: 0 },
+        { name: "Orçamento Enviado", trigger: "orcamento_enviado", messageType: "text", message: "Olá {nome_cliente}! 👋\n\nSeu orçamento *#{numero_orcamento}* da IMPPEL foi enviado com sucesso!\n\n📋 *Serviço:* {tipo_servico}\n💰 *Valor:* {valor_orcamento}\n\nQualquer dúvida, estou à disposição!\n\nEquipe IMPPEL 🏗️", includePdf: true, active: true, sortOrder: 1 },
+        { name: "Orçamento Aprovado", trigger: "orcamento_aprovado", messageType: "text", message: "Parabéns {nome_cliente}! 🎉\n\nSeu orçamento *#{numero_orcamento}* foi aprovado!\n\nEstamos muito felizes em tê-lo como cliente. Em breve nossa equipe entrará em contato para agendar o início dos serviços.\n\nObrigado pela confiança!\nEquipe IMPPEL 🏗️", includePdf: false, active: true, sortOrder: 2 },
+        { name: "Follow-up 2 Dias", trigger: "followup_2d", messageType: "text", message: "Olá {nome_cliente}! 😊\n\nPassaram 2 dias desde que enviamos seu orçamento *#{numero_orcamento}*.\n\nGostaria de saber se ficou alguma dúvida ou se precisa de mais informações?\n\nEstamos à disposição!\nEquipe IMPPEL 🏗️", includePdf: false, active: true, sortOrder: 3 },
+        { name: "Follow-up 5 Dias", trigger: "followup_5d", messageType: "text", message: "Olá {nome_cliente}! 🤔\n\nJá faz 5 dias desde o envio do seu orçamento *#{numero_orcamento}*.\n\nSabemos que a decisão é importante. Podemos conversar sobre condições especiais ou tirar qualquer dúvida?\n\nEquipe IMPPEL 🏗️", includePdf: false, active: true, sortOrder: 4 },
+        { name: "Obra Finalizada", trigger: "obra_finalizada", messageType: "text", message: "Olá {nome_cliente}! 🎊\n\nSua obra de *{tipo_servico}* foi concluída com sucesso!\n\nObrigado pela confiança na IMPPEL. Em anexo você encontra o relatório completo da obra e as informações de garantia.\n\n⭐ Sua opinião é muito importante para nós!\n\nEquipe IMPPEL 🏗️", includePdf: true, active: true, sortOrder: 5 },
+        { name: "Lembrete de Manutenção (12 meses)", trigger: "manutencao_12m", messageType: "text", message: "Olá {nome_cliente}! 🔧\n\nJá faz *12 meses* desde a conclusão da sua obra de *{tipo_servico}*!\n\nRecomendamos uma vistoria preventiva para garantir a longevidade da impermeabilização.\n\nEntre em contato conosco para agendar!\n\nEquipe IMPPEL 🏗️", includePdf: false, active: true, sortOrder: 6 },
+      ];
+      for (const flow of defaultFlows) {
+        await storage.createWhatsappFlow(flow);
+      }
+    } else {
+      // Ensure the Atendimento Inicial flow exists even if other flows were seeded before
+      // no-op: atendimento_inicial already exists or was just updated via SQL migration
+    }
+  }
+  
+  // Call seed async (fire and forget for now, or await if preferred)
+  seedDatabase().catch(console.error);
+
+  // Auth
+  app.post(api.auth.login.path, async (req, res) => {
+    try {
+      const input = api.auth.login.input.parse(req.body);
+      const user = await storage.getUserByUsername(input.username);
+      if (!user) {
+        return res.status(401).json({ message: "Usuário ou senha inválidos" });
+      }
+      // Support both bcrypt-hashed passwords (start with $2) and legacy plaintext
+      const isHashed = user.password.startsWith("$2");
+      const passwordValid = isHashed
+        ? await bcrypt.compare(input.password, user.password)
+        : input.password === user.password;
+      if (!passwordValid) {
+        return res.status(401).json({ message: "Usuário ou senha inválidos" });
+      }
+      req.session.userId = user.id;
+      req.session.userRole = user.role;
+      res.status(200).json(user);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(401).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+  
+  app.get(api.auth.me.path, async (req, res) => {
+    if (!req.session?.userId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      req.session.destroy(() => {});
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+    // Attach permissions from the user's custom role (if any)
+    let permissions: Record<string, boolean> = {};
+    if ((user as any).roleId) {
+      const customRole = await storage.getRole((user as any).roleId);
+      if (customRole) {
+        try { permissions = JSON.parse(customRole.permissions); } catch {}
+      }
+    }
+    res.status(200).json({ ...user, permissions });
+  });
+
+  app.post(api.auth.logout.path, (req, res) => {
+    req.session.destroy(() => {});
+    res.status(200).json({ message: "Logged out" });
+  });
+
+  // User management (admin only)
+  app.get("/api/users", requireAdmin, async (req, res) => {
+    try {
+      const allUsers = await storage.getUsers();
+      const allRoles = await storage.getRoles();
+      res.json(allUsers.map(u => {
+        const uAny = u as any;
+        const customRole = allRoles.find(r => r.id === uAny.roleId);
+        return {
+          id: u.id, username: u.username, role: u.role,
+          roleId: uAny.roleId || null,
+          jobTitle: uAny.jobTitle || null,
+          roleName: customRole?.name || null,
+          roleLabel: customRole?.label || null,
+        };
+      }));
+    } catch {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.post("/api/users", requireAdmin, async (req, res) => {
+    try {
+      const { username, password, role, roleId, jobTitle } = req.body;
+      if (!username || !password) return res.status(400).json({ message: "Usuário e senha obrigatórios" });
+      const existing = await storage.getUserByUsername(username);
+      if (existing) return res.status(400).json({ message: "Nome de usuário já existe" });
+      const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const newUser = await storage.createUser({ username, password: hashedPassword, role: role || "funcionario" } as any);
+      if (roleId) await storage.updateUserRoleId(newUser.id, roleId);
+      if (jobTitle) await storage.updateUserJobTitle(newUser.id, jobTitle);
+      const updatedUser = await storage.getUser(newUser.id);
+      const uAny = updatedUser as any;
+      res.status(201).json({ id: newUser.id, username: newUser.username, role: newUser.role, roleId: uAny?.roleId, jobTitle: uAny?.jobTitle });
+    } catch {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/users/:id/role", requireAdmin, async (req, res) => {
+    try {
+      const { role } = req.body;
+      if (!["admin", "funcionario"].includes(role)) return res.status(400).json({ message: "Role inválida" });
+      const updated = await storage.updateUserRole(Number(req.params.id), role);
+      if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
+      res.json({ id: updated.id, username: updated.username, role: updated.role });
+    } catch {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/users/:id/password", requireAdmin, async (req, res) => {
+    try {
+      const { password } = req.body;
+      if (!password || password.length < 4) return res.status(400).json({ message: "Senha deve ter no mínimo 4 caracteres" });
+      const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+      const updated = await storage.updateUserPassword(Number(req.params.id), hashedPassword);
+      if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
+      res.json({ message: "Senha atualizada" });
+    } catch {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/users/:id/role-id", requireAdmin, async (req, res) => {
+    try {
+      const { roleId } = req.body;
+      const updated = await storage.updateUserRoleId(Number(req.params.id), roleId ?? null);
+      if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
+      res.json({ message: "Cargo atualizado" });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/users/:id/job-title", requireAdmin, async (req, res) => {
+    try {
+      const { jobTitle } = req.body;
+      const updated = await storage.updateUserJobTitle(Number(req.params.id), jobTitle || "");
+      if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
+      res.json({ message: "Título atualizado" });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Roles / Cargos ───────────────────────────────────────────────────────
+  app.get("/api/roles", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getRoles()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/roles", requireAdmin, async (req, res) => {
+    try {
+      const { name, label, permissions, isDefault } = req.body;
+      if (!name || !label) return res.status(400).json({ message: "name e label são obrigatórios" });
+      const role = await storage.createRole({ name, label, permissions: JSON.stringify(permissions || {}), isDefault: isDefault || false });
+      res.status(201).json(role);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/roles/:id", requireAdmin, async (req, res) => {
+    try {
+      const { name, label, permissions, isDefault } = req.body;
+      const upd: any = {};
+      if (name !== undefined) upd.name = name;
+      if (label !== undefined) upd.label = label;
+      if (permissions !== undefined) upd.permissions = JSON.stringify(permissions);
+      if (isDefault !== undefined) upd.isDefault = isDefault;
+      const updated = await storage.updateRole(Number(req.params.id), upd);
+      if (!updated) return res.status(404).json({ message: "Cargo não encontrado" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/roles/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteRole(Number(req.params.id));
+      res.status(204).send();
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (id === req.session.userId) return res.status(400).json({ message: "Não é possível excluir seu próprio usuário" });
+      await storage.deleteUser(id);
+      res.status(204).send();
+    } catch {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // ─── Route-level access control ────────────────────────────────────────────
+  // Admin-only API routes
+  const adminOnlyPrefixes = [
+    "/api/clients", "/api/leads", "/api/jobs", "/api/work-orders",
+    "/api/payments", "/api/products", "/api/services", "/api/inventory",
+    "/api/transactions", "/api/settings", "/api/cost-config",
+    "/api/priority-rules", "/api/dashboard", "/api/catalog",
+    "/api/job-tracking", "/api/scheduling",
+  ];
+  app.use((req, res, next) => {
+    const isAdminRoute = adminOnlyPrefixes.some(p => req.path.startsWith(p));
+    if (isAdminRoute) return requireAdmin(req, res, next);
+    next();
+  });
+  // Obra registros require at least auth (funcionarios allowed)
+  app.use("/api/obra-registros", requireAuth);
+
+  // Clients
+  app.get(api.clients.list.path, async (req, res) => {
+    const clientList = await storage.getClients();
+    res.json(clientList);
+  });
+  app.get(api.clients.get.path, async (req, res) => {
+    const client = await storage.getClient(Number(req.params.id));
+    if (!client) return res.status(404).json({ message: "Not found" });
+    res.json(client);
+  });
+  app.post(api.clients.create.path, async (req, res) => {
+    try {
+      const input = api.clients.create.input.parse(req.body);
+      const client = await storage.createClient(input);
+      res.status(201).json(client);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.put(api.clients.update.path, async (req, res) => {
+    try {
+      const input = api.clients.update.input.parse(req.body);
+      const client = await storage.updateClient(Number(req.params.id), input);
+      if (!client) return res.status(404).json({ message: "Not found" });
+      res.json(client);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.delete(api.clients.delete.path, async (req, res) => {
+    await storage.deleteClient(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // Services
+  app.get(api.services.list.path, async (req, res) => {
+    const serviceList = await storage.getServices();
+    res.json(serviceList);
+  });
+  app.get(api.services.get.path, async (req, res) => {
+    const service = await storage.getService(Number(req.params.id));
+    if (!service) return res.status(404).json({ message: "Not found" });
+    res.json(service);
+  });
+  app.post(api.services.create.path, async (req, res) => {
+    try {
+      const input = api.services.create.input.parse(req.body);
+      const service = await storage.createService(input);
+      res.status(201).json(service);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.put(api.services.update.path, async (req, res) => {
+    try {
+      const input = api.services.update.input.parse(req.body);
+      const service = await storage.updateService(Number(req.params.id), input);
+      if (!service) return res.status(404).json({ message: "Not found" });
+      res.json(service);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.delete(api.services.delete.path, async (req, res) => {
+    await storage.deleteService(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // Dashboard Metrics
+  app.get(api.dashboard.metrics.path, async (req, res) => {
+    const jobs = await storage.getJobs();
+    const leads = await storage.getLeads();
+    
+    const monthlyRevenue = jobs.reduce((sum, j) => sum + (j.realPriceSold || 0), 0);
+    const monthlyProfit = jobs.reduce((sum, j) => sum + (j.profit || 0), 0);
+    const averageMargin = jobs.length > 0 
+      ? jobs.reduce((sum, j) => sum + (j.margin || 0), 0) / jobs.length 
+      : 0;
+      
+    const jobsInProgress = jobs.filter(j => j.status === 'In progress').length;
+    const newLeads = leads.filter(l => l.status === 'New Lead').length;
+    
+    // simple conversion rate: jobs with closed/completed vs total leads + jobs
+    const totalContacts = leads.length + jobs.length;
+    const conversionRate = totalContacts > 0 ? (jobs.length / totalContacts) * 100 : 0;
+
+    res.json({
+      monthlyRevenue,
+      monthlyProfit,
+      averageMargin,
+      jobsInProgress,
+      newLeads,
+      conversionRate,
+      cashBalance: monthlyProfit // simplified
+    });
+  });
+
+  const getLeadOperationalStatus = (leadId: number, jobs: any[], workOrders: any[]) => {
+    const leadJobs = jobs.filter(job => Number(job.leadId) === leadId);
+    const leadJobIds = new Set(leadJobs.map(job => Number(job.id)));
+    const hasWorkOrder = workOrders.some(order => order.jobId && leadJobIds.has(Number(order.jobId)));
+    if (hasWorkOrder) return "Qualified";
+    if (leadJobs.length > 0) return "Proposal";
+    return null;
+  };
+
+  const reconcileLeadOperationalStatus = async (leadId: number) => {
+    const lead = await storage.getLead(leadId);
+    if (!lead) return null;
+
+    const [jobs, workOrders] = await Promise.all([storage.getJobs(), storage.getWorkOrders()]);
+    const operationalStatus = getLeadOperationalStatus(leadId, jobs, workOrders);
+    if (!operationalStatus || lead.status === operationalStatus) return lead;
+    return storage.updateLead(leadId, { status: operationalStatus });
+  };
+
+  const reconcileAllLeadOperationalStatuses = async () => {
+    const [leads, jobs, workOrders] = await Promise.all([storage.getLeads(), storage.getJobs(), storage.getWorkOrders()]);
+    const updatedLeads = [];
+
+    for (const lead of leads) {
+      const operationalStatus = getLeadOperationalStatus(lead.id, jobs, workOrders);
+      if (operationalStatus && lead.status !== operationalStatus) {
+        updatedLeads.push(await storage.updateLead(lead.id, { status: operationalStatus }) || lead);
+      } else {
+        updatedLeads.push(lead);
+      }
+    }
+
+    return updatedLeads;
+  };
+
+  const updateLeadForJobFlow = async (job: any) => {
+    if (job?.leadId) await reconcileLeadOperationalStatus(Number(job.leadId));
+  };
+
+  const updateLeadForWorkOrderFlow = async (workOrder: any) => {
+    if (!workOrder?.jobId) return;
+    const job = await storage.getJob(Number(workOrder.jobId));
+    if (job?.leadId) await reconcileLeadOperationalStatus(Number(job.leadId));
+  };
+
+  // Leads
+  app.get(api.leads.list.path, async (req, res) => {
+    const leads = await reconcileAllLeadOperationalStatuses();
+    res.json(leads);
+  });
+  app.post(api.leads.create.path, async (req, res) => {
+    try {
+      const input = api.leads.create.input.parse(req.body);
+      const lead = await storage.createLead(input);
+      res.status(201).json(lead);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.put(api.leads.update.path, async (req, res) => {
+    try {
+      const input = api.leads.update.input.parse(req.body);
+      const lead = await storage.updateLead(Number(req.params.id), input);
+      if (!lead) return res.status(404).json({ message: "Not found" });
+      res.json(lead);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.delete(api.leads.delete.path, async (req, res) => {
+    await storage.deleteLead(Number(req.params.id));
+    res.status(204).end();
+  });
+
+  // Jobs
+  app.get(api.jobs.list.path, async (req, res) => {
+    const jobs = await storage.getJobs();
+    res.json(jobs);
+  });
+  app.get(api.jobs.get.path, async (req, res) => {
+    const job = await storage.getJob(Number(req.params.id));
+    if (!job) return res.status(404).json({ message: "Not found" });
+    res.json(job);
+  });
+  app.post(api.jobs.create.path, async (req, res) => {
+    try {
+      const input = api.jobs.create.input.parse(req.body);
+      const job = await storage.createJob(input);
+      await updateLeadForJobFlow(job);
+      res.status(201).json(job);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.put(api.jobs.update.path, async (req, res) => {
+    try {
+      const input = api.jobs.update.input.parse(req.body);
+      const previousJob = await storage.getJob(Number(req.params.id));
+      const job = await storage.updateJob(Number(req.params.id), input);
+      if (!job) return res.status(404).json({ message: "Not found" });
+      await updateLeadForJobFlow(job);
+      if (previousJob?.leadId && previousJob.leadId !== job.leadId) {
+        await reconcileLeadOperationalStatus(Number(previousJob.leadId));
+      }
+      res.json(job);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.delete(api.jobs.delete.path, async (req, res) => {
+    const job = await storage.getJob(Number(req.params.id));
+    await storage.deleteJob(Number(req.params.id));
+    if (job?.leadId) await reconcileLeadOperationalStatus(Number(job.leadId));
+    res.status(204).end();
+  });
+
+  // Work Orders
+  app.get(api.workOrders.list.path, async (req, res) => {
+    const orders = await storage.getWorkOrders();
+    res.json(orders);
+  });
+  app.get(api.workOrders.get.path, async (req, res) => {
+    const order = await storage.getWorkOrder(Number(req.params.id));
+    res.json(order);
+  });
+  app.post(api.workOrders.create.path, async (req, res) => {
+    const order = await storage.createWorkOrder(req.body);
+    await updateLeadForWorkOrderFlow(order);
+    res.status(201).json(order);
+  });
+  app.put(api.workOrders.update.path, async (req, res) => {
+    const previousOrder = await storage.getWorkOrder(Number(req.params.id));
+    const order = await storage.updateWorkOrder(Number(req.params.id), req.body);
+    if (order) await updateLeadForWorkOrderFlow(order);
+    if (previousOrder?.jobId && previousOrder.jobId !== order?.jobId) {
+      await updateLeadForWorkOrderFlow(previousOrder);
+    }
+    res.json(order);
+  });
+  // PATCH for partial updates (used by RegistroObra page)
+  app.patch("/api/work-orders/:id", requireAuth, async (req, res) => {
+    try {
+      const order = await storage.updateWorkOrder(Number(req.params.id), req.body);
+      if (!order) return res.status(404).json({ message: "Não encontrado" });
+      await updateLeadForWorkOrderFlow(order);
+      res.json(order);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete(api.workOrders.delete.path, async (req, res) => {
+    const order = await storage.getWorkOrder(Number(req.params.id));
+    await storage.deleteWorkOrder(Number(req.params.id));
+    if (order) await updateLeadForWorkOrderFlow(order);
+    res.status(204).end();
+  });
+
+  // ── Finalizar Obra: mark Concluída + auto-create Garantia ────────────────
+  const extractPhoneFromJobContacts = (job: any) => {
+    if (!job?.clientes) return "";
+    try {
+      const contacts = JSON.parse(job.clientes);
+      if (!Array.isArray(contacts)) return "";
+      return contacts.find((contact: any) => contact?.telefone)?.telefone || "";
+    } catch {
+      return "";
+    }
+  };
+
+  const resolveWorkOrderCustomerContext = async (workOrder: any) => {
+    const job = workOrder?.jobId ? await storage.getJob(Number(workOrder.jobId)) : null;
+    const directClient = workOrder?.clientId ? await storage.getClient(Number(workOrder.clientId)) : null;
+    const jobClient = job?.clientId ? await storage.getClient(Number(job.clientId)) : null;
+    const lead = job?.leadId ? await storage.getLead(Number(job.leadId)) : null;
+    const client = directClient || jobClient;
+    const clientPhone = client?.phone || extractPhoneFromJobContacts(job) || lead?.phone || null;
+
+    return {
+      job,
+      lead,
+      client,
+      clientName: workOrder?.clientName || job?.clientName || client?.name || lead?.name || "Cliente",
+      clientPhone,
+      serviceType: workOrder?.serviceType || job?.serviceType || "Serviço",
+    };
+  };
+
+  const ensurePostSaleRecordsForWorkOrder = async (workOrder: any, warranty: any, completedDate: string) => {
+    const context = await resolveWorkOrderCustomerContext(workOrder);
+    const originNote = `Origem: POS_VENDA_AUTOMATICO | OS #${workOrder.id}${warranty?.id ? ` | Garantia #${warranty.id}` : ""}`;
+
+    const npsResponses = await storage.getNpsResponses();
+    const existingNps = npsResponses.find((item: any) => Number(item.workOrderId) === Number(workOrder.id));
+    const nps = existingNps || await storage.createNpsResponse({
+      workOrderId: workOrder.id,
+      jobId: workOrder.jobId || null,
+      clientName: context.clientName,
+      clientPhone: context.clientPhone,
+      sentAt: null,
+      respondedAt: null,
+      score: null,
+      comment: originNote,
+      status: "pendente",
+    });
+
+    const reminders = await storage.getMaintenanceReminders();
+    const existingReminder = reminders.find((item: any) => Number(item.workOrderId) === Number(workOrder.id));
+    const maintenanceReminder = existingReminder || await storage.createMaintenanceReminder({
+      workOrderId: workOrder.id,
+      jobId: workOrder.jobId || null,
+      clientName: context.clientName,
+      clientPhone: context.clientPhone,
+      serviceType: context.serviceType,
+      completedDate,
+      reminder12SentAt: null,
+      reminder24SentAt: null,
+      notes: `${originNote} | Lembretes sugeridos para 12 e 24 meses.`,
+    });
+
+    return { nps, maintenanceReminder };
+  };
+
+  const ensureWarrantyForWorkOrder = async (workOrder: any, startDate: string, endDate: string, today: Date) => {
+    const context = await resolveWorkOrderCustomerContext(workOrder);
+    const warranties = await storage.getWarranties();
+    const existingWarranty = warranties.find((warranty: any) => Number(warranty.workOrderId) === Number(workOrder.id));
+    const notes = `Gerada automaticamente ao finalizar OS #${workOrder.id} em ${today.toLocaleDateString("pt-BR")} | Origem: OS_FINALIZADA`;
+
+    if (existingWarranty) {
+      const updatedWarranty = await storage.updateWarranty(existingWarranty.id, {
+        jobId: existingWarranty.jobId || workOrder.jobId || null,
+        clientName: existingWarranty.clientName || context.clientName,
+        clientPhone: existingWarranty.clientPhone || context.clientPhone,
+        serviceType: existingWarranty.serviceType || context.serviceType,
+        warrantyMonths: existingWarranty.warrantyMonths || 12,
+        startDate: existingWarranty.startDate || startDate,
+        endDate: existingWarranty.endDate || endDate,
+        status: existingWarranty.status || "ativa",
+        notes: existingWarranty.notes || notes,
+      } as any);
+      return updatedWarranty || existingWarranty;
+    }
+
+    return storage.createWarranty({
+      workOrderId: workOrder.id,
+      jobId: workOrder.jobId || null,
+      clientName: context.clientName,
+      clientPhone: context.clientPhone,
+      serviceType: context.serviceType,
+      warrantyMonths: 12,
+      startDate,
+      endDate,
+      status: "ativa",
+      notes,
+    });
+  };
+
+  app.post("/api/work-orders/:id/finalizar", requireAuth, async (req, res) => {
+    try {
+      const woId = Number(req.params.id);
+      const wo = await storage.getWorkOrder(woId);
+      if (!wo) return res.status(404).json({ message: "OS não encontrada" });
+
+      // 1. Mark as Concluída
+      await storage.updateWorkOrder(woId, { status: "Concluída" });
+
+      const today = new Date();
+      const startDate = today.toISOString().split("T")[0];
+      const endDate = new Date(today);
+      endDate.setMonth(endDate.getMonth() + 12);
+      const endDateStr = endDate.toISOString().split("T")[0];
+
+      const warranty = await ensureWarrantyForWorkOrder(wo, startDate, endDateStr, today);
+      const postSale = await ensurePostSaleRecordsForWorkOrder(wo, warranty, startDate);
+
+      res.json({ success: true, warranty, postSale });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Inventory
+  app.get(api.inventory.list.path, async (req, res) => {
+    const items = await storage.getInventoryItems();
+    res.json(items);
+  });
+  app.post(api.inventory.create.path, async (req, res) => {
+    try {
+      const input = api.inventory.create.input.parse(req.body);
+      const item = await storage.createInventoryItem(input);
+      res.status(201).json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.put(api.inventory.update.path, async (req, res) => {
+    try {
+      const input = api.inventory.update.input.parse(req.body);
+      const item = await storage.updateInventoryItem(Number(req.params.id), input);
+      if (!item) return res.status(404).json({ message: "Not found" });
+      res.json(item);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+  app.delete(api.inventory.delete.path, async (req, res) => {
+    await storage.deleteInventoryItem(Number(req.params.id));
+    res.status(204).end();
+  });
+  app.get("/api/inventory-movements", async (req, res) => {
+    const { inventoryId } = req.query;
+    if (inventoryId) {
+      const movs = await storage.getInventoryMovementsByProduct(Number(inventoryId));
+      return res.json(movs);
+    }
+    const movs = await storage.getInventoryMovements();
+    res.json(movs);
+  });
+  app.post("/api/inventory-movements", async (req, res) => {
+    try {
+      const { inventoryId, productName, type, quantity, date, month, notes } = req.body;
+      if (!inventoryId || !type || !quantity) return res.status(400).json({ message: "inventoryId, type e quantity são obrigatórios" });
+      const today = date || new Date().toISOString().split("T")[0];
+      const mov = await storage.createInventoryMovement({
+        inventoryId: Number(inventoryId), productName, type, quantity: Number(quantity), date: today,
+        month: month || new Date().toLocaleString("pt-BR", { month: "long", year: "numeric" }), notes,
+      });
+      res.status(201).json(mov);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  app.put("/api/inventory-movements/:id", async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { inventoryId, productName, type, quantity, date, notes } = req.body;
+      if (!inventoryId || !type || !quantity || !date) return res.status(400).json({ message: "Campos obrigatórios ausentes" });
+      const monthLabel = new Date(date + "T12:00:00").toLocaleString("pt-BR", { month: "long", year: "numeric" });
+      const updated = await storage.updateInventoryMovement(id, {
+        inventoryId: Number(inventoryId), productName, type, quantity: Number(quantity),
+        date, month: monthLabel, notes,
+      });
+      if (!updated) return res.status(404).json({ message: "Movimentação não encontrada" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  app.delete("/api/inventory-movements/:id", async (req, res) => {
+    try {
+      await storage.deleteInventoryMovement(Number(req.params.id));
+      res.status(204).end();
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  // Batch: register multiple movements in one request — each item has its own type
+  app.post("/api/inventory-movements/batch", async (req, res) => {
+    try {
+      const { date, items, notes } = req.body as {
+        date: string; notes?: string;
+        items: { inventoryId: number; productName: string; quantity: number; type: string }[];
+      };
+      if (!date || !items?.length) return res.status(400).json({ message: "date e items são obrigatórios" });
+      const monthLabel = new Date(date + "T12:00:00").toLocaleString("pt-BR", { month: "long", year: "numeric" });
+
+      // Deduplicate by inventoryId — keep only the LAST entry per product
+      const deduped = new Map<number, typeof items[0]>();
+      for (const item of items) {
+        const id = Number(item.inventoryId);
+        if (id && item.quantity) deduped.set(id, item);
+      }
+
+      const results = [];
+      for (const item of deduped.values()) {
+        const qty = Number(item.quantity);
+        if (!qty) continue;
+        const itemType = item.type === "SAÍDA" ? "SAÍDA" : "ENTRADA";
+        const mov = await storage.createInventoryMovement({
+          inventoryId: Number(item.inventoryId),
+          productName: item.productName,
+          type: itemType,
+          quantity: qty,
+          date,
+          month: monthLabel,
+          notes,
+        });
+        results.push(mov);
+      }
+      res.status(201).json(results);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  const paymentTransactionMarker = (paymentId: number) => `Origem: PAGAMENTO | Payment #${paymentId}`;
+
+  const isCompletedPayment = (payment: any) => String(payment?.status || "").toLowerCase() === "completed";
+
+  const getJobTotalValue = (job: any) => Number(job?.realPriceSold || job?.calculatedPrice || 0);
+
+  const recalculateJobPaymentStatus = async (jobId: number) => {
+    const job = await storage.getJob(jobId);
+    if (!job) return null;
+
+    const jobPayments = await storage.getPaymentsByJobId(jobId);
+    const totalPaid = jobPayments
+      .filter(isCompletedPayment)
+      .reduce((sum, payment: any) => sum + Number(payment.amount || 0), 0);
+    const totalValue = getJobTotalValue(job);
+    const newStatus = totalValue > 0 && totalPaid >= totalValue
+      ? "paid"
+      : totalPaid > 0
+        ? "partial"
+        : "pending";
+
+    await storage.updateJob(job.id, { paymentStatus: newStatus });
+    return { jobId, totalPaid, totalValue, paymentStatus: newStatus };
+  };
+
+  const removePaymentFinancialTransactions = async (paymentId: number) => {
+    const marker = paymentTransactionMarker(paymentId);
+    const currentTransactions = await storage.getTransactions();
+    const linkedTransactions = currentTransactions.filter((transaction: any) =>
+      String(transaction.description || "").includes(marker)
+    );
+
+    for (const transaction of linkedTransactions) {
+      await storage.deleteTransaction(transaction.id);
+    }
+
+    return linkedTransactions.length;
+  };
+
+  const syncPaymentWithFinancialTransactions = async (payment: any) => {
+    if (!payment?.id) return null;
+
+    if (!isCompletedPayment(payment)) {
+      await removePaymentFinancialTransactions(payment.id);
+      return { paymentId: payment.id, createdTransaction: null };
+    }
+
+    const job = await storage.getJob(Number(payment.jobId));
+    const marker = paymentTransactionMarker(payment.id);
+    const description = [
+      marker,
+      `Job #${payment.jobId}`,
+      `Cliente: ${payment.clientName}`,
+      `Metodo: ${payment.paymentMethod}`,
+      job?.orcamentoNumero ? `Orcamento #${job.orcamentoNumero}` : null,
+    ].filter(Boolean).join(" | ");
+
+    const currentTransactions = await storage.getTransactions();
+    const linkedTransactions = currentTransactions.filter((transaction: any) =>
+      String(transaction.description || "").includes(marker)
+    );
+    const existing = linkedTransactions[0];
+    const isAlreadySynced = linkedTransactions.length === 1 &&
+      existing.type === "inflow" &&
+      existing.category === "Pagamento de orçamento" &&
+      Number(existing.amount || 0) === Number(payment.amount || 0) &&
+      existing.description === description;
+
+    if (isAlreadySynced) {
+      return { paymentId: payment.id, createdTransaction: existing };
+    }
+
+    await removePaymentFinancialTransactions(payment.id);
+
+    const createdTransaction = await storage.createTransaction({
+      type: "inflow",
+      category: "Pagamento de orçamento",
+      amount: Number(payment.amount || 0),
+      description,
+    } as any);
+
+    return { paymentId: payment.id, createdTransaction };
+  };
+
+  const reconcileAllPaymentsWithFinance = async () => {
+    const payments = await storage.getPayments();
+    const touchedJobIds = new Set<number>();
+
+    for (const payment of payments as any[]) {
+      await syncPaymentWithFinancialTransactions(payment);
+      if (payment.jobId) touchedJobIds.add(Number(payment.jobId));
+    }
+
+    for (const jobId of touchedJobIds) {
+      await recalculateJobPaymentStatus(jobId);
+    }
+
+    return { payments: payments.length, jobs: touchedJobIds.size };
+  };
+
+  // Transactions
+  app.get(api.transactions.list.path, async (req, res) => {
+    await reconcileAllPaymentsWithFinance();
+    const ts = await storage.getTransactions();
+    res.json(ts);
+  });
+  app.post(api.transactions.create.path, async (req, res) => {
+    try {
+      const input = api.transactions.create.input.parse(req.body);
+      const t = await storage.createTransaction(input);
+      res.status(201).json(t);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // Settings
+  app.get(api.settings.list.path, async (req, res) => {
+    const s = await storage.getSettings();
+    res.json(s);
+  });
+  app.post(api.settings.updateBulk.path, async (req, res) => {
+    try {
+      const { settings: items } = api.settings.updateBulk.input.parse(req.body);
+      for (const item of items) {
+        await storage.updateSetting(item.key, item.value);
+      }
+      const updated = await storage.getSettings();
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // Payments
+  app.get("/api/payments", async (req, res) => {
+    try {
+      await reconcileAllPaymentsWithFinance();
+      const payments = await storage.getPayments();
+      res.json(payments);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.post("/api/payments", async (req, res) => {
+    try {
+      const payment = await storage.createPayment(req.body);
+      await syncPaymentWithFinancialTransactions(payment);
+      await recalculateJobPaymentStatus(payment.jobId);
+      res.json(payment);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/payments/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const previousPayment = await storage.getPayment(id);
+      if (!previousPayment) return res.status(404).json({ message: "Pagamento nao encontrado" });
+      const payment = await storage.updatePayment(id, req.body);
+      if (!payment) return res.status(404).json({ message: "Pagamento nao encontrado" });
+      await syncPaymentWithFinancialTransactions(payment);
+      await recalculateJobPaymentStatus(payment.jobId);
+      if (previousPayment.jobId !== payment.jobId) {
+        await recalculateJobPaymentStatus(previousPayment.jobId);
+      }
+      res.json(payment);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.delete("/api/payments/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const previousPayment = await storage.getPayment(id);
+      if (!previousPayment) return res.status(404).json({ message: "Pagamento nao encontrado" });
+      await removePaymentFinancialTransactions(id);
+      await storage.deletePayment(id);
+      await recalculateJobPaymentStatus(previousPayment.jobId);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // Products / Catalog
+  app.get("/api/products", async (req, res) => {
+    try {
+      const products = await storage.getProducts();
+      res.json(products);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.post("/api/products", async (req, res) => {
+    try {
+      const product = await storage.createProduct(req.body);
+      res.json(product);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/products/:id", async (req, res) => {
+    try {
+      const product = await storage.updateProduct(parseInt(req.params.id), req.body);
+      res.json(product);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.delete("/api/products/:id", async (req, res) => {
+    try {
+      await storage.deleteProduct(parseInt(req.params.id));
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // Job Tracking
+  app.get("/api/job-tracking/:workOrderId", async (req, res) => {
+    try {
+      const tracking = await storage.getJobTracking(parseInt(req.params.workOrderId));
+      res.json(tracking || null);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.post("/api/job-tracking", async (req, res) => {
+    try {
+      const tracking = await storage.createJobTracking(req.body);
+      res.json(tracking);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/job-tracking/:id", async (req, res) => {
+    try {
+      const tracking = await storage.updateJobTracking(parseInt(req.params.id), req.body);
+      res.json(tracking);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // Priority Rules
+  app.get("/api/priority-rules", async (req, res) => {
+    try {
+      const rules = await storage.getPriorityRules();
+      res.json(rules || {});
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/priority-rules", async (req, res) => {
+    try {
+      const updated = await storage.updatePriorityRules(req.body);
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // Cost Config
+  app.get("/api/cost-config", async (req, res) => {
+    try {
+      let config = await storage.getCostConfig();
+      if (!config) {
+        config = await storage.updateCostConfig({
+          laborDailyRate: 800,
+          laborHourlyRate: 100,
+          transportCostPerKm: 1.5,
+          transportMinimumCost: 50,
+          minMarginPercent: 0.30,
+          idealMarginPercent: 0.40,
+          alertMarginPercent: 0.30,
+          prohibitedMarginPercent: 0.25,
+          minimumServiceValue: 1000,
+        });
+      }
+      res.json(config);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/cost-config", async (req, res) => {
+    try {
+      const parsed = insertCostConfigSchema.partial().safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Dados inválidos", errors: parsed.error.flatten().fieldErrors });
+      }
+      const updated = await storage.updateCostConfig(parsed.data);
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // Obra Registros
+  app.get("/api/obra-registros", async (req, res) => {
+    try {
+      const tipo = req.query.tipo as string | undefined;
+      const registros = tipo
+        ? await storage.getObraRegistrosByTipo(tipo)
+        : await storage.getObraRegistros();
+      res.json(registros);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.get("/api/obra-registros/:id", async (req, res) => {
+    try {
+      const registro = await storage.getObraRegistro(Number(req.params.id));
+      if (!registro) return res.status(404).json({ message: "Registro não encontrado" });
+      res.json(registro);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.post("/api/obra-registros", async (req, res) => {
+    try {
+      const created = await storage.createObraRegistro(req.body);
+      res.status(201).json(created);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.patch("/api/obra-registros/:id", async (req, res) => {
+    try {
+      const updated = await storage.updateObraRegistro(Number(req.params.id), req.body);
+      if (!updated) return res.status(404).json({ message: "Registro não encontrado" });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.delete("/api/obra-registros/:id", async (req, res) => {
+    try {
+      await storage.deleteObraRegistro(Number(req.params.id));
+      res.status(204).send();
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // Job Statuses (custom WhatsApp messages)
+  const DEFAULT_JOB_STATUSES = [
+    { name: "Lead",        sortOrder: 1, includePdf: true,  generateOs: false, message: "Olá {cliente}! Segue o orçamento solicitado da IMPPEL. Qualquer dúvida estou à disposição.\n\n📋 Orçamento Nº {numero} — IMPPEL Impermeabilizações" },
+    { name: "Estimando",   sortOrder: 2, includePdf: true,  generateOs: false, message: "Olá {cliente}! Segue o orçamento solicitado da IMPPEL. Qualquer dúvida estou à disposição.\n\n📋 Orçamento Nº {numero} — IMPPEL Impermeabilizações" },
+    { name: "Aprovado",    sortOrder: 3, includePdf: true,  generateOs: true,  message: "Olá {cliente}! Seu orçamento foi aprovado. Segue o documento oficial para sua análise.\n\n📋 Orçamento Nº {numero} — IMPPEL Impermeabilizações" },
+    { name: "Agendada",    sortOrder: 4, includePdf: true,  generateOs: false, message: "Olá {cliente}! Aqui está o orçamento atualizado. Podemos agendar a execução?\n\n📋 Orçamento Nº {numero} — IMPPEL Impermeabilizações" },
+    { name: "Em Progresso",sortOrder: 5, includePdf: false, generateOs: false, message: "Olá {cliente}! Aqui está o orçamento atualizado. Podemos agendar a execução?\n\n📋 Orçamento Nº {numero} — IMPPEL Impermeabilizações" },
+    { name: "Concluída",   sortOrder: 6, includePdf: true,  generateOs: false, message: "Olá {cliente}! Segue o orçamento final da obra realizada. Obrigado pela confiança!\n\n📋 Orçamento Nº {numero} — IMPPEL Impermeabilizações" },
+    { name: "Faturada",    sortOrder: 7, includePdf: false, generateOs: false, message: "Olá {cliente}! Segue o orçamento final da obra realizada. Obrigado pela confiança!\n\n📋 Orçamento Nº {numero} — IMPPEL Impermeabilizações" },
+  ];
+
+  app.get("/api/job-statuses", async (req, res) => {
+    try {
+      let list = await storage.getJobStatuses();
+      // Seed defaults if empty
+      if (list.length === 0) {
+        for (const s of DEFAULT_JOB_STATUSES) {
+          await storage.createJobStatus(s as any);
+        }
+        list = await storage.getJobStatuses();
+      }
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.post("/api/job-statuses", async (req, res) => {
+    try {
+      const created = await storage.createJobStatus(req.body);
+      res.status(201).json(created);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.put("/api/job-statuses/:id", async (req, res) => {
+    try {
+      const updated = await storage.updateJobStatus(Number(req.params.id), req.body);
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.delete("/api/job-statuses/:id", async (req, res) => {
+    try {
+      await storage.deleteJobStatus(Number(req.params.id));
+      res.status(204).send();
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  // ─── Payment Methods (Formas de Pagamento) ───
+  app.get("/api/payment-methods", async (req, res) => {
+    try {
+      const pms = await storage.getPaymentMethods();
+      res.json(pms);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/payment-methods", async (req, res) => {
+    try {
+      const { name, discountPercent, active, notes } = req.body;
+      if (!name) return res.status(400).json({ message: "name obrigatório" });
+      const pm = await storage.createPaymentMethod({ name, discountPercent: Number(discountPercent) || 0, active: active !== false, notes });
+      res.status(201).json(pm);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/payment-methods/:id", async (req, res) => {
+    try {
+      const { name, discountPercent, active, notes } = req.body;
+      const pm = await storage.updatePaymentMethod(Number(req.params.id), { name, discountPercent: discountPercent !== undefined ? Number(discountPercent) : undefined, active, notes });
+      if (!pm) return res.status(404).json({ message: "Não encontrado" });
+      res.json(pm);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/payment-methods/:id", async (req, res) => {
+    try {
+      await storage.deletePaymentMethod(Number(req.params.id));
+      res.status(204).send();
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Payment Conditions (Condições de Pagamento) ─────────────────────────────
+  app.get("/api/payment-conditions", async (req, res) => {
+    try { res.json(await storage.getPaymentConditions()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/payment-conditions", async (req, res) => {
+    try {
+      const { name, fullText, active, sortOrder } = req.body;
+      if (!name || !fullText) return res.status(400).json({ message: "name e fullText são obrigatórios" });
+      const pc = await storage.createPaymentCondition({ name, fullText, active: active !== false, sortOrder: Number(sortOrder) || 0 });
+      res.status(201).json(pc);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/payment-conditions/:id", async (req, res) => {
+    try {
+      const { name, fullText, active, sortOrder } = req.body;
+      const pc = await storage.updatePaymentCondition(Number(req.params.id), { name, fullText, active, sortOrder: sortOrder !== undefined ? Number(sortOrder) : undefined });
+      if (!pc) return res.status(404).json({ message: "Não encontrado" });
+      res.json(pc);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/payment-conditions/:id", async (req, res) => {
+    try {
+      await storage.deletePaymentCondition(Number(req.params.id));
+      res.status(204).send();
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Obra Consumo Logs — per-user material consumption tracking ──────────────
+  type MaterialReconciliationBucket = {
+    key: string;
+    inventoryId: number | null;
+    name: string;
+    planned: number;
+    withdrawn: number;
+    consumed: number;
+    returned: number;
+  };
+
+  const toNumber = (value: any) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const normalizeMaterialName = (value: any) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+
+  const materialKey = (inventoryId: any, name: any) => {
+    const invId = Number(inventoryId);
+    if (Number.isFinite(invId) && invId > 0) return `inv:${invId}`;
+    return `name:${normalizeMaterialName(name)}`;
+  };
+
+  const readJsonArray = (value: any): any[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const addMaterialAmount = (
+    buckets: Map<string, MaterialReconciliationBucket>,
+    input: { inventoryId?: any; name?: any; productName?: any; materialName?: any; quantity?: any },
+    field: "planned" | "withdrawn" | "consumed" | "returned",
+  ) => {
+    const name = String(input.name || input.productName || input.materialName || "Material sem nome");
+    const invId = Number(input.inventoryId);
+    const key = materialKey(input.inventoryId, name);
+    const nameOnlyKey = materialKey(null, name);
+    let current = buckets.get(key);
+    if (!current && key !== nameOnlyKey) {
+      current = buckets.get(nameOnlyKey);
+      if (current) {
+        buckets.delete(nameOnlyKey);
+        current.key = key;
+      }
+    }
+    current = current || {
+      key,
+      inventoryId: Number.isFinite(invId) && invId > 0 ? invId : null,
+      name,
+      planned: 0,
+      withdrawn: 0,
+      consumed: 0,
+      returned: 0,
+    };
+    current[field] += Math.ceil(toNumber(input.quantity));
+    if (!current.inventoryId && Number.isFinite(invId) && invId > 0) current.inventoryId = invId;
+    if (current.name === "Material sem nome" && name) current.name = name;
+    buckets.set(key, current);
+  };
+
+  const buildWorkOrderMaterialReconciliation = async (workOrderId: number) => {
+    const workOrder = await storage.getWorkOrder(workOrderId);
+    if (!workOrder) return null;
+
+    const buckets = new Map<string, MaterialReconciliationBucket>();
+    for (const material of readJsonArray((workOrder as any).materialsNeeded)) {
+      addMaterialAmount(buckets, {
+        inventoryId: material.inventoryId,
+        name: material.name || material.productName || material.materialName,
+        quantity: material.quantity,
+      }, "planned");
+    }
+
+    const withdrawals = (await storage.getMaterialWithdrawals()).filter((withdrawal: any) => Number(withdrawal.workOrderId) === workOrderId);
+    for (const withdrawal of withdrawals) {
+      for (const item of withdrawal.items || []) {
+        addMaterialAmount(buckets, {
+          inventoryId: item.inventoryId,
+          productName: item.productName,
+          quantity: item.quantity,
+        }, "withdrawn");
+        const returnedQuantity = Math.ceil(toNumber(item.returnedQuantity));
+        if (returnedQuantity > 0) {
+          addMaterialAmount(buckets, {
+            inventoryId: item.inventoryId,
+            productName: item.productName,
+            quantity: returnedQuantity,
+          }, "returned");
+        }
+      }
+    }
+
+    const logs = await storage.getObraConsumoLogs(workOrderId);
+    for (const log of logs) {
+      addMaterialAmount(buckets, {
+        inventoryId: log.inventoryId,
+        materialName: log.materialName,
+        quantity: log.quantity,
+      }, "consumed");
+    }
+
+    const items = Array.from(buckets.values())
+      .map(item => {
+        const availableFromWithdrawal = Math.max(item.withdrawn - item.returned, 0);
+        const pending = Math.max(item.withdrawn - item.returned - item.consumed, 0);
+        const directConsumed = Math.max(item.consumed - availableFromWithdrawal, 0);
+        const plannedVariance = item.planned > 0 ? item.consumed - item.planned : 0;
+        const status = directConsumed > 0
+          ? "direct"
+          : pending > 0
+            ? "pending"
+            : plannedVariance > 0
+              ? "exceeded"
+              : "ok";
+        return {
+          ...item,
+          availableFromWithdrawal,
+          pending,
+          directConsumed,
+          plannedVariance,
+          status,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+
+    return {
+      workOrderId,
+      items,
+      summary: {
+        planned: items.reduce((sum, item) => sum + item.planned, 0),
+        withdrawn: items.reduce((sum, item) => sum + item.withdrawn, 0),
+        consumed: items.reduce((sum, item) => sum + item.consumed, 0),
+        returned: items.reduce((sum, item) => sum + item.returned, 0),
+        pending: items.reduce((sum, item) => sum + item.pending, 0),
+        directConsumed: items.reduce((sum, item) => sum + item.directConsumed, 0),
+      },
+      hasPending: items.some(item => item.pending > 0),
+      hasDirectConsumption: items.some(item => item.directConsumed > 0),
+      generatedAt: new Date().toISOString(),
+    };
+  };
+
+  const getMaterialCoverageBeforeConsumption = async (workOrderId: number, inventoryId: any, materialName: string) => {
+    const reconciliation = await buildWorkOrderMaterialReconciliation(workOrderId);
+    const key = materialKey(inventoryId, materialName);
+    const item = reconciliation?.items.find((entry: any) => entry.key === key);
+    const availableFromWithdrawal = item ? Math.max(item.withdrawn - item.returned - item.consumed, 0) : 0;
+    return { reconciliation, item, availableFromWithdrawal };
+  };
+
+  app.get("/api/obra-consumo-logs", requireAuth, async (req, res) => {
+    try {
+      const workOrderId = Number(req.query.workOrderId);
+      if (!workOrderId) return res.json([]);
+      const logs = await storage.getObraConsumoLogs(workOrderId);
+      res.json(logs);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/work-orders/:id/material-reconciliation", requireAuth, async (req, res) => {
+    try {
+      const workOrderId = Number(req.params.id);
+      const reconciliation = await buildWorkOrderMaterialReconciliation(workOrderId);
+      if (!reconciliation) return res.status(404).json({ message: "OS nao encontrada" });
+      res.json(reconciliation);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/obra-consumo-logs", requireAuth, async (req, res) => {
+    try {
+      const userId = (req as any).session.userId as number;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+      const { workOrderId, serviceName, materialName, inventoryId, quantity, notes } = req.body;
+      if (!workOrderId || !serviceName || !materialName || quantity == null) {
+        return res.status(400).json({ message: "workOrderId, serviceName, materialName e quantity são obrigatórios" });
+      }
+      const ceiledQty = Math.ceil(Number(quantity));
+      if (ceiledQty <= 0) return res.status(400).json({ message: "Quantidade deve ser maior que zero" });
+      const { availableFromWithdrawal } = await getMaterialCoverageBeforeConsumption(Number(workOrderId), inventoryId, materialName);
+      const coveredByWithdrawal = Math.min(ceiledQty, availableFromWithdrawal);
+      const directStockQuantity = inventoryId ? Math.max(ceiledQty - coveredByWithdrawal, 0) : 0;
+      const traceNotes = [
+        coveredByWithdrawal > 0 ? `Origem: CONSUMO_OS_RECONCILIADO | Coberto por retirada: ${coveredByWithdrawal}` : "Origem: CONSUMO_DIRETO_OS",
+        directStockQuantity > 0 ? `Baixa direta de estoque: ${directStockQuantity}` : "Sem baixa adicional de estoque",
+        notes ? `Obs.: ${notes}` : null,
+      ].filter(Boolean).join(" | ");
+      const log = await storage.createObraConsumoLog({
+        workOrderId: Number(workOrderId),
+        serviceName,
+        materialName,
+        inventoryId: inventoryId ? Number(inventoryId) : null,
+        quantity: ceiledQty,
+        userId,
+        username: user.username,
+        notes: traceNotes || null,
+      });
+      // ── Baixa automática de estoque ───────────────────────────────────────
+      if (inventoryId && directStockQuantity > 0) {
+        const invId = Number(inventoryId);
+        const today = new Date().toISOString().split("T")[0];
+        const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+        const month = monthNames[new Date().getMonth()];
+        await storage.createInventoryMovement({
+          inventoryId: invId,
+          productName: materialName,
+          type: "SAÍDA",
+          quantity: directStockQuantity,
+          date: today,
+          month,
+          notes: `Origem: CONSUMO_DIRETO_OS | ConsumoLog #${log.id} | OS #${workOrderId} | Servico: ${serviceName} | Quantidade: ${directStockQuantity}`,
+        });
+      }
+      res.status(201).json(log);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/obra-consumo-logs/:id", requireAuth, async (req, res) => {
+    try {
+      const consumoLogId = Number(req.params.id);
+      const log = await storage.getObraConsumoLog(consumoLogId);
+      if (log) {
+        const directMovements = (await storage.getInventoryMovements()).filter((movement: any) =>
+          String(movement.notes || "").includes(`ConsumoLog #${consumoLogId}`) &&
+          String(movement.notes || "").includes("Origem: CONSUMO_DIRETO_OS")
+        );
+        for (const movement of directMovements) {
+          await storage.deleteInventoryMovement(movement.id);
+        }
+      }
+      await storage.deleteObraConsumoLog(consumoLogId);
+      res.status(204).send();
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Contracts ───────────────────────────────────────────────────────────────
+  app.get("/api/contracts", async (req, res) => {
+    try { res.json(await storage.getContracts()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.get("/api/contracts/:id", async (req, res) => {
+    try {
+      const c = await storage.getContract(Number(req.params.id));
+      if (!c) return res.status(404).json({ message: "Não encontrado" });
+      res.json(c);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/contracts", async (req, res) => {
+    try {
+      const { jobId, workOrderId, clientName, serviceType, contractText, status, valor } = req.body;
+      if (!clientName) return res.status(400).json({ message: "clientName obrigatório" });
+      const c = await storage.createContract({ jobId: jobId || null, workOrderId: workOrderId || null, clientName, serviceType, contractText, status: status || "gerado", valor: valor ? Number(valor) : null });
+      res.status(201).json(c);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/contracts/:id", async (req, res) => {
+    try {
+      const c = await storage.updateContract(Number(req.params.id), req.body);
+      if (!c) return res.status(404).json({ message: "Não encontrado" });
+      res.json(c);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/contracts/:id", async (req, res) => {
+    try { await storage.deleteContract(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Warranties ──────────────────────────────────────────────────────────────
+  app.get("/api/warranties", async (req, res) => {
+    try { res.json(await storage.getWarranties()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/warranties", async (req, res) => {
+    try {
+      const { workOrderId, jobId, clientName, clientPhone, serviceType, warrantyMonths, startDate, endDate, status, notes } = req.body;
+      if (!clientName || !serviceType || !startDate || !endDate) return res.status(400).json({ message: "Campos obrigatórios: clientName, serviceType, startDate, endDate" });
+      const w = await storage.createWarranty({ workOrderId: workOrderId || null, jobId: jobId || null, clientName, clientPhone: clientPhone || null, serviceType, warrantyMonths: Number(warrantyMonths) || 12, startDate, endDate, status: status || "ativa", notes: notes || null });
+      res.status(201).json(w);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/warranties/:id", async (req, res) => {
+    try {
+      const w = await storage.updateWarranty(Number(req.params.id), req.body);
+      if (!w) return res.status(404).json({ message: "Não encontrado" });
+      res.json(w);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/warranties/:id", async (req, res) => {
+    try { await storage.deleteWarranty(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Warranty Incidents ───────────────────────────────────────────────────────
+  app.get("/api/warranty-incidents", async (req, res) => {
+    try {
+      const warrantyId = Number(req.query.warrantyId);
+      if (!warrantyId) return res.json([]);
+      res.json(await storage.getWarrantyIncidents(warrantyId));
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/warranty-incidents", async (req, res) => {
+    try {
+      const { warrantyId, description, cost, technicianName, resolvedAt, status, notes } = req.body;
+      if (!warrantyId || !description) return res.status(400).json({ message: "warrantyId e description obrigatórios" });
+      const wi = await storage.createWarrantyIncident({ warrantyId: Number(warrantyId), description, cost: cost ? Number(cost) : 0, technicianName: technicianName || null, resolvedAt: resolvedAt || null, status: status || "aberta", notes: notes || null });
+      res.status(201).json(wi);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/warranty-incidents/:id", async (req, res) => {
+    try {
+      const wi = await storage.updateWarrantyIncident(Number(req.params.id), req.body);
+      if (!wi) return res.status(404).json({ message: "Não encontrado" });
+      res.json(wi);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/warranty-incidents/:id", async (req, res) => {
+    try { await storage.deleteWarrantyIncident(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Production Logs ─────────────────────────────────────────────────────────
+  app.get("/api/production-logs", async (req, res) => {
+    try { res.json(await storage.getProductionLogs()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/production-logs", async (req, res) => {
+    try {
+      const { workOrderId, jobId, clientName, technicianName, userId, date, hoursWorked, squareMeters, serviceType, notes } = req.body;
+      if (!technicianName || !date) return res.status(400).json({ message: "technicianName e date obrigatórios" });
+      const pl = await storage.createProductionLog({ workOrderId: workOrderId || null, jobId: jobId || null, clientName: clientName || null, technicianName, userId: userId || null, date, hoursWorked: Number(hoursWorked) || 0, squareMeters: Number(squareMeters) || 0, serviceType: serviceType || null, notes: notes || null });
+      res.status(201).json(pl);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/production-logs/:id", async (req, res) => {
+    try {
+      const pl = await storage.updateProductionLog(Number(req.params.id), req.body);
+      if (!pl) return res.status(404).json({ message: "Não encontrado" });
+      res.json(pl);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/production-logs/:id", async (req, res) => {
+    try { await storage.deleteProductionLog(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── NPS Responses ───────────────────────────────────────────────────────────
+  app.get("/api/nps-responses", async (req, res) => {
+    try { res.json(await storage.getNpsResponses()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/nps-responses", async (req, res) => {
+    try {
+      const { workOrderId, jobId, clientName, clientPhone, score, comment, status } = req.body;
+      if (!clientName) return res.status(400).json({ message: "clientName obrigatório" });
+      const r = await storage.createNpsResponse({ workOrderId: workOrderId || null, jobId: jobId || null, clientName, clientPhone: clientPhone || null, sentAt: new Date(), score: score != null ? Number(score) : null, comment: comment || null, status: status || "pendente" });
+      res.status(201).json(r);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/nps-responses/:id", async (req, res) => {
+    try {
+      const { score, comment, status } = req.body;
+      const upd: any = { status };
+      if (score != null) upd.score = Number(score);
+      if (comment != null) upd.comment = comment;
+      if (status === "respondido") upd.respondedAt = new Date();
+      const r = await storage.updateNpsResponse(Number(req.params.id), upd);
+      if (!r) return res.status(404).json({ message: "Não encontrado" });
+      res.json(r);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/nps-responses/:id", async (req, res) => {
+    try { await storage.deleteNpsResponse(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Maintenance Reminders ───────────────────────────────────────────────────
+  app.get("/api/maintenance-reminders", async (req, res) => {
+    try { res.json(await storage.getMaintenanceReminders()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/maintenance-reminders", async (req, res) => {
+    try {
+      const { workOrderId, jobId, clientName, clientPhone, serviceType, completedDate, notes } = req.body;
+      if (!clientName || !completedDate) return res.status(400).json({ message: "clientName e completedDate obrigatórios" });
+      const mr = await storage.createMaintenanceReminder({ workOrderId: workOrderId || null, jobId: jobId || null, clientName, clientPhone: clientPhone || null, serviceType: serviceType || null, completedDate, notes: notes || null });
+      res.status(201).json(mr);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/maintenance-reminders/:id", async (req, res) => {
+    try {
+      const mr = await storage.updateMaintenanceReminder(Number(req.params.id), req.body);
+      if (!mr) return res.status(404).json({ message: "Não encontrado" });
+      res.json(mr);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/maintenance-reminders/:id", async (req, res) => {
+    try { await storage.deleteMaintenanceReminder(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Quote PDF Templates CRUD ────────────────────────────────────────────────
+  app.get("/api/quote-templates", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getQuoteTemplates()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.get("/api/quote-templates/default", requireAdmin, async (req, res) => {
+    try {
+      const t = await storage.getDefaultQuoteTemplate();
+      if (!t) return res.status(404).json({ message: "Nenhum template padrão definido" });
+      res.json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.get("/api/quote-templates/:id", requireAdmin, async (req, res) => {
+    try {
+      const t = await storage.getQuoteTemplate(Number(req.params.id));
+      if (!t) return res.status(404).json({ message: "Não encontrado" });
+      res.json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/quote-templates", requireAdmin, async (req, res) => {
+    try {
+      const { name, isDefault, config } = req.body;
+      if (!name || !config) return res.status(400).json({ message: "name e config obrigatórios" });
+      const t = await storage.createQuoteTemplate({ name, isDefault: !!isDefault, config: typeof config === "string" ? config : JSON.stringify(config) });
+      if (t.isDefault) await storage.setDefaultQuoteTemplate(t.id);
+      res.status(201).json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/quote-templates/:id", requireAdmin, async (req, res) => {
+    try {
+      const { name, isDefault, config } = req.body;
+      const upd: any = {};
+      if (name !== undefined) upd.name = name;
+      if (isDefault !== undefined) upd.isDefault = !!isDefault;
+      if (config !== undefined) upd.config = typeof config === "string" ? config : JSON.stringify(config);
+      const t = await storage.updateQuoteTemplate(Number(req.params.id), upd);
+      if (!t) return res.status(404).json({ message: "Não encontrado" });
+      res.json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/quote-templates/:id/set-default", requireAdmin, async (req, res) => {
+    try {
+      await storage.setDefaultQuoteTemplate(Number(req.params.id));
+      const t = await storage.getQuoteTemplate(Number(req.params.id));
+      res.json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/quote-templates/:id", requireAdmin, async (req, res) => {
+    try { await storage.deleteQuoteTemplate(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── WhatsApp Templates CRUD ─────────────────────────────────────────────────
+  app.get("/api/whatsapp-templates", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getWhatsappTemplates()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/whatsapp-templates", requireAdmin, async (req, res) => {
+    try {
+      const { name, category, message, variables, active } = req.body;
+      if (!name || !message) return res.status(400).json({ message: "name e message obrigatórios" });
+      const t = await storage.createWhatsappTemplate({ name, category: category || "geral", message, variables: variables || null, active: active !== false });
+      res.status(201).json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/whatsapp-templates/:id", requireAdmin, async (req, res) => {
+    try {
+      const { name, category, message, variables, active } = req.body;
+      const upd: any = {};
+      if (name !== undefined) upd.name = name;
+      if (category !== undefined) upd.category = category;
+      if (message !== undefined) upd.message = message;
+      if (variables !== undefined) upd.variables = variables;
+      if (active !== undefined) upd.active = !!active;
+      const t = await storage.updateWhatsappTemplate(Number(req.params.id), upd);
+      if (!t) return res.status(404).json({ message: "Não encontrado" });
+      res.json(t);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/whatsapp-templates/:id", requireAdmin, async (req, res) => {
+    try { await storage.deleteWhatsappTemplate(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── WhatsApp: Log de envio via wa.me ────────────────────────────────────────
+  app.post("/api/whatsapp/log", requireAdmin, async (req, res) => {
+    try {
+      const { phone, message, flowId, flowName } = req.body;
+      if (!phone || !message) return res.status(400).json({ message: "phone e message obrigatórios" });
+      const log = await storage.createWhatsappSendLog({
+        flowId: flowId || null,
+        flowName: flowName || "Envio Manual",
+        phone,
+        message,
+        status: "sent",
+        errorMessage: null,
+      });
+      res.json({ ok: true, log });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Material Withdrawals (Controle de Materiais) ────────────────────────────
+  app.get("/api/material-withdrawals", requireAuth, async (req, res) => {
+    try {
+      const all = await storage.getMaterialWithdrawals();
+      const isAdmin = req.session.userRole === "admin";
+      // Non-admin users see only their own withdrawals
+      const filtered = isAdmin ? all : all.filter((w: any) => w.userId === req.session.userId);
+      res.json(filtered);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/material-withdrawals/:id", requireAuth, async (req, res) => {
+    try {
+      const w = await storage.getMaterialWithdrawal(Number(req.params.id));
+      if (!w) return res.status(404).json({ message: "Não encontrado" });
+      const isAdmin = req.session.userRole === "admin";
+      if (!isAdmin && (w as any).userId !== req.session.userId) return res.status(403).json({ message: "Acesso negado" });
+      res.json(w);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/material-withdrawals", requireAuth, async (req, res) => {
+    try {
+      const { userId, username, workOrderId, jobId, clientName, withdrawalPhoto, withdrawalSignature, notes, items } = req.body;
+      if (!userId || !username) return res.status(400).json({ message: "userId e username são obrigatórios" });
+      if (!items || items.length === 0) return res.status(400).json({ message: "Pelo menos um item é obrigatório" });
+      if (!withdrawalPhoto) return res.status(400).json({ message: "Foto da retirada é obrigatória" });
+      if (!withdrawalSignature) return res.status(400).json({ message: "Assinatura é obrigatória" });
+
+      const now = new Date();
+      const dateStr = now.toISOString().split("T")[0];
+      const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+      const month = months[now.getMonth()];
+
+      const withdrawal = await storage.createMaterialWithdrawal(
+        { userId, username, workOrderId: workOrderId || null, jobId: jobId || null, clientName: clientName || null,
+          status: "pendente", withdrawalPhoto, withdrawalSignature, notes: notes || null,
+          returnPhoto: null, returnSignature: null, returnNotes: null },
+        items.map((i: any) => ({ withdrawalId: 0, inventoryId: i.inventoryId, productName: i.productName, unit: i.unit || "unid", quantity: i.quantity }))
+      );
+
+      // Register inventory SAÍDA movements
+      for (const item of withdrawal.items) {
+        await storage.createInventoryMovement({
+          inventoryId: item.inventoryId,
+          productName: item.productName,
+          type: "SAÍDA",
+          quantity: item.quantity,
+          date: dateStr,
+          month,
+          notes: `Origem: RETIRADA_MATERIAL | Retirada #${withdrawal.id}${workOrderId ? " | OS #" + workOrderId : ""} | Responsavel: ${username}${clientName ? " | Cliente: " + clientName : ""}`,
+        });
+      }
+
+      res.status(201).json(withdrawal);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/material-withdrawals/:id/retorno", requireAuth, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getMaterialWithdrawal(id);
+      if (!existing) return res.status(404).json({ message: "Saída não encontrada" });
+      if (existing.status === "retornado") return res.status(400).json({ message: "Já retornado" });
+
+      const { returnPhoto, returnSignature, returnNotes, items } = req.body;
+      if (!returnPhoto) return res.status(400).json({ message: "Foto do retorno é obrigatória" });
+      if (!returnSignature) return res.status(400).json({ message: "Assinatura do retorno é obrigatória" });
+      if (!items || items.length === 0) return res.status(400).json({ message: "Informe os itens retornados" });
+
+      const now = new Date();
+      const dateStr = now.toISOString().split("T")[0];
+      const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+      const month = months[now.getMonth()];
+
+      // Update withdrawal items (returnedQuantity and condition)
+      await storage.updateMaterialWithdrawalItems(id, items);
+
+      // Determine new status
+      const allReturned = items.every((i: any) => {
+        const orig = existing.items.find((x: any) => x.id === i.id);
+        return orig ? i.returnedQuantity >= orig.quantity : true;
+      });
+      const newStatus = allReturned ? "retornado" : "parcial";
+
+      await storage.updateMaterialWithdrawal(id, {
+        status: newStatus,
+        returnPhoto,
+        returnSignature,
+        returnNotes: returnNotes || null,
+        returnedAt: now,
+      } as any);
+
+      // Register ENTRADA movements for returned (non-lost) items
+      for (const retItem of items) {
+        if (retItem.returnedQuantity > 0 && retItem.condition !== "perdido") {
+          const original = existing.items.find((x: any) => x.id === retItem.id);
+          if (!original) continue;
+          await storage.createInventoryMovement({
+            inventoryId: original.inventoryId,
+            productName: original.productName,
+            type: "ENTRADA",
+            quantity: retItem.returnedQuantity,
+            date: dateStr,
+            month,
+            notes: `Origem: DEVOLUCAO_MATERIAL | Retirada #${existing.id}${existing.workOrderId ? " | OS #" + existing.workOrderId : ""} | Responsavel: ${existing.username}${existing.clientName ? " | Cliente: " + existing.clientName : ""} | Condicao: ${retItem.condition}`,
+          });
+        }
+      }
+
+      // Auto-create pending salary discounts for lost/damaged items
+      const rules = await storage.getSalaryDiscountRules();
+      for (const retItem of items) {
+        if (retItem.condition === "perdido" || retItem.condition === "danificado") {
+          const original = existing.items.find((x: any) => x.id === retItem.id);
+          if (!original) continue;
+          const matchingRule = rules.find((r: any) => r.condition === retItem.condition && r.active);
+          await storage.createSalaryDiscount({
+            userId: existing.userId,
+            username: existing.username,
+            withdrawalId: id,
+            withdrawalItemId: retItem.id,
+            productName: original.productName,
+            condition: retItem.condition,
+            ruleId: matchingRule?.id || null,
+            ruleName: matchingRule?.name || null,
+            discountAmount: 0, // Admin fills in the actual amount when approving
+            status: "pendente",
+            notes: null,
+            approvedBy: null,
+          });
+        }
+      }
+
+      const updated = await storage.getMaterialWithdrawal(id);
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Salary Discount Rules ───────────────────────────────────────────────────
+  app.get("/api/salary-discount-rules", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getSalaryDiscountRules()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/salary-discount-rules", requireAdmin, async (req, res) => {
+    try {
+      const { name, condition, discountType, discountValue, active } = req.body;
+      if (!name || !condition) return res.status(400).json({ message: "name e condition são obrigatórios" });
+      const rule = await storage.createSalaryDiscountRule({ name, condition, discountType: discountType || "percent", discountValue: discountValue ?? 100, active: active !== false });
+      res.status(201).json(rule);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/salary-discount-rules/:id", requireAdmin, async (req, res) => {
+    try {
+      const upd: any = {};
+      for (const k of ["name", "condition", "discountType", "discountValue", "active"]) if (req.body[k] !== undefined) upd[k] = req.body[k];
+      const rule = await storage.updateSalaryDiscountRule(Number(req.params.id), upd);
+      if (!rule) return res.status(404).json({ message: "Não encontrado" });
+      res.json(rule);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.delete("/api/salary-discount-rules/:id", requireAdmin, async (req, res) => {
+    try { await storage.deleteSalaryDiscountRule(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Salary Discounts ─────────────────────────────────────────────────────────
+  app.get("/api/salary-discounts", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getSalaryDiscounts()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/salary-discounts/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const { discountAmount, notes, approvedBy } = req.body;
+      if (discountAmount === undefined) return res.status(400).json({ message: "discountAmount é obrigatório" });
+      const updated = await storage.updateSalaryDiscount(Number(req.params.id), {
+        status: "aprovado",
+        discountAmount: Number(discountAmount),
+        notes: notes || null,
+        approvedBy: approvedBy || "Admin",
+        approvedAt: new Date(),
+      } as any);
+      if (!updated) return res.status(404).json({ message: "Não encontrado" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.patch("/api/salary-discounts/:id/reject", requireAdmin, async (req, res) => {
+    try {
+      const { notes } = req.body;
+      const updated = await storage.updateSalaryDiscount(Number(req.params.id), {
+        status: "rejeitado",
+        notes: notes || null,
+      } as any);
+      if (!updated) return res.status(404).json({ message: "Não encontrado" });
+      res.json(updated);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── WorkOrders: check pending materials ─────────────────────────────────────
+  app.get("/api/work-orders/:id/pending-materials", requireAuth, async (req, res) => {
+    try {
+      const woId = Number(req.params.id);
+      const all = await storage.getMaterialWithdrawals();
+      const pending = all.filter((w: any) => w.workOrderId === woId && w.status !== "retornado");
+      res.json(pending);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── WhatsApp Send Logs ───────────────────────────────────────────────────────
+  app.get("/api/whatsapp-logs", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getWhatsappSendLogs(50)); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── BACKUP / RESTORE ─────────────────────────────────────────────────────────
+
+  app.get("/api/backup/estoque", requireAdmin, async (req, res) => {
+    try {
+      const items = await storage.getInventoryItems();
+      const movements = await storage.getInventoryMovements();
+      res.json({ type: "estoque", version: "1.0", exportedAt: new Date().toISOString(), data: { items, movements } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/backup/produtos", requireAdmin, async (req, res) => {
+    try {
+      const products = await storage.getProducts();
+      res.json({ type: "produtos", version: "1.0", exportedAt: new Date().toISOString(), data: { products } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/backup/servicos", requireAdmin, async (req, res) => {
+    try {
+      const services = await storage.getServices();
+      res.json({ type: "servicos", version: "1.0", exportedAt: new Date().toISOString(), data: { services } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/backup/materiais", requireAdmin, async (req, res) => {
+    try {
+      const withdrawals = await storage.getMaterialWithdrawals();
+      res.json({ type: "materiais", version: "1.0", exportedAt: new Date().toISOString(), data: { withdrawals } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ── Restore endpoints (upsert by name — safe merge, nothing deleted) ──────────
+
+  app.post("/api/backup/restore/estoque", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      const mode = (req.query.mode as string) || "merge";
+      if (!data?.items) return res.status(400).json({ message: "Formato de backup inválido" });
+
+      const movements: any[] = data.movements || [];
+      let updated = 0, created = 0, deleted = 0;
+      let movementsRestored = 0, movementsDeleted = 0;
+
+      // ── Build name→newId map so we can re-link movements after restore ───────
+      const nameToNewId = new Map<string, number>();
+
+      if (mode === "overwrite") {
+        // Delete all existing movements first (to avoid FK issues)
+        const existingMovs = await storage.getInventoryMovements();
+        for (const m of existingMovs) { await storage.deleteInventoryMovement(m.id); movementsDeleted++; }
+        // Delete all existing items
+        const existingItems = await storage.getInventoryItems();
+        for (const i of existingItems) { await storage.deleteInventoryItem(i.id); deleted++; }
+        // Recreate all items from backup
+        for (const item of data.items) {
+          const newItem = await storage.createInventoryItem({
+            name: item.name, type: item.type || "Geral", unit: item.unit || "un",
+            quantity: item.quantity ?? 0, minStock: item.minStock ?? 5, pricePerUnit: item.pricePerUnit ?? 0,
+          });
+          created++;
+          nameToNewId.set(item.name.toLowerCase().trim(), newItem.id);
+        }
+      } else {
+        // Merge mode: upsert items by name
+        const existing = await storage.getInventoryItems();
+        const byName = new Map(existing.map((i: any) => [i.name.toLowerCase().trim(), i]));
+        for (const item of data.items) {
+          const key = String(item.name).toLowerCase().trim();
+          const found = byName.get(key);
+          if (found) {
+            await storage.updateInventoryItem(found.id, {
+              quantity: item.quantity ?? found.quantity,
+              minStock: item.minStock ?? found.minStock,
+              pricePerUnit: item.pricePerUnit ?? found.pricePerUnit,
+            });
+            updated++;
+            nameToNewId.set(key, found.id);
+          } else {
+            const newItem = await storage.createInventoryItem({
+              name: item.name, type: item.type || "Geral", unit: item.unit || "un",
+              quantity: item.quantity ?? 0, minStock: item.minStock ?? 5, pricePerUnit: item.pricePerUnit ?? 0,
+            });
+            created++;
+            nameToNewId.set(key, newItem.id);
+          }
+        }
+      }
+
+      // ── Restore movements — re-link by item name ─────────────────────────────
+      if (movements.length > 0) {
+        // Build existing movement deduplication key (merge mode only)
+        let existingMovKeys = new Set<string>();
+        if (mode === "merge") {
+          const existingMovs = await storage.getInventoryMovements();
+          existingMovKeys = new Set(existingMovs.map((m: any) =>
+            `${m.inventoryId}|${m.type}|${m.quantity}|${m.date}`
+          ));
+        }
+
+        // Build old backup itemId → name map (from backup items)
+        const backupIdToName = new Map<number, string>();
+        for (const item of data.items) {
+          if (item.id) backupIdToName.set(item.id, item.name.toLowerCase().trim());
+        }
+
+        for (const mov of movements) {
+          // Find new inventoryId by item name (from old backup id → name → new id)
+          const itemName = backupIdToName.get(mov.inventoryId) ?? String(mov.productName || "").toLowerCase().trim();
+          const newInventoryId = nameToNewId.get(itemName);
+          if (!newInventoryId) continue; // Item not found, skip
+
+          const movDate = mov.date || new Date().toISOString().split("T")[0];
+          const dedupeKey = `${newInventoryId}|${mov.type}|${mov.quantity}|${movDate}`;
+
+          if (mode === "merge" && existingMovKeys.has(dedupeKey)) continue; // Already exists
+
+          await storage.createInventoryMovement({
+            inventoryId: newInventoryId,
+            productName: mov.productName || "",
+            type: mov.type,
+            quantity: Number(mov.quantity),
+            date: movDate,
+            month: mov.month || new Date(movDate + "T12:00:00").toLocaleString("pt-BR", { month: "long", year: "numeric" }),
+            notes: mov.notes || "",
+          });
+          movementsRestored++;
+        }
+      }
+
+      res.json({
+        message: `Estoque restaurado com sucesso. ${movementsRestored} movimentação(ões) recuperada(s).`,
+        updated, created, deleted,
+        movementsRestored, movementsDeleted,
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/produtos", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      if (!data?.products) return res.status(400).json({ message: "Formato de backup inválido" });
+      const existing = await storage.getProducts();
+      const byName = new Map(existing.map((p: any) => [p.name.toLowerCase().trim(), p]));
+      let updated = 0, created = 0;
+      for (const p of data.products) {
+        const key = String(p.name).toLowerCase().trim();
+        const found = byName.get(key);
+        if (found) {
+          await storage.updateProduct(found.id, {
+            description: p.description ?? found.description,
+            category: p.category ?? found.category,
+            brand: p.brand ?? found.brand,
+            unit: p.unit ?? found.unit,
+            salePrice: p.salePrice ?? found.salePrice,
+            commission: p.commission ?? found.commission,
+            maxDiscount: p.maxDiscount ?? found.maxDiscount,
+            active: p.active ?? found.active,
+          });
+          updated++;
+        } else {
+          await storage.createProduct({
+            name: p.name,
+            description: p.description || "",
+            category: p.category || "Sem Categoria",
+            brand: p.brand || "",
+            unit: p.unit || "un",
+            salePrice: p.salePrice ?? 0,
+            commission: p.commission ?? 0,
+            maxDiscount: p.maxDiscount ?? 0,
+            active: p.active ?? true,
+          });
+          created++;
+        }
+      }
+      res.json({ message: "Catálogo de produtos restaurado com sucesso", updated, created });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/servicos", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      if (!data?.services) return res.status(400).json({ message: "Formato de backup inválido" });
+      const existing = await storage.getServices();
+      const byName = new Map(existing.map((s: any) => [s.name.toLowerCase().trim(), s]));
+      let updated = 0, created = 0;
+      for (const s of data.services) {
+        const key = String(s.name).toLowerCase().trim();
+        const found = byName.get(key);
+        if (found) {
+          await storage.updateService(found.id, {
+            description: s.description ?? found.description,
+            pricePerUnit: s.pricePerUnit ?? found.pricePerUnit,
+            laborCostPerM2: s.laborCostPerM2 ?? found.laborCostPerM2,
+            transportCostPerM2: s.transportCostPerM2 ?? found.transportCostPerM2,
+            materialConsumptionPerM2: s.materialConsumptionPerM2 ?? found.materialConsumptionPerM2,
+            serviceMaterials: s.serviceMaterials ?? found.serviceMaterials,
+          });
+          updated++;
+        } else {
+          await storage.createService({
+            name: s.name,
+            description: s.description || "",
+            pricePerUnit: s.pricePerUnit ?? 0,
+            laborCostPerM2: s.laborCostPerM2 ?? 0,
+            transportCostPerM2: s.transportCostPerM2 ?? 0,
+            materialConsumptionPerM2: s.materialConsumptionPerM2 ?? 0,
+            serviceMaterials: s.serviceMaterials ?? null,
+          });
+          created++;
+        }
+      }
+      res.json({ message: "Catálogo de serviços restaurado com sucesso", updated, created });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/materiais", requireAdmin, async (req, res) => {
+    res.json({ message: "Histórico de materiais é somente leitura — não pode ser restaurado automaticamente.", updated: 0, created: 0 });
+  });
+
+  // ─── Backup v2 — Clientes, Orçamentos, Ordens de Serviço, Garantias ───────────
+
+  app.get("/api/backup/clientes", requireAdmin, async (req, res) => {
+    try {
+      const clients = await storage.getClients();
+      res.json({ type: "clientes", version: "2.0", exportedAt: new Date().toISOString(), data: { clients } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/clientes", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      const mode = (req.query.mode as string) || "merge";
+      if (!data?.clients) return res.status(400).json({ message: "Formato de backup inválido" });
+      let updated = 0, created = 0, deleted = 0;
+
+      if (mode === "overwrite") {
+        const all = await storage.getClients();
+        for (const c of all) { await storage.deleteClient(c.id); deleted++; }
+        for (const c of data.clients) {
+          await storage.createClient({ name: c.name, phone: c.phone || "", email: c.email || "", address: c.address || "", city: c.city || "", cpfCnpj: c.cpfCnpj || "", notes: c.notes || "" });
+          created++;
+        }
+      } else {
+        const existing = await storage.getClients();
+        const byName = new Map(existing.map((c: any) => [c.name.toLowerCase().trim(), c]));
+        for (const c of data.clients) {
+          const key = String(c.name).toLowerCase().trim();
+          const found = byName.get(key);
+          if (found) {
+            await storage.updateClient(found.id, { phone: c.phone ?? found.phone, email: c.email ?? found.email, address: c.address ?? found.address, city: c.city ?? found.city, cpfCnpj: c.cpfCnpj ?? found.cpfCnpj, notes: c.notes ?? found.notes });
+            updated++;
+          } else {
+            await storage.createClient({ name: c.name, phone: c.phone || "", email: c.email || "", address: c.address || "", city: c.city || "", cpfCnpj: c.cpfCnpj || "", notes: c.notes || "" });
+            created++;
+          }
+        }
+      }
+      res.json({ message: "Clientes restaurados com sucesso", updated, created, deleted });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/backup/orcamentos", requireAdmin, async (req, res) => {
+    try {
+      const jobs = await storage.getJobs();
+      res.json({ type: "orcamentos", version: "2.0", exportedAt: new Date().toISOString(), data: { jobs } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/orcamentos", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      const mode = (req.query.mode as string) || "merge";
+      if (!data?.jobs) return res.status(400).json({ message: "Formato de backup inválido" });
+      let updated = 0, created = 0, deleted = 0;
+
+      if (mode === "overwrite") {
+        const all = await storage.getJobs();
+        for (const j of all) { await storage.deleteJob(j.id); deleted++; }
+        for (const j of data.jobs) {
+          await storage.createJob({
+            clientName: j.clientName,
+            serviceType: j.serviceType || j.title || "Serviço",
+            squareMeters: j.squareMeters ?? j.totalArea ?? 0,
+            status: j.status || "Lead",
+            calculatedPrice: j.calculatedPrice ?? j.totalPrice ?? 0,
+            realPriceSold: j.realPriceSold ?? j.totalPrice ?? 0,
+            inspectionNotes: j.inspectionNotes ?? j.description ?? j.notes ?? "",
+          });
+          created++;
+        }
+      } else {
+        const existing = await storage.getJobs();
+        const byKey = new Map(existing.map((j: any) => [`${j.clientName}||${j.serviceType}`.toLowerCase(), j]));
+        for (const j of data.jobs) {
+          const serviceType = j.serviceType || j.title || "Serviço";
+          const key = `${j.clientName}||${serviceType}`.toLowerCase();
+          const found = byKey.get(key);
+          if (found) {
+            await storage.updateJob(found.id, {
+              status: j.status ?? found.status,
+              calculatedPrice: j.calculatedPrice ?? j.totalPrice ?? found.calculatedPrice,
+              realPriceSold: j.realPriceSold ?? j.totalPrice ?? found.realPriceSold,
+              inspectionNotes: j.inspectionNotes ?? j.description ?? j.notes ?? found.inspectionNotes,
+            });
+            updated++;
+          } else {
+            await storage.createJob({
+              clientName: j.clientName,
+              serviceType,
+              squareMeters: j.squareMeters ?? j.totalArea ?? 0,
+              status: j.status || "Lead",
+              calculatedPrice: j.calculatedPrice ?? j.totalPrice ?? 0,
+              realPriceSold: j.realPriceSold ?? j.totalPrice ?? 0,
+              inspectionNotes: j.inspectionNotes ?? j.description ?? j.notes ?? "",
+            });
+            created++;
+          }
+        }
+      }
+      res.json({ message: "Orçamentos restaurados com sucesso", updated, created, deleted });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/backup/ordens-servico", requireAdmin, async (req, res) => {
+    try {
+      const workOrders = await storage.getWorkOrders();
+      res.json({ type: "ordens-servico", version: "2.0", exportedAt: new Date().toISOString(), data: { workOrders } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/ordens-servico", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      const mode = (req.query.mode as string) || "merge";
+      if (!data?.workOrders) return res.status(400).json({ message: "Formato de backup inválido" });
+      let updated = 0, created = 0, deleted = 0;
+
+      if (mode === "overwrite") {
+        const all = await storage.getWorkOrders();
+        for (const w of all) { await storage.deleteWorkOrder(w.id); deleted++; }
+        for (const w of data.workOrders) {
+          await storage.createWorkOrder({ clientName: w.clientName, serviceType: w.serviceType || w.serviceName || "Serviço", status: w.status || "Planejada", scheduledDate: w.scheduledDate || null, teamAssigned: w.teamAssigned || w.technicianId?.toString() || null, notes: w.notes || "" });
+          created++;
+        }
+      } else {
+        const existing = await storage.getWorkOrders();
+        const byKey = new Map(existing.map((w: any) => [`${w.clientName}||${w.serviceType}`.toLowerCase(), w]));
+        for (const w of data.workOrders) {
+          const serviceType = w.serviceType || w.serviceName || "Serviço";
+          const key = `${w.clientName}||${serviceType}`.toLowerCase();
+          const found = byKey.get(key);
+          if (found) {
+            await storage.updateWorkOrder(found.id, { status: w.status ?? found.status, notes: w.notes ?? found.notes });
+            updated++;
+          } else {
+            await storage.createWorkOrder({ clientName: w.clientName, serviceType, status: w.status || "Planejada", scheduledDate: w.scheduledDate || null, teamAssigned: w.teamAssigned || w.technicianId?.toString() || null, notes: w.notes || "" });
+            created++;
+          }
+        }
+      }
+      res.json({ message: "Ordens de Serviço restauradas com sucesso", updated, created, deleted });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/backup/garantias", requireAdmin, async (req, res) => {
+    try {
+      const warranties = await storage.getWarranties();
+      res.json({ type: "garantias", version: "2.0", exportedAt: new Date().toISOString(), data: { warranties } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/garantias", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      const mode = (req.query.mode as string) || "merge";
+      if (!data?.warranties) return res.status(400).json({ message: "Formato de backup inválido" });
+      let updated = 0, created = 0, deleted = 0;
+
+      if (mode === "overwrite") {
+        const all = await storage.getWarranties();
+        for (const w of all) { await storage.deleteWarranty(w.id); deleted++; }
+        for (const w of data.warranties) {
+          await storage.createWarranty({ clientName: w.clientName, clientPhone: w.clientPhone || "", serviceType: w.serviceType || w.serviceName || "Serviço", startDate: w.startDate || w.issueDate, endDate: w.endDate || w.expiryDate, status: w.status || "ativa", notes: w.notes || "" });
+          created++;
+        }
+      } else {
+        const existing = await storage.getWarranties();
+        const byKey = new Map(existing.map((w: any) => [`${w.clientName}||${w.serviceType}`.toLowerCase(), w]));
+        for (const w of data.warranties) {
+          const serviceType = w.serviceType || w.serviceName || "Serviço";
+          const key = `${w.clientName}||${serviceType}`.toLowerCase();
+          const found = byKey.get(key);
+          if (found) {
+            await storage.updateWarranty(found.id, { status: w.status ?? found.status, notes: w.notes ?? found.notes });
+            updated++;
+          } else {
+            await storage.createWarranty({ clientName: w.clientName, clientPhone: w.clientPhone || "", serviceType, startDate: w.startDate || w.issueDate, endDate: w.endDate || w.expiryDate, status: w.status || "ativa", notes: w.notes || "" });
+            created++;
+          }
+        }
+      }
+      res.json({ message: "Garantias restauradas com sucesso", updated, created, deleted });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // ─── Also support ?mode=overwrite for v1 restore endpoints ───────────────────
+
+  // ─── WhatsApp Flows CRUD ──────────────────────────────────────────────────────
+  app.get("/api/whatsapp-flows", requireAdmin, async (req, res) => {
+    try { res.json(await storage.getWhatsappFlows()); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.post("/api/whatsapp-flows", requireAdmin, async (req, res) => {
+    try {
+      const { name, trigger, triggerValue, message, messageType, buttons, includePdf, active, sortOrder } = req.body;
+      if (!name || !trigger || !message) return res.status(400).json({ message: "name, trigger e message obrigatórios" });
+      const f = await storage.createWhatsappFlow({ name, trigger, triggerValue: triggerValue || null, message, messageType: messageType || "text", buttons: buttons || null, includePdf: !!includePdf, active: active !== false, sortOrder: sortOrder || 0 });
+      res.status(201).json(f);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.put("/api/whatsapp-flows/:id", requireAdmin, async (req, res) => {
+    try {
+      const { name, trigger, triggerValue, message, messageType, buttons, includePdf, active, sortOrder } = req.body;
+      const upd: any = {};
+      if (name !== undefined) upd.name = name;
+      if (trigger !== undefined) upd.trigger = trigger;
+      if (triggerValue !== undefined) upd.triggerValue = triggerValue;
+      if (message !== undefined) upd.message = message;
+      if (messageType !== undefined) upd.messageType = messageType;
+      if (buttons !== undefined) upd.buttons = buttons;
+      if (includePdf !== undefined) upd.includePdf = !!includePdf;
+      if (active !== undefined) upd.active = !!active;
+      if (sortOrder !== undefined) upd.sortOrder = sortOrder;
+      const f = await storage.updateWhatsappFlow(Number(req.params.id), upd);
+      if (!f) return res.status(404).json({ message: "Não encontrado" });
+      res.json(f);
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+  app.delete("/api/whatsapp-flows/:id", requireAdmin, async (req, res) => {
+    try { await storage.deleteWhatsappFlow(Number(req.params.id)); res.status(204).send(); }
+    catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  return httpServer;
+}

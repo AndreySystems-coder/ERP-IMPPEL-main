@@ -1,0 +1,38 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local build/test caches
+.cache
+.vite
+coverage
+playwright-report
+test-results
+
+# Local editor/OS files
+.idea
+.vscode/*
+!.vscode/extensions.json
+Thumbs.db
+
+# Local/private project backups
+backups/
+ERP-IMPPEL-main/
+
+# Local/private uploaded assets
+attached_assets/
