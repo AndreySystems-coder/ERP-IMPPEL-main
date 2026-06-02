@@ -6,8 +6,6 @@ import {
   Building2,
   Calculator,
   Calendar as CalendarIcon,
-  ChevronDown,
-  ChevronRight,
   Clipboard,
   ClipboardList,
   CreditCard,
@@ -58,7 +56,7 @@ interface NavSection {
 
 const ALL_SECTIONS: NavSection[] = [
   {
-    label: "Inicio",
+    label: "Início",
     path: "/",
     icon: LayoutDashboard,
     items: [{ name: "Dashboard", path: "/", icon: LayoutDashboard }],
@@ -75,13 +73,13 @@ const ALL_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Orcamentos",
+    label: "Orçamentos",
     path: "/orcamentos",
     icon: Briefcase,
     adminOnly: true,
     items: [
-      { name: "Orcamentos", path: "/jobs", icon: Briefcase },
-      { name: "Calculadora de Precos", path: "/calculator", icon: Calculator },
+      { name: "Orçamentos", path: "/jobs", icon: Briefcase },
+      { name: "Calculadora de Preços", path: "/calculator", icon: Calculator },
       { name: "Templates", path: "/quote-templates", icon: FileText },
     ],
   },
@@ -90,9 +88,9 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/obras",
     icon: ClipboardList,
     items: [
-      { name: "Ordens de Servico", path: "/work-orders", icon: ClipboardList, adminOnly: true },
+      { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, adminOnly: true },
       { name: "Registro de Obra", path: "/registro-obra", icon: PenSquare },
-      { name: "Calendario", path: "/calendar", icon: CalendarIcon, adminOnly: true },
+      { name: "Calendário", path: "/calendar", icon: CalendarIcon, adminOnly: true },
     ],
   },
   {
@@ -102,8 +100,8 @@ const ALL_SECTIONS: NavSection[] = [
     adminOnly: true,
     items: [
       { name: "Estoque Atual", path: "/inventory", icon: Package },
-      { name: "Contagem Fisica", path: "/contagem-fisica", icon: ListChecks },
-      { name: "Catalogo de Produtos", path: "/catalog", icon: ShoppingCart },
+      { name: "Contagem Física", path: "/contagem-fisica", icon: ListChecks },
+      { name: "Catálogo de Produtos", path: "/catalog", icon: ShoppingCart },
     ],
   },
   {
@@ -115,7 +113,7 @@ const ALL_SECTIONS: NavSection[] = [
       { name: "Fluxo de Caixa", path: "/financials", icon: DollarSign },
       { name: "Pagamentos", path: "/payments", icon: CreditCard },
       { name: "Config. Pagamentos", path: "/pagamentos-config", icon: Tag },
-      { name: "Relatorios", path: "/relatorios", icon: BarChart3 },
+      { name: "Relatórios", path: "/relatorios", icon: BarChart3 },
     ],
   },
   {
@@ -126,12 +124,12 @@ const ALL_SECTIONS: NavSection[] = [
     items: [
       { name: "Produtividade", path: "/equipe-produtividade", icon: Gauge },
       { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck },
-      { name: "Pos-venda & NPS", path: "/pos-venda", icon: Heart },
+      { name: "Pós-venda & NPS", path: "/pos-venda", icon: Heart },
       { name: "Garantias", path: "/garantias", icon: Shield },
     ],
   },
   {
-    label: "Configuracoes",
+    label: "Configurações",
     path: "/configuracoes",
     icon: Settings,
     adminOnly: true,
@@ -139,20 +137,20 @@ const ALL_SECTIONS: NavSection[] = [
       { name: "Status Personalizados", path: "/status-personalizados", icon: Hash },
       { name: "Regras de Prioridade", path: "/priority-rules", icon: Scale },
       { name: "Custos, Margens e Zonas", path: "/custos-margens", icon: TrendingDown },
-      { name: "Catalogo de Servicos", path: "/services", icon: Layers },
-      { name: "Usuarios", path: "/usuarios", icon: UserCog },
-      { name: "Configuracoes Gerais", path: "/settings", icon: Settings },
+      { name: "Catálogo de Serviços", path: "/services", icon: Layers },
+      { name: "Usuários", path: "/usuarios", icon: UserCog },
+      { name: "Configurações Gerais", path: "/settings", icon: Settings },
       { name: "Formas de Pagamento", path: "/formas-pagamento", icon: CreditCard },
-      { name: "Condicoes de Pagamento", path: "/condicoes-pagamento", icon: Clipboard },
+      { name: "Condições de Pagamento", path: "/condicoes-pagamento", icon: Clipboard },
       { name: "Contratos", path: "/contratos", icon: FileText },
     ],
   },
   {
     label: "Backups",
-    path: "/backups",
+    path: "/backups-hub",
     icon: HardDrive,
     adminOnly: true,
-    items: [{ name: "Backups e Restauracao", path: "/backups", icon: HardDrive }],
+    items: [{ name: "Backups e Restauração", path: "/backups", icon: HardDrive }],
   },
 ];
 
@@ -172,7 +170,6 @@ function NavSectionGroup({
   isAdmin: boolean;
   onNavClick: () => void;
 }) {
-  const [collapsed, setCollapsed] = React.useState(false);
   const visibleItems = section.items.filter((item) => !item.adminOnly || isAdmin);
   if (section.adminOnly && !isAdmin) return null;
   if (visibleItems.length === 0) return null;
@@ -182,51 +179,16 @@ function NavSectionGroup({
     visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
 
   return (
-    <div className="mb-1">
-      <div className="flex items-center gap-1">
-        <Link
-          href={section.path}
-          onClick={onNavClick}
-          className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-            hasActive ? "bg-slate-100 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-          }`}
-        >
-          <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
-          <span className="truncate">{section.label}</span>
-        </Link>
-        {visibleItems.length > 1 && (
-          <button
-            type="button"
-            onClick={() => setCollapsed((current) => !current)}
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-700"
-            aria-label={`Alternar subitens de ${section.label}`}
-          >
-            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-          </button>
-        )}
-      </div>
-
-      {!collapsed && visibleItems.length > 1 && (
-        <div className="mt-1 space-y-0.5 pl-3">
-          {visibleItems.map((item) => {
-            const isActive = location === item.path || (item.path !== "/" && location.startsWith(item.path));
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                onClick={onNavClick}
-                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
-                  isActive ? "bg-slate-100 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
-                }`}
-              >
-                <item.icon className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : "text-slate-400"}`} />
-                <span className="truncate">{item.name}</span>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <Link
+      href={section.path}
+      onClick={onNavClick}
+      className={`mb-1 flex min-w-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
+        hasActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+      }`}
+    >
+      <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
+      <span className="truncate">{section.label}</span>
+    </Link>
   );
 }
 
@@ -258,7 +220,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background font-sans">
+    <div className="flex h-screen flex-col overflow-hidden bg-background font-sans">
       <header className="relative z-50 flex h-14 shrink-0 items-center justify-between bg-primary px-4 text-primary-foreground shadow-sm sm:px-6">
         <div className="flex items-center gap-4">
           <button
@@ -286,7 +248,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               onKeyDown={(event) => {
                 if (event.key === "Enter" && searchResults[0]) goToResult(searchResults[0].path);
               }}
-              placeholder="Buscar modulo..."
+              placeholder="Buscar módulo..."
               className="h-8 w-full rounded-full border-white/10 bg-white/10 pl-9 pr-4 text-sm text-white transition-all placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-white/20"
             />
             {globalSearch.trim() && searchResults.length > 0 && (
@@ -318,7 +280,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {isMobileMenuOpen && (
           <div
             className="fixed inset-0 z-40 bg-primary/20 backdrop-blur-sm lg:hidden"
@@ -330,7 +292,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           className={`
             fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white
             shadow-[2px_0_15px_-3px_rgba(0,0,0,0.05)] transition-transform duration-300 ease-in-out
-            lg:static lg:transform-none lg:shadow-none
+            lg:static lg:h-full lg:transform-none lg:shadow-none
             ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           `}
         >
@@ -358,13 +320,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <main className="custom-scrollbar flex-1 overflow-y-auto bg-slate-50/50 p-4 lg:px-8 lg:py-6">
+        <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-50/50 p-4 lg:px-8 lg:py-6">
           <motion.div
             key={location}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className="mx-auto min-h-full max-w-[1600px]"
+            className="mx-auto min-h-0 max-w-[1600px]"
           >
             {children}
           </motion.div>
