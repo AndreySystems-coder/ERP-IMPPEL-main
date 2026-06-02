@@ -3,6 +3,7 @@ import { useForm, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCostConfig, useUpdateCostConfig } from "@/hooks/use-cost-config";
+import { useSettings, useUpdateBulkSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -234,8 +235,12 @@ function SimulatorPanel({ minMarginPct, prohibitedPct, minimumServiceValue }: { 
 
 export default function CostConfig() {
   const { data: config, isLoading } = useCostConfig();
+  const { data: settings = [] } = useSettings();
   const updateMutation = useUpdateCostConfig();
+  const updateSettings = useUpdateBulkSettings();
   const { toast } = useToast();
+  const [regionBPercent, setRegionBPercent] = useState("15");
+  const [regionCPercent, setRegionCPercent] = useState("25");
 
   const {
     register,
@@ -274,6 +279,16 @@ export default function CostConfig() {
     }
   }, [config, reset]);
 
+  useEffect(() => {
+    const getSetting = (key: string, defaultValue: number) => {
+      const setting = (settings as any[]).find((item: any) => item.key === key);
+      return Number(setting?.value ?? defaultValue);
+    };
+    const asPercent = (value: number) => (value > 1 ? value : value * 100);
+    setRegionBPercent(String(asPercent(getSetting("regionBZonePercent", 0.15))));
+    setRegionCPercent(String(asPercent(getSetting("regionCZonePercent", 0.25))));
+  }, [settings]);
+
   const watchedValues = watch();
 
   const idealPct = watchedValues.idealMarginPct ?? 40;
@@ -302,6 +317,32 @@ export default function CostConfig() {
       toast({
         title: "Erro ao salvar",
         description: "Não foi possível salvar as configurações.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function saveRegionRules() {
+    const toDecimal = (value: string) => {
+      const numeric = Number(value.replace(",", ".")) || 0;
+      return numeric > 1 ? numeric / 100 : numeric;
+    };
+
+    try {
+      await updateSettings.mutateAsync({
+        settings: [
+          { key: "regionBZonePercent", value: toDecimal(regionBPercent) },
+          { key: "regionCZonePercent", value: toDecimal(regionCPercent) },
+        ],
+      });
+      toast({
+        title: "Regras regionais salvas",
+        description: "Zona B e Zona C foram atualizadas para os orçamentos.",
+      });
+    } catch {
+      toast({
+        title: "Erro ao salvar zonas",
+        description: "Não foi possível atualizar os percentuais regionais.",
         variant: "destructive",
       });
     }
@@ -436,6 +477,59 @@ export default function CostConfig() {
           <div className="mt-3 text-xs text-gray-500 flex items-center gap-1.5">
             <Info className="w-3.5 h-3.5" />
             Para editar os custos de materiais, acesse o módulo <strong>Catálogo de Vendas</strong> na barra lateral.
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          icon={<Package className="w-5 h-5" />}
+          title="Regras de Preço por Região"
+          description="Zona A é o padrão. Zona B/C aplicam acréscimo somente sobre materiais dos serviços."
+          bgClass="bg-blue-50/50"
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <p className="text-sm font-bold text-slate-900">Zona A</p>
+              <p className="mt-1 text-2xl font-bold text-primary">0%</p>
+              <p className="mt-1 text-xs text-slate-500">Padrão, sem acréscimo regional.</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <Label className="text-sm font-bold text-slate-900">Zona B</Label>
+              <div className="relative mt-2">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={regionBPercent}
+                  onChange={(event) => setRegionBPercent(event.target.value)}
+                  className="pr-10"
+                  data-testid="input-region-b-percent"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500">%</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Exemplo: 50 significa 50%. Se usar 0,5, também será tratado como 50%.</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <Label className="text-sm font-bold text-slate-900">Zona C</Label>
+              <div className="relative mt-2">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={regionCPercent}
+                  onChange={(event) => setRegionCPercent(event.target.value)}
+                  className="pr-10"
+                  data-testid="input-region-c-percent"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-500">%</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">Aplicado ao custo de materiais/produtos usados no orçamento.</p>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button type="button" onClick={saveRegionRules} disabled={updateSettings.isPending} data-testid="button-save-region-rules">
+              <Save className="w-4 h-4 mr-2" />
+              {updateSettings.isPending ? "Salvando..." : "Salvar Zonas"}
+            </Button>
           </div>
         </SectionCard>
 

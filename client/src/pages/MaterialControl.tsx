@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, DollarSign, History, Package, Users } from "lucide-react";
 
-import BackupManager from "@/components/BackupManager";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiscountsPanel } from "@/features/materials/components/DiscountsPanel";
@@ -98,7 +97,6 @@ export default function MaterialControl() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 text-center sm:flex sm:items-center sm:gap-5">
-          <BackupManager type="materiais" label="Controle de Materiais" isAdmin={isAdmin} />
           <div>
             <div className="text-2xl font-bold text-orange-600" data-testid="text-pending-count">{pendingWithdrawals.length}</div>
             <div className="text-xs text-gray-500">Pendentes</div>

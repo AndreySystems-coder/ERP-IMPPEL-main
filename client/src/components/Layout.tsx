@@ -1,16 +1,45 @@
 import React from "react";
 import { Link, useLocation } from "wouter";
 import {
-  LayoutDashboard, Users, Briefcase, Calculator, Package, DollarSign,
-  Settings, LogOut, Building2, Menu, Calendar as CalendarIcon, CreditCard,
-  ShoppingCart, TrendingDown, ClipboardList, UserCog, Shield, MessageSquare,
-  FileText, BarChart3, Heart, Clipboard, Tag, ChevronDown, ChevronRight,
-  Warehouse, Scale, PenSquare, ListChecks, Layers, Wrench, ScrollText,
-  FileSearch, Star, Hash, AlignLeft, Gauge, Zap, PackageCheck, HardDrive,
-  Search, Bell
+  BarChart3,
+  Briefcase,
+  Building2,
+  Calculator,
+  Calendar as CalendarIcon,
+  ChevronDown,
+  ChevronRight,
+  Clipboard,
+  ClipboardList,
+  CreditCard,
+  DollarSign,
+  FileText,
+  Gauge,
+  HardDrive,
+  Hash,
+  Heart,
+  Layers,
+  LayoutDashboard,
+  ListChecks,
+  LogOut,
+  Menu,
+  MessageSquare,
+  Package,
+  PackageCheck,
+  PenSquare,
+  Scale,
+  Search,
+  Settings,
+  Shield,
+  ShoppingCart,
+  Tag,
+  TrendingDown,
+  Users,
+  UserCog,
+  Zap,
 } from "lucide-react";
-import { useUser, useLogout } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
+
+import { useLogout, useUser } from "@/hooks/use-auth";
 
 interface NavItem {
   name: string;
@@ -18,116 +47,119 @@ interface NavItem {
   icon: React.ElementType;
   adminOnly?: boolean;
 }
+
 interface NavSection {
   label: string;
-  emoji: string;
+  path: string;
+  icon: React.ElementType;
   adminOnly?: boolean;
   items: NavItem[];
 }
 
 const ALL_SECTIONS: NavSection[] = [
   {
-    label: "Início",
-    emoji: "🏠",
-    items: [
-      { name: "Dashboard", path: "/", icon: LayoutDashboard },
-    ],
+    label: "Inicio",
+    path: "/",
+    icon: LayoutDashboard,
+    items: [{ name: "Dashboard", path: "/", icon: LayoutDashboard }],
   },
   {
-    label: "CRM & WhatsApp",
-    emoji: "💬",
+    label: "CRM",
+    path: "/crm",
+    icon: MessageSquare,
     adminOnly: true,
     items: [
       { name: "CRM & WhatsApp", path: "/crm-whatsapp", icon: Zap },
+      { name: "Leads", path: "/leads", icon: Users },
       { name: "Clientes", path: "/clients", icon: Building2 },
     ],
   },
   {
-    label: "Orçamentos",
-    emoji: "📋",
+    label: "Orcamentos",
+    path: "/orcamentos",
+    icon: Briefcase,
     adminOnly: true,
     items: [
-      { name: "Orçamentos", path: "/jobs", icon: Briefcase },
-      { name: "Calculadora de Preços", path: "/calculator", icon: Calculator },
-      { name: "Templates de Orçamento", path: "/quote-templates", icon: FileText },
+      { name: "Orcamentos", path: "/jobs", icon: Briefcase },
+      { name: "Calculadora de Precos", path: "/calculator", icon: Calculator },
+      { name: "Templates", path: "/quote-templates", icon: FileText },
     ],
   },
   {
     label: "Obras",
-    emoji: "🛠️",
+    path: "/obras",
+    icon: ClipboardList,
     items: [
-      { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, adminOnly: true },
+      { name: "Ordens de Servico", path: "/work-orders", icon: ClipboardList, adminOnly: true },
       { name: "Registro de Obra", path: "/registro-obra", icon: PenSquare },
+      { name: "Calendario", path: "/calendar", icon: CalendarIcon, adminOnly: true },
     ],
   },
   {
     label: "Estoque",
-    emoji: "📦",
+    path: "/estoque",
+    icon: Package,
     adminOnly: true,
     items: [
       { name: "Estoque Atual", path: "/inventory", icon: Package },
-      { name: "Contagem Física Rápida", path: "/contagem-fisica", icon: ListChecks },
-      { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck },
-    ],
-  },
-  {
-    label: "Catálogo",
-    emoji: "🧰",
-    items: [
-      { name: "Catálogo de Produtos", path: "/catalog", icon: ShoppingCart },
-      { name: "Catálogo de Serviços", path: "/services", icon: Layers, adminOnly: true },
+      { name: "Contagem Fisica", path: "/contagem-fisica", icon: ListChecks },
+      { name: "Catalogo de Produtos", path: "/catalog", icon: ShoppingCart },
     ],
   },
   {
     label: "Financeiro",
-    emoji: "💰",
+    path: "/financeiro",
+    icon: DollarSign,
     adminOnly: true,
     items: [
-      { name: "Financeiro", path: "/financials", icon: DollarSign },
+      { name: "Fluxo de Caixa", path: "/financials", icon: DollarSign },
       { name: "Pagamentos", path: "/payments", icon: CreditCard },
-      { name: "Config. de Pagamentos", path: "/pagamentos-config", icon: Tag },
-      { name: "Custos e Margens", path: "/custos-margens", icon: TrendingDown },
-      { name: "Relatórios Gerenciais", path: "/relatorios", icon: BarChart3 },
+      { name: "Config. Pagamentos", path: "/pagamentos-config", icon: Tag },
+      { name: "Relatorios", path: "/relatorios", icon: BarChart3 },
     ],
   },
   {
-    label: "Documentos",
-    emoji: "📄",
+    label: "Equipe",
+    path: "/equipe",
+    icon: Users,
     adminOnly: true,
     items: [
-      { name: "Contratos", path: "/contratos", icon: FileText },
+      { name: "Produtividade", path: "/equipe-produtividade", icon: Gauge },
+      { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck },
+      { name: "Pos-venda & NPS", path: "/pos-venda", icon: Heart },
       { name: "Garantias", path: "/garantias", icon: Shield },
     ],
   },
   {
-    label: "Equipe & Pós-Venda",
-    emoji: "👷",
-    adminOnly: true,
-    items: [
-      { name: "Produtividade da Equipe", path: "/equipe-produtividade", icon: Gauge },
-      { name: "Pós-Venda & NPS", path: "/pos-venda", icon: Heart },
-    ],
-  },
-  {
-    label: "Configurações",
-    emoji: "⚙️",
+    label: "Configuracoes",
+    path: "/configuracoes",
+    icon: Settings,
     adminOnly: true,
     items: [
       { name: "Status Personalizados", path: "/status-personalizados", icon: Hash },
       { name: "Regras de Prioridade", path: "/priority-rules", icon: Scale },
-      { name: "Usuários", path: "/usuarios", icon: UserCog },
-      { name: "Configurações", path: "/settings", icon: Settings },
+      { name: "Custos, Margens e Zonas", path: "/custos-margens", icon: TrendingDown },
+      { name: "Catalogo de Servicos", path: "/services", icon: Layers },
+      { name: "Usuarios", path: "/usuarios", icon: UserCog },
+      { name: "Configuracoes Gerais", path: "/settings", icon: Settings },
+      { name: "Formas de Pagamento", path: "/formas-pagamento", icon: CreditCard },
+      { name: "Condicoes de Pagamento", path: "/condicoes-pagamento", icon: Clipboard },
+      { name: "Contratos", path: "/contratos", icon: FileText },
     ],
   },
   {
     label: "Backups",
-    emoji: "💾",
+    path: "/backups",
+    icon: HardDrive,
     adminOnly: true,
-    items: [
-      { name: "Backups & Restauração", path: "/backups", icon: HardDrive },
-    ],
+    items: [{ name: "Backups e Restauracao", path: "/backups", icon: HardDrive }],
   },
 ];
+
+const SEARCH_ITEMS = ALL_SECTIONS.flatMap((section) => [
+  { name: section.label, path: section.path, icon: section.icon, adminOnly: section.adminOnly },
+  ...section.items,
+]);
 
 function NavSectionGroup({
   section,
@@ -141,47 +173,53 @@ function NavSectionGroup({
   onNavClick: () => void;
 }) {
   const [collapsed, setCollapsed] = React.useState(false);
-
-  const visibleItems = section.items.filter(i => !i.adminOnly || isAdmin);
+  const visibleItems = section.items.filter((item) => !item.adminOnly || isAdmin);
   if (section.adminOnly && !isAdmin) return null;
   if (visibleItems.length === 0) return null;
 
-  const hasActive = visibleItems.some(
-    i => location === i.path || (i.path !== "/" && location.startsWith(i.path))
-  );
+  const hasActive =
+    location === section.path ||
+    visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
 
   return (
-    <div className="mb-2">
-      <button
-        onClick={() => setCollapsed(c => !c)}
-        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg group transition-colors ${hasActive ? "text-primary" : "text-slate-500 hover:text-slate-800"}`}
-      >
-        <span className="text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-1.5">
-          <span className="text-base leading-none">{section.emoji}</span>
-          {section.label}
-        </span>
-        {collapsed
-          ? <ChevronRight className="w-3 h-3 opacity-50" />
-          : <ChevronDown className="w-3 h-3 opacity-50" />
-        }
-      </button>
+    <div className="mb-1">
+      <div className="flex items-center gap-1">
+        <Link
+          href={section.path}
+          onClick={onNavClick}
+          className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+            hasActive ? "bg-slate-100 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+          }`}
+        >
+          <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
+          <span className="truncate">{section.label}</span>
+        </Link>
+        {visibleItems.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setCollapsed((current) => !current)}
+            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-50 hover:text-slate-700"
+            aria-label={`Alternar subitens de ${section.label}`}
+          >
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+        )}
+      </div>
 
-      {!collapsed && (
-        <div className="mt-1 space-y-0.5">
-          {visibleItems.map(item => {
+      {!collapsed && visibleItems.length > 1 && (
+        <div className="mt-1 space-y-0.5 pl-3">
+          {visibleItems.map((item) => {
             const isActive = location === item.path || (item.path !== "/" && location.startsWith(item.path));
             return (
               <Link
                 key={item.path}
                 href={item.path}
                 onClick={onNavClick}
-                className={`flex items-center gap-2.5 px-4 py-2 rounded-lg transition-all duration-150 text-sm font-medium ${
-                  isActive
-                    ? "bg-slate-100 text-primary"
-                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150 ${
+                  isActive ? "bg-slate-100 text-primary" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
                 }`}
               >
-                <item.icon className={`w-4 h-4 shrink-0 ${isActive ? "text-primary" : "text-slate-400"}`} />
+                <item.icon className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : "text-slate-400"}`} />
                 <span className="truncate">{item.name}</span>
               </Link>
             );
@@ -193,97 +231,111 @@ function NavSectionGroup({
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const { data: user, isLoading } = useUser();
   const logout = useLogout();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [globalSearch, setGlobalSearch] = React.useState("");
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }
 
   const isAdmin = user?.role === "admin";
+  const searchResults = SEARCH_ITEMS
+    .filter((item) => !item.adminOnly || isAdmin)
+    .filter((item) => item.name.toLowerCase().includes(globalSearch.trim().toLowerCase()))
+    .slice(0, 6);
+
+  const goToResult = (path: string) => {
+    navigate(path);
+    setGlobalSearch("");
+    setIsMobileMenuOpen(false);
+  };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans">
-
-      {/* Top Header */}
-      <header className="h-14 bg-primary text-primary-foreground flex items-center justify-between px-4 sm:px-6 shrink-0 z-50 shadow-sm relative">
+    <div className="flex min-h-screen flex-col bg-background font-sans">
+      <header className="relative z-50 flex h-14 shrink-0 items-center justify-between bg-primary px-4 text-primary-foreground shadow-sm sm:px-6">
         <div className="flex items-center gap-4">
           <button
-            className="lg:hidden p-1.5 -ml-1.5 text-primary-foreground/80 hover:text-white rounded-md transition-colors"
+            className="rounded-md p-1.5 -ml-1.5 text-primary-foreground/80 transition-colors hover:text-white lg:hidden"
             onClick={() => setIsMobileMenuOpen(true)}
+            type="button"
+            aria-label="Abrir menu"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="h-5 w-5" />
           </button>
 
-          {/* Logo in Header */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
-               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                 <path d="M12 2C12 2 4 7 4 13C4 17.4 7.6 21 12 21C16.4 21 20 17.4 20 13C20 7 12 2 12 2Z" fill="white" />
-                 <path d="M12 6C12 6 7 9.5 7 13C7 15.8 9.2 18 12 18C14.8 18 17 15.8 17 13C17 9.5 12 6 12 6Z" fill="#F97316"/>
-               </svg>
-            </div>
-            <div className="font-display font-bold text-lg tracking-tight flex items-center gap-1">
-              <span className="text-white">IMPP</span><span className="text-accent">EL</span>
-            </div>
+          <div className="font-display flex items-center gap-1 text-lg font-bold tracking-tight">
+            <span className="text-white">IMPP</span>
+            <span className="text-accent">EL</span>
           </div>
         </div>
 
-        {/* Global Search (Visual placeholder for now) */}
-        <div className="hidden md:flex items-center max-w-md w-full px-8">
-           <div className="relative w-full">
-             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/50" />
-              <input
-                type="text"
-                placeholder="Buscar no sistema..."
-               className="w-full bg-white/10 border-white/10 text-white placeholder:text-white/40 h-8 rounded-full pl-9 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-white/20 transition-all"
-             />
-           </div>
+        <div className="hidden w-full max-w-md items-center px-8 md:flex">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/50" />
+            <input
+              type="text"
+              value={globalSearch}
+              onChange={(event) => setGlobalSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && searchResults[0]) goToResult(searchResults[0].path);
+              }}
+              placeholder="Buscar modulo..."
+              className="h-8 w-full rounded-full border-white/10 bg-white/10 pl-9 pr-4 text-sm text-white transition-all placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-white/20"
+            />
+            {globalSearch.trim() && searchResults.length > 0 && (
+              <div className="absolute left-0 right-0 top-10 z-50 overflow-hidden rounded-lg border border-slate-200 bg-white text-slate-700 shadow-xl">
+                {searchResults.map((item) => (
+                  <button
+                    key={`${item.name}-${item.path}`}
+                    type="button"
+                    onClick={() => goToResult(item.path)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  >
+                    <item.icon className="h-4 w-4 text-slate-400" />
+                    <span>{item.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Right side Profile / Actions */}
-        <div className="flex items-center gap-4">
-          <button className="text-white/70 hover:text-white transition-colors relative">
-             <Bell className="w-5 h-5" />
-             <span className="absolute top-0 right-0 w-2 h-2 bg-accent rounded-full border border-primary"></span>
-          </button>
-
-          <div className="flex items-center gap-2 pl-4 border-l border-white/10">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-semibold text-white leading-tight">{user?.username}</p>
-              <p className="text-[10px] text-white/60">{isAdmin ? "Admin" : "Func"}</p>
-            </div>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-primary text-sm font-bold bg-white shrink-0 shadow-sm cursor-pointer`}>
-              {user?.username.charAt(0).toUpperCase()}
-            </div>
+        <div className="flex items-center gap-2">
+          <div className="hidden text-right sm:block">
+            <p className="text-xs font-semibold leading-tight text-white">{user?.username}</p>
+            <p className="text-[10px] text-white/60">{isAdmin ? "Admin" : "Func"}</p>
+          </div>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-primary shadow-sm">
+            {user?.username.charAt(0).toUpperCase()}
           </div>
         </div>
       </header>
 
-      {/* Main Layout Area */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Mobile Sidebar Overlay */}
         {isMobileMenuOpen && (
           <div
-            className="fixed inset-0 bg-primary/20 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 z-40 bg-primary/20 backdrop-blur-sm lg:hidden"
             onClick={() => setIsMobileMenuOpen(false)}
           />
         )}
 
-        {/* Sidebar Clara (Light) */}
-        <aside className={`
-          fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col
-          transition-transform duration-300 ease-in-out lg:transform-none shadow-[2px_0_15px_-3px_rgba(0,0,0,0.05)] lg:shadow-none
-          ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-        `}>
-          <nav className="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar">
-            {ALL_SECTIONS.map(section => (
+        <aside
+          className={`
+            fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white
+            shadow-[2px_0_15px_-3px_rgba(0,0,0,0.05)] transition-transform duration-300 ease-in-out
+            lg:static lg:transform-none lg:shadow-none
+            ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+          `}
+        >
+          <nav className="custom-scrollbar flex-1 overflow-y-auto px-3 py-4">
+            {ALL_SECTIONS.map((section) => (
               <NavSectionGroup
                 key={section.label}
                 section={section}
@@ -294,26 +346,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          {/* Logout Section at the bottom */}
-          <div className="p-4 border-t border-slate-100">
-             <button
+          <div className="border-t border-slate-100 p-4">
+            <button
               onClick={() => logout.mutate()}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
+              type="button"
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="h-4 w-4" />
               <span>Sair do sistema</span>
             </button>
           </div>
         </aside>
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50 p-4 lg:p-6 lg:px-8">
+        <main className="custom-scrollbar flex-1 overflow-y-auto bg-slate-50/50 p-4 lg:px-8 lg:py-6">
           <motion.div
             key={location}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
-            className="max-w-[1600px] mx-auto h-full"
+            className="mx-auto min-h-full max-w-[1600px]"
           >
             {children}
           </motion.div>

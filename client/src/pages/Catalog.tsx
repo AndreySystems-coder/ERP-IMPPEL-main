@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+﻿import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -15,9 +15,8 @@ import {
   Building2, Barcode, ChevronDown, Eye, EyeOff, DollarSign,
   Grid3X3, List, ShoppingCart,
 } from "lucide-react";
-import BackupManager from "@/components/BackupManager";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type Product = {
   id: number;
   inventoryId?: number;
@@ -34,21 +33,21 @@ type Product = {
   active: boolean;
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CATEGORIES = [
-  "Argamassa Polimérica",
-  "Manta Líquida",
-  "Manta Asfáltica",
+  "Argamassa PolimÃ©rica",
+  "Manta LÃ­quida",
+  "Manta AsfÃ¡ltica",
   "Sistema de Drenagem",
   "Primer",
   "Selante PU",
-  "Massa Asfáltica",
+  "Massa AsfÃ¡ltica",
   "Ferramenta",
   "Tela",
-  "Geotêxtil",
-  "Acessório",
+  "GeotÃªxtil",
+  "AcessÃ³rio",
   "EPI",
-  "Pó Mineral",
+  "PÃ³ Mineral",
   "Fita",
   "Sem Categoria",
 ];
@@ -59,7 +58,7 @@ function fmtPrice(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// ─── Product Form Modal ────────────────────────────────────────────────────────
+// â”€â”€â”€ Product Form Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ProductForm({
   product,
   onClose,
@@ -119,7 +118,7 @@ function ProductForm({
                   <Trash2 className="w-3 h-3 mr-1" /> Remover
                 </Button>
               )}
-              <p className="text-xs text-gray-400">JPG, PNG ou WEBP. Tamanho recomendado: 400×400px</p>
+              <p className="text-xs text-gray-400">JPG, PNG ou WEBP. Tamanho recomendado: 400Ã—400px</p>
             </div>
           </div>
 
@@ -143,7 +142,7 @@ function ProductForm({
           {/* Code + Brand */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Barcode className="w-4 h-4 text-gray-400" /> Código / SKU</Label>
+              <Label className="flex items-center gap-1.5"><Barcode className="w-4 h-4 text-gray-400" /> CÃ³digo / SKU</Label>
               <Input value={form.code || ""} onChange={e => set("code", e.target.value)} placeholder="Ex: 7890137000003" data-testid="input-product-code" />
             </div>
             <div className="space-y-1.5">
@@ -154,16 +153,16 @@ function ProductForm({
 
           {/* Description */}
           <div className="space-y-1.5">
-            <Label>Descrição / Função</Label>
+            <Label>DescriÃ§Ã£o / FunÃ§Ã£o</Label>
             <Textarea value={form.description || ""} onChange={e => set("description", e.target.value)}
-              placeholder="Descreva a função, aplicação e características do produto..." rows={3}
+              placeholder="Descreva a funÃ§Ã£o, aplicaÃ§Ã£o e caracterÃ­sticas do produto..." rows={3}
               data-testid="textarea-product-description" />
           </div>
 
           {/* Price + Unit */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <Label>Preço de Venda <span className="text-red-500">*</span></Label>
+              <Label>PreÃ§o de Venda <span className="text-red-500">*</span></Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">R$</span>
                 <Input type="number" step="0.01" min="0" value={form.salePrice || ""} onChange={e => set("salePrice", parseFloat(e.target.value) || 0)}
@@ -172,10 +171,10 @@ function ProductForm({
             </div>
             <div className="space-y-1.5">
               <Label>Unidade</Label>
-              <Input value={form.unit || "un"} onChange={e => set("unit", e.target.value)} placeholder="un, m², m, L, kg" data-testid="input-unit" />
+              <Input value={form.unit || "un"} onChange={e => set("unit", e.target.value)} placeholder="un, mÂ², m, L, kg" data-testid="input-unit" />
             </div>
             <div className="space-y-1.5">
-              <Label>Desc. Máx. (%)</Label>
+              <Label>Desc. MÃ¡x. (%)</Label>
               <Input type="number" min="0" max="100" value={form.maxDiscount || ""} onChange={e => set("maxDiscount", parseFloat(e.target.value) || 0)}
                 placeholder="0" data-testid="input-max-discount" />
             </div>
@@ -184,14 +183,14 @@ function ProductForm({
           {/* Active toggle */}
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
             <input type="checkbox" id="active-toggle" checked={form.active ?? true} onChange={e => set("active", e.target.checked)} className="w-4 h-4 accent-blue-900" />
-            <label htmlFor="active-toggle" className="text-sm font-medium text-gray-700">Produto ativo (visível no catálogo)</label>
+            <label htmlFor="active-toggle" className="text-sm font-medium text-gray-700">Produto ativo (visÃ­vel no catÃ¡logo)</label>
           </div>
         </div>
 
         <div className="flex gap-3 p-6 pt-0">
           <Button variant="outline" onClick={onClose} className="flex-1" disabled={saving}>Cancelar</Button>
           <Button onClick={() => onSave(form)} disabled={!form.name || saving} className="flex-1 bg-blue-900 hover:bg-blue-800 text-white" data-testid="button-save-product">
-            {saving ? "Salvando..." : product?.id ? "Salvar Alterações" : "Criar Produto"}
+            {saving ? "Salvando..." : product?.id ? "Salvar AlteraÃ§Ãµes" : "Criar Produto"}
           </Button>
         </div>
       </div>
@@ -199,7 +198,7 @@ function ProductForm({
   );
 }
 
-// ─── Product Card ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Product Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ProductCard({
   product, isAdmin, onEdit, onDelete, onToggle, viewMode,
 }: {
@@ -314,7 +313,7 @@ function ProductCard({
           </div>
           {product.maxDiscount > 0 && (
             <Badge variant="outline" className="text-xs text-green-700 border-green-200">
-              Desc. até {product.maxDiscount}%
+              Desc. atÃ© {product.maxDiscount}%
             </Badge>
           )}
         </div>
@@ -323,7 +322,7 @@ function ProductCard({
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function Catalog() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -338,7 +337,7 @@ export default function Catalog() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null | false>(false);
 
-  // ─── Mutations ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/products", data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/products"] }); setEditingProduct(false); toast({ title: "Produto criado!" }); },
@@ -370,7 +369,7 @@ export default function Catalog() {
     updateMutation.mutate({ id: p.id, data: { active: !p.active } });
   };
 
-  // ─── Filtering ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Filtering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const activeProducts = useMemo(() =>
     products.filter(p => showInactive ? true : p.active),
     [products, showInactive]
@@ -404,21 +403,20 @@ export default function Catalog() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-900 rounded-xl flex items-center justify-center">
             <ShoppingCart className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900" data-testid="text-page-title">Catálogo de Produtos</h1>
-            <p className="text-sm text-gray-500">{products.filter(p => p.active).length} produto(s) ativo(s) · {categories.length - 1} categoria(s)</p>
+            <h1 className="text-2xl font-bold text-gray-900" data-testid="text-page-title">CatÃ¡logo de Produtos</h1>
+            <p className="text-sm text-gray-500">{products.filter(p => p.active).length} produto(s) ativo(s) Â· {categories.length - 1} categoria(s)</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && (
             <>
-              <BackupManager type="produtos" label="Catálogo de Produtos" isAdmin={isAdmin} />
               <button
                 onClick={() => setShowInactive(s => !s)}
                 className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border transition-colors ${showInactive ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500 hover:border-gray-300"}`}
@@ -435,11 +433,11 @@ export default function Catalog() {
         </div>
       </div>
 
-      {/* ── Search + View toggle ────────────────────────────────────────────── */}
+      {/* â”€â”€ Search + View toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex gap-3 items-center">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome, código ou fabricante..."
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome, cÃ³digo ou fabricante..."
             className="pl-9" data-testid="input-search-products" />
         </div>
         <div className="flex border border-gray-200 rounded-lg overflow-hidden">
@@ -452,7 +450,7 @@ export default function Catalog() {
         </div>
       </div>
 
-      {/* ── Category filter tabs ─────────────────────────────────────────────── */}
+      {/* â”€â”€ Category filter tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {categories.map(cat => (
           <button
@@ -475,7 +473,7 @@ export default function Catalog() {
         ))}
       </div>
 
-      {/* ── Empty state ──────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Empty state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isLoading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {[1,2,3,4].map(i => <div key={i} className="h-64 bg-gray-100 rounded-2xl animate-pulse" />)}
@@ -485,7 +483,7 @@ export default function Catalog() {
           <Package className="w-14 h-14 mx-auto mb-3 opacity-20" />
           <p className="font-semibold text-gray-500">Nenhum produto encontrado</p>
           <p className="text-sm mt-1">
-            {search ? `Nenhum resultado para "${search}"` : isAdmin ? "Clique em 'Novo Produto' para começar." : "Nenhum produto cadastrado ainda."}
+            {search ? `Nenhum resultado para "${search}"` : isAdmin ? "Clique em 'Novo Produto' para comeÃ§ar." : "Nenhum produto cadastrado ainda."}
           </p>
         </CardContent></Card>
       ) : (
@@ -529,7 +527,7 @@ export default function Catalog() {
         </div>
       )}
 
-      {/* ── Stats footer ─────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Stats footer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {filtered.length > 0 && (
         <div className="flex gap-6 p-4 bg-gray-50 rounded-2xl text-center text-sm flex-wrap justify-center">
           <div>
@@ -539,22 +537,22 @@ export default function Catalog() {
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
             <p className="text-xl font-bold text-blue-900">{fmtPrice(Math.min(...filtered.map(p => p.salePrice)))}</p>
-            <p className="text-xs text-gray-400">menor preço</p>
+            <p className="text-xs text-gray-400">menor preÃ§o</p>
           </div>
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
             <p className="text-xl font-bold text-blue-900">{fmtPrice(Math.max(...filtered.map(p => p.salePrice)))}</p>
-            <p className="text-xs text-gray-400">maior preço</p>
+            <p className="text-xs text-gray-400">maior preÃ§o</p>
           </div>
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
             <p className="text-xl font-bold text-green-700">{fmtPrice(filtered.reduce((s, p) => s + p.salePrice, 0) / filtered.length)}</p>
-            <p className="text-xs text-gray-400">preço médio</p>
+            <p className="text-xs text-gray-400">preÃ§o mÃ©dio</p>
           </div>
         </div>
       )}
 
-      {/* ── Form Modal ───────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Form Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {editingProduct !== false && (
         <ProductForm
           product={editingProduct || null}

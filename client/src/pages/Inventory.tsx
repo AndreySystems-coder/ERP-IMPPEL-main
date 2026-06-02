@@ -6,8 +6,6 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { AlertTriangle, History, TrendingDown, TrendingUp, X } from "lucide-react";
-import BackupManager from "@/components/BackupManager";
-import { useUser } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { DuplicateProductsAlert } from "@/features/inventory/components/DuplicateProductsAlert";
 import { InventoryMovementForm } from "@/features/inventory/components/InventoryMovementForm";
@@ -231,8 +229,6 @@ function generateMovementPDF(selectedYM: string, movements: Movement[], items: I
 export default function Inventory() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: currentUser } = useUser();
-  const isAdmin = (currentUser as any)?.role === "admin";
   const { data: items = [], isLoading } = useInventory();
   const createItem = useCreateInventory();
   const updateItem = useUpdateInventory();
@@ -587,6 +583,38 @@ export default function Inventory() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Estoque</h1>
+            <p className="text-sm text-slate-500">Estoque atual, movimentacoes e contagem fisica em uma unica area.</p>
+          </div>
+          <Button onClick={openNew} data-testid="button-add-inventory-item">
+            Adicionar Item ao Estoque
+          </Button>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {[
+            { key: "produtos", label: "Estoque Atual", hint: `${(items as InventoryItem[]).length} itens cadastrados` },
+            { key: "movimentacoes", label: "Entrada / Saida / Ajuste", hint: "Historico e lancamentos" },
+            { key: "rapida", label: "Contagem Fisica", hint: "Fluxo guiado de conferencia" },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key as "produtos" | "movimentacoes" | "rapida")}
+              className={`rounded-lg border px-3 py-3 text-left transition-colors ${
+                activeTab === tab.key
+                  ? "border-primary bg-primary/5 text-primary"
+                  : "border-slate-200 bg-slate-50 text-slate-600 hover:border-primary/30 hover:bg-white"
+              }`}
+            >
+              <span className="block text-sm font-bold">{tab.label}</span>
+              <span className="mt-0.5 block text-xs">{tab.hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       {activeTab === "produtos" && (
         <>
           <DuplicateProductsAlert duplicateNameGroups={duplicateNameGroups} />

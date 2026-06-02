@@ -9,16 +9,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
-import { Plus, Search, DollarSign, Briefcase, Download, FileText, X, Users, Hash, CreditCard } from "lucide-react";
+import { Plus, Search, DollarSign, Briefcase, FileText, X, Users, Hash, CreditCard } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
-import { format } from "date-fns";
 import { useLocation } from "wouter";
-import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
 import { gerarOrcamentoPDF, mergeQuoteTemplateConfig } from "@/lib/orcamentoPDF";
 import type { MaterialDisplayMode, QuoteTemplateConfig } from "@/lib/orcamentoPDF";
 import { useJobStatuses } from "@/hooks/use-job-statuses";
-import BackupManager from "@/components/BackupManager";
-import { useUser } from "@/hooks/use-auth";
 import { QuoteClientSection } from "@/features/quotes/components/QuoteClientSection";
 import { QuoteFinancialAnalysis } from "@/features/quotes/components/QuoteFinancialAnalysis";
 import { QuoteForm } from "@/features/quotes/components/QuoteForm";
@@ -27,6 +23,7 @@ import { QuotesList } from "@/features/quotes/components/QuotesList";
 import { evaluateMargin, validateDiscount, calculateTotalCost, getCombinedRecommendation } from "@shared/marginEngine";
 import { calculateScore } from "@shared/scoringEngine";
 import { usePriorityRules } from "@/hooks/use-priority-rules";
+import { useSettings } from "@/hooks/use-settings";
 
 interface ServiceItemForm {
   _id: string;
@@ -74,8 +71,6 @@ const makeResponsavel = (): ResponsavelForm => ({
 });
 
 export default function Jobs() {
-  const { data: currentUser } = useUser();
-  const isAdmin = currentUser?.role === "admin";
   const { data: jobs = [], isLoading } = useJobs();
   const { data: services = [] } = useServices();
   const { data: clients = [] } = useClients();
@@ -85,6 +80,7 @@ export default function Jobs() {
   const { data: workOrders = [] } = useQuery<any[]>({ queryKey: ["/api/work-orders"] });
   const { data: paymentMethodsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-methods"] });
   const { data: paymentConditionsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-conditions"] });
+  const { data: settings = [] } = useSettings();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: priorityRules } = usePriorityRules();
@@ -120,7 +116,7 @@ export default function Jobs() {
   const [clientes, setClientes] = useState<ClienteForm[]>([makeCliente()]);
   const [distanceKm, setDistanceKm] = useState("0");
   const [status, setStatus] = useState("Lead");
-  const [locationRegion, setLocationRegion] = useState("");
+  const [locationRegion, setLocationRegion] = useState("Zona A");
   const [inspectionNotes, setInspectionNotes] = useState("");
   const [executionDeadline, setExecutionDeadline] = useState("");
   const [responsaveis, setResponsaveis] = useState<ResponsavelForm[]>([makeResponsavel()]);
@@ -162,32 +158,25 @@ export default function Jobs() {
   const addItem = () => setMultiItems(prev => [...prev, makeItem()]);
   const removeItem = (id: string) => setMultiItems(prev => prev.filter(i => i._id !== id));
 
-  const handleExport = (exportFmt: "csv" | "pdf") => {
-    const exportData = filteredJobs.map((job: any) => ({
-      "ID": job.id,
-      "Cliente": job.clientName,
-      "Serviço": job.serviceType,
-      "M²": job.squareMeters,
-      "Status": job.status,
-      "Preço": `R$ ${job.realPriceSold?.toLocaleString("pt-BR") || "0"}`,
-      "Lucro": `R$ ${job.profit?.toLocaleString("pt-BR") || "0"}`,
-      "Data": job.createdAt ? format(new Date(job.createdAt), "dd/MM/yyyy") : "",
-    }));
-
-    if (exportFmt === "csv") {
-      exportToCSV(exportData, "orçamentos");
-    } else {
-      exportToPDF(exportData, "Orçamentos");
-    }
-  };
 
   // Budget calculation
   const distKm = Number(distanceKm) || 0;
+  const getSetting = (key: string, defaultValue: number) => {
+    const setting = (settings as any[]).find((item: any) => item.key === key);
+    return Number(setting?.value ?? defaultValue);
+  };
+  const normalizePercent = (value: number) => (value > 1 ? value / 100 : value);
+  const regionPercentMap: Record<string, number> = {
+    "Zona A": 0,
+    "Zona B": normalizePercent(getSetting("regionBZonePercent", 0.15)),
+    "Zona C": normalizePercent(getSetting("regionCZonePercent", 0.25)),
+  };
+  const regionalAdjustmentPercent = regionPercentMap[locationRegion] ?? 0;
 
   // Multi-service cost analysis (sum costs across all services)
   const multiCostAnalysis = useMemo(() => {
     if (!costConfig || multiItems.length === 0) return null;
-    let totalMaterial = 0, totalLabor = 0, totalTransport = 0;
+    let totalMaterialBase = 0, totalLabor = 0, totalTransport = 0;
     multiItems.forEach(item => {
       const svc = services.find(s => s.name === item.name);
       const area = Number(item.area) || 0;
@@ -196,14 +185,16 @@ export default function Jobs() {
         { squareMeters: area, distanceKm: distKm, serviceMaterialCostPerM2: svc.materialConsumptionPerM2, serviceLaborCostPerM2: svc.laborCostPerM2, serviceTransportCostPerM2: svc.transportCostPerM2 },
         costConfig,
       );
-      totalMaterial += calc.materialCost;
+      totalMaterialBase += calc.materialCost;
       totalLabor += calc.laborCost;
       totalTransport += calc.transportCost;
     });
+    const materialRegionalIncrease = totalMaterialBase * regionalAdjustmentPercent;
+    const totalMaterial = totalMaterialBase + materialRegionalIncrease;
     const directCost = totalMaterial + totalLabor + totalTransport;
     const suggestedPrice = directCost > 0 ? directCost / (1 - costConfig.minMarginPercent) : 0;
-    return { materialCost: totalMaterial, laborCost: totalLabor, transportCost: totalTransport, directCost, suggestedPrice };
-  }, [multiItems, distKm, services, costConfig]);
+    return { materialCost: totalMaterial, baseMaterialCost: totalMaterialBase, materialRegionalIncrease, regionalAdjustmentPercent, laborCost: totalLabor, transportCost: totalTransport, directCost, suggestedPrice };
+  }, [multiItems, distKm, services, costConfig, regionalAdjustmentPercent]);
 
   const filteredJobs = jobsWithScores.filter(j => 
     j.clientName.toLowerCase().includes(search.toLowerCase()) || 
@@ -240,7 +231,7 @@ export default function Jobs() {
   const openNew = () => {
     setEditingJob(null);
     setClientId(""); setDistanceKm("0"); setStatus("Lead");
-    setLocationRegion(""); setInspectionNotes(""); setExecutionDeadline("");
+    setLocationRegion("Zona A"); setInspectionNotes(""); setExecutionDeadline("");
     setDiscountPercent("");
     setSelectedConditionIds([]);
     setMaterialDisplayMode("material_mdo");
@@ -259,7 +250,7 @@ export default function Jobs() {
   const openEdit = (job: any) => {
     setEditingJob(job);
     setClientId(job.clientId?.toString() || ""); setStatus(job.status);
-    setLocationRegion(job.locationRegion || "");
+    setLocationRegion(["Zona A", "Zona B", "Zona C"].includes(job.locationRegion) ? job.locationRegion : "Zona A");
     setInspectionNotes(job.inspectionNotes || "");
     setExecutionDeadline(job.executionDeadline ? new Date(job.executionDeadline).toISOString().split("T")[0] : "");
     setDiscountPercent("");
@@ -455,6 +446,9 @@ export default function Jobs() {
       }
     });
 
+    const pdfRegion = ["Zona A", "Zona B", "Zona C"].includes(job.locationRegion) ? job.locationRegion : "Zona A";
+    const pdfRegionalAdjustmentPercent = regionPercentMap[pdfRegion] ?? 0;
+    totalMaterial = totalMaterial * (1 + pdfRegionalAdjustmentPercent);
     const directCost = totalMaterial + totalLabor + totalTransport;
     const finalPrice = job.realPriceSold > 0 ? job.realPriceSold : (directCost > 0 ? directCost / (1 - (costConfig?.minMarginPercent || 0.3)) : 0);
     const marginPct = directCost > 0 && finalPrice > 0 ? (finalPrice - directCost) / finalPrice : (costConfig?.minMarginPercent || 0.3);
@@ -594,7 +588,7 @@ export default function Jobs() {
     if (statusConfig?.message) {
       rawMessage = statusConfig.message;
     } else {
-      rawMessage = "Olá {cliente}! Segue o orçamento solicitado da IMPPEL. Qualquer dúvida estou à disposição.\n\n📋 Orçamento Nº {numero} — IMPPEL Impermeabilizações";
+      rawMessage = "Olá {cliente}! Segue o orçamento solicitado da IMPPEL. Qualquer dúvida estou à disposição.\n\n Orçamento Nº {numero} — IMPPEL Impermeabilizações";
     }
 
     const msg = rawMessage
@@ -720,7 +714,7 @@ export default function Jobs() {
         queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
 
         toast({
-          title: "✅ Ordem de Serviço criada!",
+          title: "OK Ordem de Serviço criada!",
           description: `Status → "${newStatus}" · OS gerada automaticamente com ${materialsNeeded.length} material(is) necessário(s).`,
         });
       }
@@ -748,18 +742,11 @@ export default function Jobs() {
           </h1>
           <p className="text-slate-500 mt-1">Gerencie orçamentos com cálculo automático de materiais.</p>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-          <BackupManager type="orcamentos" isAdmin={isAdmin} />
-          <Button variant="outline" size="sm" className="justify-center" onClick={() => handleExport("csv")} data-testid="button-export-jobs-csv">
-            <Download className="w-4 h-4 mr-2" /> CSV
-          </Button>
-          <Button variant="outline" size="sm" className="justify-center" onClick={() => handleExport("pdf")} data-testid="button-export-jobs-pdf">
-            <Download className="w-4 h-4 mr-2" /> PDF
-          </Button>
+        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <Button variant="outline" className="justify-center" onClick={() => setLocation("/calculator")}>
             <DollarSign className="w-4 h-4 mr-2" /> Calculadora
           </Button>
-          <Button className="col-span-2 justify-center sm:col-span-1" onClick={openNew} data-testid="button-new-job">
+          <Button className="justify-center" onClick={openNew} data-testid="button-new-job">
             <Plus className="w-5 h-5 mr-2" /> Criar Orçamento
           </Button>
         </div>
@@ -950,6 +937,8 @@ export default function Jobs() {
             onDistanceKmChange={setDistanceKm}
             multiCostAnalysis={multiCostAnalysis}
             directCostNum={directCostNum}
+            locationRegion={locationRegion}
+            regionalAdjustmentPercent={regionalAdjustmentPercent}
             discountPercent={discountPercent}
             onDiscountPercentChange={setDiscountPercent}
             discountNum={discountNum}
@@ -965,7 +954,40 @@ export default function Jobs() {
             onShowMaterialsToClientChange={setShowMaterialsToClient}
           />
           <div id="quote-final" className="scroll-mt-28 space-y-4 rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
-          <Input label="Região/Localização" value={locationRegion} onChange={e => setLocationRegion(e.target.value)} placeholder="Zona A, Zona B..." />
+          <div className="space-y-2">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <label className="text-sm font-semibold text-slate-700">Regiao e Localizacao</label>
+              <span className="text-xs font-semibold text-primary">
+                {locationRegion} · {(regionalAdjustmentPercent * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% sobre materiais
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {(["Zona A", "Zona B", "Zona C"] as const).map((zone) => {
+                const percent = regionPercentMap[zone] ?? 0;
+                const selected = locationRegion === zone;
+                return (
+                  <button
+                    key={zone}
+                    type="button"
+                    onClick={() => setLocationRegion(zone)}
+                    className={`rounded-lg border px-3 py-3 text-left transition-all ${
+                      selected
+                        ? "border-primary bg-primary/5 text-primary shadow-sm"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:bg-slate-50"
+                    }`}
+                    data-testid={`button-region-${zone.replace(" ", "-").toLowerCase()}`}
+                  >
+                    <span className="block text-sm font-bold">{zone}</span>
+                    <span className="mt-0.5 block text-xs">
+                      {percent > 0
+                        ? `+${(percent * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% em materiais`
+                        : "Padrao, sem acrescimo"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           <div className="space-y-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1105,7 +1127,7 @@ export default function Jobs() {
               {/* Attach instruction */}
               {waModal.pdfIncluded && (
                 <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <span className="text-xl shrink-0">📎</span>
+                  <span className="text-xl shrink-0">Anexo</span>
                   <div>
                     <p className="font-semibold text-amber-800 text-sm">Como anexar o PDF no WhatsApp:</p>
                     <p className="text-amber-700 text-xs mt-1">

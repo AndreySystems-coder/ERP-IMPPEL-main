@@ -30,6 +30,7 @@ import RegistroObra from "@/pages/RegistroObra";
 import Reports from "@/pages/Reports";
 import ServicesCatalog from "@/pages/ServicesCatalog";
 import Settings from "@/pages/Settings";
+import { BackupsHub, CrmHub, FinancialHub, InventoryHub, QuotesHub, SettingsHub, TeamHub, WorksHub } from "@/pages/SectionHub";
 import StatusPersonalizados from "@/pages/StatusPersonalizados";
 import TeamProductivity from "@/pages/TeamProductivity";
 import Usuarios from "@/pages/Usuarios";
@@ -62,6 +63,14 @@ export const protectedRoutes: AppRoute[] = [
 
 export const adminRoutes: AppRoute[] = [
   { path: "/", component: Dashboard, access: "admin", withLayout: true },
+  { path: "/crm", component: CrmHub, access: "admin", withLayout: true },
+  { path: "/orcamentos", component: QuotesHub, access: "admin", withLayout: true },
+  { path: "/obras", component: WorksHub, access: "admin", withLayout: true },
+  { path: "/estoque", component: InventoryHub, access: "admin", withLayout: true },
+  { path: "/financeiro", component: FinancialHub, access: "admin", withLayout: true },
+  { path: "/equipe", component: TeamHub, access: "admin", withLayout: true },
+  { path: "/configuracoes", component: SettingsHub, access: "admin", withLayout: true },
+  { path: "/backups-hub", component: BackupsHub, access: "admin", withLayout: true },
   { path: "/leads", component: Leads, access: "admin", withLayout: true },
   { path: "/crm-whatsapp", component: CrmWhatsapp, access: "admin", withLayout: true },
   { path: "/jobs", component: Jobs, access: "admin", withLayout: true },

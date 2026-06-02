@@ -45,7 +45,7 @@ function parseConfig(raw: string): QuoteTemplateConfig {
   } catch { return DEFAULT_TEMPLATE_CONFIG; }
 }
 
-// ─── Live Preview ─────────────────────────────────────────────────────────────
+// Live Previewâ”€
 
 function PDFPreview({ config }: { config: QuoteTemplateConfig }) {
   const { headerColor, totalsColor, margins, columns, fontSize, rowPadding, sections } = config;
@@ -63,7 +63,7 @@ function PDFPreview({ config }: { config: QuoteTemplateConfig }) {
   const totalsRgb = totalsColor;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden select-none" style={{ fontFamily: "Arial, sans-serif" }}>
+    <div className="min-w-[720px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm select-none" style={{ fontFamily: "Arial, sans-serif" }}>
       {/* Page header bar */}
       <div className="w-full flex items-stretch" style={{ backgroundColor: headerRgb, minHeight: 56 }}>
         <div className="flex flex-col justify-center px-4 py-3 flex-1">
@@ -172,7 +172,7 @@ function PDFPreview({ config }: { config: QuoteTemplateConfig }) {
         {sections.showPaymentConditions && (
           <div className="rounded border px-3 py-2" style={{ borderColor: "#E2E8F0", backgroundColor: "#F8FAFC" }}>
             <div className="font-bold text-gray-500 mb-1" style={{ fontSize: fontSize.body * 1.5 }}>CONDIÇÕES DE PAGAMENTO</div>
-            <div className="text-gray-600" style={{ fontSize: fontSize.body * 1.5 }}>À Vista: 5% de desconto (PIX / Transferência Bancária) • Cartão: até 3x sem juros</div>
+            <div className="text-gray-600" style={{ fontSize: fontSize.body * 1.5 }}>À vista: 5% de desconto (PIX / Transferência bancária) • Cartão: até 3x sem juros</div>
           </div>
         )}
 
@@ -204,7 +204,7 @@ function PDFPreview({ config }: { config: QuoteTemplateConfig }) {
   );
 }
 
-// ─── Slider Row ───────────────────────────────────────────────────────────────
+// Slider Row
 
 function SliderRow({ label, value, min, max, step = 0.5, unit = "mm", onChange }: {
   label: string; value: number; min: number; max: number; step?: number; unit?: string; onChange: (v: number) => void;
@@ -230,7 +230,7 @@ function SliderRow({ label, value, min, max, step = 0.5, unit = "mm", onChange }
   );
 }
 
-// ─── Section Toggle ───────────────────────────────────────────────────────────
+// Section Toggle
 
 function SectionToggle({ label, desc, checked, onChange, testId }: {
   label: string; desc: string; checked: boolean; onChange: (v: boolean) => void; testId?: string;
@@ -246,7 +246,7 @@ function SectionToggle({ label, desc, checked, onChange, testId }: {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// Main Page
 
 export default function QuoteTemplates() {
   const { toast } = useToast();
@@ -334,9 +334,9 @@ export default function QuoteTemplates() {
   const colError = Math.abs(totalColW - contentW) > 2;
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden">
-      {/* ── Left: Template list ─────────────────────────────────────────────── */}
-      <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <div className="flex min-h-[calc(100vh-96px)] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm xl:h-[calc(100vh-96px)] xl:flex-row">
+      {/* Template list */}
+      <div className="flex-shrink-0 border-b border-gray-200 bg-gray-50 xl:w-64 xl:border-b-0 xl:border-r flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 text-sm">
             <LayoutTemplate className="w-4 h-4 text-blue-700" />Templates de Orçamento
@@ -378,15 +378,15 @@ export default function QuoteTemplates() {
         </div>
       </div>
 
-      {/* ── Right: Editor + Preview ─────────────────────────────────────────── */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Editor and preview */}
+      <div className="flex-1 flex min-h-0 flex-col overflow-hidden xl:flex-row">
         {/* Editor panel */}
-        <div className="w-[380px] flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-gray-800 overflow-hidden">
+        <div className="flex max-h-[620px] flex-shrink-0 flex-col overflow-hidden border-b border-gray-200 xl:max-h-none xl:w-[380px] xl:border-b-0 xl:border-r">
           {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <div className="px-4 py-3 border-b border-gray-200 bg-white">
             <div className="flex items-center gap-2 mb-2">
               <Settings2 className="w-4 h-4 text-blue-700" />
-              <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">Editor de Template</span>
+              <span className="font-semibold text-sm text-gray-900">Editor de Template</span>
               {isDirty && <Badge variant="outline" className="text-xs text-orange-600 border-orange-400">Não salvo</Badge>}
             </div>
             <Input
@@ -414,7 +414,7 @@ export default function QuoteTemplates() {
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Tabela de Serviços (mm)</p>
                   {colError && (
                     <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-2 text-xs text-orange-700 dark:text-orange-400 mb-3">
-                      ⚠ Total atual: <strong>{totalColW}mm</strong> — Conteúdo disponível: <strong>{contentW}mm</strong>. Ajuste as colunas.
+                      Atencao: Total atual: <strong>{totalColW}mm</strong> — Conteúdo disponível: <strong>{contentW}mm</strong>. Ajuste as colunas.
                     </div>
                   )}
                   <div className="space-y-3">
@@ -586,7 +586,7 @@ export default function QuoteTemplates() {
         </div>
 
         {/* Live preview panel */}
-        <div className="flex-1 overflow-auto bg-gray-100 dark:bg-gray-800 p-4">
+        <div className="flex-1 overflow-auto bg-slate-100 p-4">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <Eye className="w-4 h-4 text-gray-500" />
             <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Pré-visualização em tempo real</span>
@@ -644,7 +644,7 @@ export default function QuoteTemplates() {
               </Button>
             </div>
           </div>
-          <div className="max-w-2xl">
+          <div className="max-w-full overflow-x-auto rounded-lg">
             <PDFPreview config={config} />
           </div>
           <p className="text-xs text-gray-400 mt-3 max-w-2xl">

@@ -9,6 +9,8 @@ interface QuoteFinancialAnalysisProps {
   onDistanceKmChange: (value: string) => void;
   multiCostAnalysis: any;
   directCostNum: number;
+  locationRegion: string;
+  regionalAdjustmentPercent: number;
   discountPercent: string;
   onDiscountPercentChange: (value: string) => void;
   discountNum: number;
@@ -29,6 +31,8 @@ export function QuoteFinancialAnalysis({
   onDistanceKmChange,
   multiCostAnalysis,
   directCostNum,
+  locationRegion,
+  regionalAdjustmentPercent,
   discountPercent,
   onDiscountPercentChange,
   discountNum,
@@ -76,6 +80,19 @@ export function QuoteFinancialAnalysis({
                   <span className="font-bold text-emerald-700">R$ {multiCostAnalysis.suggestedPrice.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
               )}
+              <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-semibold">Regra regional: {locationRegion}</span>
+                  <span>{(regionalAdjustmentPercent * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% sobre materiais</span>
+                </div>
+                {multiCostAnalysis.materialRegionalIncrease > 0 ? (
+                  <p className="mt-1">
+                    Materiais antes da regra: {multiCostAnalysis.baseMaterialCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · impacto: {multiCostAnalysis.materialRegionalIncrease.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </p>
+                ) : (
+                  <p className="mt-1">Zona A padrão, sem acréscimo regional.</p>
+                )}
+              </div>
             </CardContent>
           </Card>
 
