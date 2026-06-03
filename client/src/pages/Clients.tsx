@@ -106,7 +106,7 @@ export default function Clients() {
                 <th className="p-4">Telefone</th>
                 <th className="p-4">Email</th>
                 <th className="p-4">Cidade</th>
-                <th className="p-4 text-right pr-6">AÃ§Ãµes</th>
+                <th className="p-4 text-right pr-6">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -132,16 +132,16 @@ export default function Clients() {
                           <div className="hidden group-hover:block absolute right-0 top-10 bg-slate-800 text-white text-xs rounded p-2 w-48 z-50">
                             <div className="space-y-1">
                               <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(WhatsAppTemplates.inspection(client.name))}`} target="_blank" rel="noopener noreferrer" className="block hover:text-blue-300">
-                                ðŸ“‹ InspeÃ§Ã£o
+                                 Inspeção
                               </a>
                               <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(WhatsAppTemplates.quote(client.name))}`} target="_blank" rel="noopener noreferrer" className="block hover:text-blue-300">
-                                ðŸ’° OrÃ§amento
+                                 Orçamento
                               </a>
                               <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(WhatsAppTemplates.followup(client.name))}`} target="_blank" rel="noopener noreferrer" className="block hover:text-blue-300">
-                                ðŸ“ž Acompanhamento
+                                 Acompanhamento
                               </a>
                               <a href={`https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(WhatsAppTemplates.completed(client.name))}`} target="_blank" rel="noopener noreferrer" className="block hover:text-blue-300">
-                                âœ… Obra ConcluÃ­da
+                                ✓ Obra Concluída
                               </a>
                             </div>
                           </div>
@@ -168,7 +168,7 @@ export default function Clients() {
         title={editingClient ? "Editar Cliente" : "Novo Cliente"}
       >
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <Input label="Nome Completo *" required value={name} onChange={e => setName(e.target.value)} placeholder="Ex. JoÃ£o Silva" data-testid="input-client-name" />
+          <Input label="Nome Completo *" required value={name} onChange={e => setName(e.target.value)} placeholder="Ex. João Silva" data-testid="input-client-name" />
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input label="Telefone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 99999-9999" data-testid="input-client-phone" />
@@ -180,8 +180,8 @@ export default function Clients() {
             <Input label="UF" value={state} onChange={e => setState(e.target.value)} placeholder="SP" data-testid="input-client-state" maxLength={2} />
           </div>
 
-          <Input label="Cidade" value={city} onChange={e => setCity(e.target.value)} placeholder="SÃ£o Paulo" data-testid="input-client-city" />
-          <Input label="EndereÃ§o" value={address} onChange={e => setAddress(e.target.value)} placeholder="Rua/Avenida, nÃºmero..." data-testid="input-client-address" />
+          <Input label="Cidade" value={city} onChange={e => setCity(e.target.value)} placeholder="São Paulo" data-testid="input-client-city" />
+          <Input label="Endereço" value={address} onChange={e => setAddress(e.target.value)} placeholder="Rua/Avenida, número..." data-testid="input-client-address" />
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-semibold text-slate-700">Notas</label>
@@ -189,7 +189,7 @@ export default function Clients() {
               className="w-full px-4 py-3 rounded-xl bg-slate-50 border-2 border-border focus:outline-none focus:border-primary transition-all resize-none h-16"
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="ObservaÃ§Ãµes, preferÃªncias de contato..."
+              placeholder="Observações, preferências de contato..."
               data-testid="input-client-notes"
             />
           </div>
@@ -197,7 +197,7 @@ export default function Clients() {
           <div className="pt-4 flex justify-end gap-3 border-t">
             <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
             <Button type="submit" isLoading={createClient.isPending || updateClient.isPending} data-testid="button-submit-client">
-              {editingClient ? "Salvar AlteraÃ§Ãµes" : "Criar Cliente"}
+              {editingClient ? "Salvar Alterações" : "Criar Cliente"}
             </Button>
           </div>
         </form>

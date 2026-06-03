@@ -30,12 +30,15 @@ import {
   Users,
   Zap,
 } from "lucide-react";
+import { useUser } from "@/hooks/use-auth";
+import { canAccess, type PermissionKey } from "@/lib/permissions";
 
 interface HubItem {
   title: string;
   description: string;
   href: string;
   icon: React.ElementType;
+  permission: PermissionKey;
   accent: {
     bar: string;
     icon: string;
@@ -60,23 +63,20 @@ const accents = {
 };
 
 function HubPage({ config }: { config: HubConfig }) {
+  const { data: user } = useUser();
+  const visibleItems = config.items.filter((item) => canAccess(user as any, item.permission));
+
   return (
     <div className="flex min-h-full flex-col gap-5">
-      <div className="rounded-xl border border-primary/15 bg-gradient-to-r from-primary/10 via-white to-orange-50 px-5 py-5 shadow-sm sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Central do módulo</p>
-            <h1 className="mt-1 text-3xl font-display font-bold text-slate-950">{config.title}</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{config.description}</p>
-          </div>
-          <div className="hidden rounded-full border border-primary/15 bg-white/80 px-3 py-1 text-xs font-semibold text-primary shadow-sm sm:block">
-            ERP IMPPEL
-          </div>
+      <div className="rounded-xl border border-primary/15 bg-gradient-to-r from-white via-white to-primary px-5 py-5 shadow-sm sm:px-6">
+        <div className="max-w-3xl">
+          <h1 className="text-3xl font-display font-bold text-slate-950">{config.title}</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{config.description}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {config.items.map((item) => (
+        {visibleItems.map((item) => (
           <Link
             key={`${item.href}-${item.title}`}
             href={item.href}
@@ -100,6 +100,11 @@ function HubPage({ config }: { config: HubConfig }) {
             </div>
           </Link>
         ))}
+        {visibleItems.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+            Nenhuma opção disponível para o seu cargo neste módulo.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -112,9 +117,9 @@ export function CrmHub() {
         title: "CRM",
         description: "Centralize leads, contatos, clientes, conversas e ações comerciais.",
         items: [
-          { title: "WhatsApp", description: "Pipeline, conversas, templates e próximas ações.", href: "/crm-whatsapp", icon: MessageSquare, accent: accents.emerald },
-          { title: "Leads", description: "Entrada e acompanhamento de oportunidades.", href: "/leads", icon: Zap, accent: accents.orange },
-          { title: "Clientes", description: "Cadastro e histórico básico dos clientes.", href: "/clients", icon: Building2, accent: accents.blue },
+          { title: "Clientes", description: "Cadastro e histórico básico dos clientes.", href: "/clients", icon: Building2, permission: "viewClients", accent: accents.blue },
+          { title: "WhatsApp", description: "Pipeline, conversas, templates e próximas ações.", href: "/crm-whatsapp", icon: MessageSquare, permission: "viewCrmWhatsapp", accent: accents.emerald },
+          { title: "Leads", description: "Entrada e acompanhamento de oportunidades.", href: "/leads", icon: Zap, permission: "viewLeads", accent: accents.orange },
         ],
       }}
     />
@@ -128,9 +133,9 @@ export function QuotesHub() {
         title: "Orçamentos",
         description: "Crie propostas, calcule margens, aplique zonas e gere PDFs profissionais.",
         items: [
-          { title: "Orçamentos", description: "Lista, criação, edição, PDF e envio por WhatsApp.", href: "/jobs", icon: Briefcase, accent: accents.blue },
-          { title: "Calculadora de Preços", description: "Simulações rápidas de custo, margem e zona.", href: "/calculator", icon: Calculator, accent: accents.emerald },
-          { title: "Templates", description: "Layout, cores, seções e preview dos PDFs.", href: "/quote-templates", icon: FileText, accent: accents.orange },
+          { title: "Orçamentos", description: "Lista, criação, edição, PDF e envio por WhatsApp.", href: "/jobs", icon: Briefcase, permission: "viewQuotes", accent: accents.blue },
+          { title: "Templates", description: "Layout, cores, seções e preview dos PDFs.", href: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates", accent: accents.emerald },
+          { title: "Calculadora de Preços", description: "Simulações rápidas de custo, margem e zona.", href: "/calculator", icon: Calculator, permission: "viewQuoteRules", accent: accents.orange },
         ],
       }}
     />
@@ -144,9 +149,9 @@ export function WorksHub() {
         title: "Obras",
         description: "Acompanhe OS, registro de obra, agenda e execução em campo.",
         items: [
-          { title: "Ordens de Serviço", description: "Criação, progresso, consumo, fotos e finalização.", href: "/work-orders", icon: ClipboardList, accent: accents.blue },
-          { title: "Registro de Obras", description: "Apontamentos operacionais e fotos da execução.", href: "/registro-obra", icon: PenSquare, accent: accents.orange },
-          { title: "Calendário", description: "Programação semanal e diária das equipes.", href: "/calendar", icon: Calendar, accent: accents.violet },
+          { title: "Ordens de Serviço", description: "Criação, progresso, consumo, fotos e finalização.", href: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders", accent: accents.blue },
+          { title: "Calendário", description: "Programação semanal e diária das equipes.", href: "/calendar", icon: Calendar, permission: "viewCalendar", accent: accents.violet },
+          { title: "Registro de Obras", description: "Apontamentos operacionais e fotos da execução.", href: "/registro-obra", icon: PenSquare, permission: "viewObraRegistro", accent: accents.orange },
         ],
       }}
     />
@@ -160,9 +165,9 @@ export function InventoryHub() {
         title: "Estoque",
         description: "Controle saldo, movimentações, contagem física e catálogo de produtos.",
         items: [
-          { title: "Estoque Atual", description: "Produtos, entradas, saídas, ajustes e histórico.", href: "/inventory", icon: Package, accent: accents.blue },
-          { title: "Contagem Física", description: "Conferência rápida para reduzir erros de estoque.", href: "/contagem-fisica", icon: ListChecks, accent: accents.emerald },
-          { title: "Movimentações", description: "Entradas, saídas e ajustes dentro do estoque.", href: "/inventory", icon: ShoppingCart, accent: accents.orange },
+          { title: "Estoque Atual", description: "Produtos, entradas, saídas, ajustes e histórico.", href: "/inventory", icon: Package, permission: "viewInventoryCurrent", accent: accents.blue },
+          { title: "Contagem Física", description: "Conferência rápida para reduzir erros de estoque.", href: "/contagem-fisica", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
+          { title: "Movimentações", description: "Entradas, saídas e ajustes dentro do estoque.", href: "/inventory", icon: ShoppingCart, permission: "viewInventoryMovements", accent: accents.orange },
         ],
       }}
     />
@@ -176,10 +181,10 @@ export function FinancialHub() {
         title: "Financeiro",
         description: "Fluxo de caixa, pagamentos, relatórios e configurações financeiras.",
         items: [
-          { title: "Pagamentos", description: "Parcelas, status e vínculos com orçamentos.", href: "/payments", icon: CreditCard, accent: accents.emerald },
-          { title: "Fluxo de Caixa", description: "Entradas, saídas e visão financeira geral.", href: "/financials", icon: DollarSign, accent: accents.blue },
-          { title: "Configurações", description: "Formas, condições e regras de cobrança.", href: "/pagamentos-config", icon: Tag, accent: accents.orange },
-          { title: "Relatórios", description: "DRE, conversão, obras por período e indicadores.", href: "/relatorios", icon: BarChart3, accent: accents.violet },
+          { title: "Fluxo de Caixa", description: "Entradas, saídas e visão financeira geral.", href: "/financials", icon: DollarSign, permission: "viewCashFlow", accent: accents.blue },
+          { title: "Pagamentos", description: "Parcelas, status e vínculos com orçamentos.", href: "/payments", icon: CreditCard, permission: "viewPayments", accent: accents.emerald },
+          { title: "Configurações", description: "Formas, condições e regras de cobrança.", href: "/pagamentos-config", icon: Tag, permission: "viewFinancialSettings", accent: accents.orange },
+          { title: "Relatórios", description: "DRE, conversão, obras por período e indicadores.", href: "/relatorios", icon: BarChart3, permission: "viewFinancials", accent: accents.violet },
         ],
       }}
     />
@@ -193,10 +198,10 @@ export function TeamHub() {
         title: "Equipe",
         description: "Controle o trabalho em campo, materiais, produtividade, garantias e pós-venda.",
         items: [
-          { title: "Produtividade", description: "Horas, área executada e desempenho por técnico.", href: "/equipe-produtividade", icon: Gauge, accent: accents.blue },
-          { title: "Controle de Materiais", description: "Retirada, uso, devolução, fotos e assinatura.", href: "/controle-materiais", icon: PackageCheck, accent: accents.orange },
-          { title: "Pós-venda & NPS", description: "Acompanhamento após obra e pesquisa de satisfação.", href: "/pos-venda", icon: Heart, accent: accents.rose },
-          { title: "Garantias", description: "Certificados, prazos e incidentes de garantia.", href: "/garantias", icon: Shield, accent: accents.emerald },
+          { title: "Produtividade", description: "Horas, área executada e desempenho por técnico.", href: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity", accent: accents.blue },
+          { title: "Garantias", description: "Certificados, prazos e incidentes de garantia.", href: "/garantias", icon: Shield, permission: "viewWarranties", accent: accents.emerald },
+          { title: "Controle de Materiais", description: "Retirada, uso, devolução, fotos e assinatura.", href: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials", accent: accents.orange },
+          { title: "Pós-venda & NPS", description: "Acompanhamento após obra e pesquisa de satisfação.", href: "/pos-venda", icon: Heart, permission: "viewPostSale", accent: accents.rose },
         ],
       }}
     />
@@ -210,15 +215,15 @@ export function SettingsHub() {
         title: "Configurações",
         description: "Regras, usuários, catálogos, contratos, margens e parâmetros gerais.",
         items: [
-          { title: "Custos, Margens e Zonas", description: "Margens, custos, Zona A/B/C e acréscimos regionais.", href: "/custos-margens", icon: TrendingDown, accent: accents.orange },
-          { title: "Status Personalizados", description: "Etapas e status usados nos fluxos.", href: "/status-personalizados", icon: Hash, accent: accents.blue },
-          { title: "Regras de Prioridade", description: "Critérios para score e recomendação de serviços.", href: "/priority-rules", icon: Scale, accent: accents.violet },
-          { title: "Catálogo de Serviços", description: "Serviços, custos por m² e descrições técnicas.", href: "/services", icon: Layers, accent: accents.emerald },
-          { title: "Usuários", description: "Acessos, cargos e permissões internas.", href: "/usuarios", icon: UserCog, accent: accents.slate },
-          { title: "Configurações Gerais", description: "Parâmetros gerais do ERP.", href: "/settings", icon: Settings, accent: accents.blue },
-          { title: "Formas de Pagamento", description: "Meios de pagamento e ajustes.", href: "/formas-pagamento", icon: CreditCard, accent: accents.emerald },
-          { title: "Condições de Pagamento", description: "Textos e condições exibidas nos PDFs.", href: "/condicoes-pagamento", icon: Clipboard, accent: accents.amber },
-          { title: "Contratos", description: "Modelos, contratos e documentos comerciais.", href: "/contratos", icon: FileText, accent: accents.rose },
+          { title: "Status", description: "Etapas e status usados nos fluxos.", href: "/status-personalizados", icon: Hash, permission: "viewStatusSettings", accent: accents.blue },
+          { title: "Usuários", description: "Acessos, cargos e permissões internas.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
+          { title: "Catálogo de Serviços", description: "Serviços, custos por m² e descrições técnicas.", href: "/services", icon: Layers, permission: "viewQuoteRules", accent: accents.emerald },
+          { title: "Custos", description: "Margens, custos, Zona A/B/C e acréscimos regionais.", href: "/custos-margens", icon: TrendingDown, permission: "viewCostSettings", accent: accents.orange },
+          { title: "Regras", description: "Critérios para score e recomendação de serviços.", href: "/priority-rules", icon: Scale, permission: "viewPriorityRules", accent: accents.violet },
+          { title: "Configurações Gerais", description: "Parâmetros gerais do ERP.", href: "/settings", icon: Settings, permission: "viewSettings", accent: accents.blue },
+          { title: "Formas de Pagamento", description: "Meios de pagamento e ajustes.", href: "/formas-pagamento", icon: CreditCard, permission: "viewFinancialSettings", accent: accents.emerald },
+          { title: "Condições de Pagamento", description: "Textos e condições exibidas nos PDFs.", href: "/condicoes-pagamento", icon: Clipboard, permission: "viewFinancialSettings", accent: accents.amber },
+          { title: "Contratos", description: "Modelos, contratos e documentos comerciais.", href: "/contratos", icon: FileText, permission: "viewSettings", accent: accents.rose },
         ],
       }}
     />
@@ -232,9 +237,9 @@ export function BackupsHub() {
         title: "Backups",
         description: "Backup, restauração e exportações gerais ficam centralizados aqui.",
         items: [
-          { title: "Backup", description: "Crie e acompanhe cópias de segurança do ERP.", href: "/backups", icon: HardDrive, accent: accents.blue },
-          { title: "Restauração", description: "Acesse a central para restaurar dados quando necessário.", href: "/backups", icon: Shield, accent: accents.orange },
-          { title: "Exportações", description: "Centralize exportações administrativas e arquivos de apoio.", href: "/backups", icon: FileText, accent: accents.emerald },
+          { title: "Backup", description: "Crie e acompanhe cópias de segurança do ERP.", href: "/backups", icon: HardDrive, permission: "viewBackupGeneration", accent: accents.blue },
+          { title: "Exportações", description: "Centralize exportações administrativas e arquivos de apoio.", href: "/backups", icon: FileText, permission: "viewExports", accent: accents.emerald },
+          { title: "Restauração", description: "Acesse a central para restaurar dados quando necessário.", href: "/backups", icon: Shield, permission: "viewRestore", accent: accents.orange },
         ],
       }}
     />

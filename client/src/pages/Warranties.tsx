@@ -36,7 +36,7 @@ type WarrantyIncident = {
 };
 
 const fmtBRL  = (v?: number | null) => v != null ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "R$ 0,00";
-const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("pt-BR") : "â€”";
+const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
 
 function daysLeft(endDate: string): number {
   const end  = new Date(endDate);
@@ -101,14 +101,14 @@ export default function Warranties() {
       invalidateInc();
       // mark warranty as "acionada"
       if (expanded != null) update.mutate({ id: expanded, status: "acionada" });
-      toast({ title: "OcorrÃªncia registrada!" });
+      toast({ title: "Ocorrência registrada!" });
       setIncModal(false);
     },
     onError: (e: any) => toast({ title: `Erro: ${e.message}`, variant: "destructive" }),
   });
   const removeInc = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/warranty-incidents/${id}`),
-    onSuccess: () => { invalidateInc(); toast({ title: "OcorrÃªncia removida." }); },
+    onSuccess: () => { invalidateInc(); toast({ title: "Ocorrência removida." }); },
   });
 
   const setFormField = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -141,7 +141,7 @@ export default function Warranties() {
 
   const filtered = (warranties as Warranty[]).filter(w => statusFilter === "todos" || w.status === statusFilter);
 
-  // All incidents for the "OcorrÃªncias" tab
+  // All incidents for the "Ocorrências" tab
   const { data: allIncidents = [] } = useQuery<WarrantyIncident[]>({
     queryKey: ["/api/warranty-incidents", "all"],
     queryFn: () =>
@@ -158,7 +158,7 @@ export default function Warranties() {
             <Shield className="w-8 h-8 text-primary" />
             Garantias
           </h1>
-          <p className="text-slate-500 mt-1">Controle de garantias ativas, vencimentos e ocorrÃªncias registradas.</p>
+          <p className="text-slate-500 mt-1">Controle de garantias ativas, vencimentos e ocorrências registradas.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={openNew} data-testid="button-new-warranty">
@@ -187,7 +187,7 @@ export default function Warranties() {
         {(["garantias","ocorrencias"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${tab === t ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-700"}`}>
-            {t === "garantias" ? "Garantias" : "OcorrÃªncias"}
+            {t === "garantias" ? "Garantias" : "Ocorrências"}
           </button>
         ))}
       </div>
@@ -232,13 +232,13 @@ export default function Warranties() {
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-slate-500">{w.serviceType} Â· {w.warrantyMonths} meses Â· {fmtDate(w.startDate)} atÃ© {fmtDate(w.endDate)}</p>
+                          <p className="text-sm text-slate-500">{w.serviceType} · {w.warrantyMonths} meses · {fmtDate(w.startDate)} até {fmtDate(w.endDate)}</p>
                           {w.clientPhone && <p className="text-xs text-slate-400">{w.clientPhone}</p>}
                         </div>
                         <div className="flex items-center gap-1">
                           <button onClick={() => { setSelWarranty(w); setIncModal(true); }}
-                            className="px-2 py-1 text-xs rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50 font-medium" title="Registrar ocorrÃªncia">
-                            <Wrench className="w-3 h-3 inline mr-1" />OcorrÃªncia
+                            className="px-2 py-1 text-xs rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50 font-medium" title="Registrar ocorrência">
+                            <Wrench className="w-3 h-3 inline mr-1" />Ocorrência
                           </button>
                           <select value={w.status} onChange={e => update.mutate({ id: w.id, status: e.target.value })}
                             className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-600">
@@ -257,16 +257,16 @@ export default function Warranties() {
 
                       {isEx && (
                         <div className="px-6 pb-4 bg-slate-50 border-t border-slate-100">
-                          <p className="text-xs font-bold text-slate-400 uppercase mt-3 mb-2">OcorrÃªncias desta garantia</p>
+                          <p className="text-xs font-bold text-slate-400 uppercase mt-3 mb-2">Ocorrências desta garantia</p>
                           {(incidents as WarrantyIncident[]).length === 0 ? (
-                            <p className="text-sm text-slate-400">Nenhuma ocorrÃªncia registrada.</p>
+                            <p className="text-sm text-slate-400">Nenhuma ocorrência registrada.</p>
                           ) : (
                             <div className="space-y-2">
                               {(incidents as WarrantyIncident[]).map(inc => (
                                 <div key={inc.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-3">
                                   <div className="flex-1">
                                     <p className="text-sm font-semibold text-slate-700">{inc.description}</p>
-                                    <p className="text-xs text-slate-500">{inc.technicianName ? `TÃ©cnico: ${inc.technicianName}` : ""} {inc.cost ? `Â· Custo: ${fmtBRL(inc.cost)}` : ""}</p>
+                                    <p className="text-xs text-slate-500">{inc.technicianName ? `Técnico: ${inc.technicianName}` : ""} {inc.cost ? `· Custo: ${fmtBRL(inc.cost)}` : ""}</p>
                                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${inc.status === "resolvida" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{inc.status === "resolvida" ? "Resolvida" : "Aberta"}</span>
                                   </div>
                                   <button onClick={() => removeInc.mutate(inc.id)} className="p-1.5 text-slate-300 hover:text-red-500 rounded-lg"><Trash2 className="w-3 h-3" /></button>
@@ -290,7 +290,7 @@ export default function Warranties() {
           {(allIncidents as WarrantyIncident[]).length === 0 ? (
             <div className="text-center py-14 text-slate-400">
               <AlertTriangle className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">Nenhuma ocorrÃªncia registrada</p>
+              <p className="font-medium">Nenhuma ocorrência registrada</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
@@ -299,10 +299,10 @@ export default function Warranties() {
                 return (
                   <div key={inc.id} className="flex items-center gap-4 px-6 py-4">
                     <div className="flex-1">
-                      <p className="font-semibold text-slate-800">{warranty?.clientName || "â€”"}</p>
+                      <p className="font-semibold text-slate-800">{warranty?.clientName || "—"}</p>
                       <p className="text-sm text-slate-600 mt-0.5">{inc.description}</p>
                       <div className="flex gap-4 text-xs text-slate-400 mt-1">
-                        {inc.technicianName && <span>TÃ©cnico: {inc.technicianName}</span>}
+                        {inc.technicianName && <span>Técnico: {inc.technicianName}</span>}
                         {inc.cost ? <span>Custo: {fmtBRL(inc.cost)}</span> : null}
                         <span>{fmtDate(inc.createdAt)}</span>
                       </div>
@@ -343,13 +343,13 @@ export default function Warranties() {
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50" />
             </div>
             <div className="col-span-2">
-              <label className="text-sm font-semibold text-slate-700 block mb-1">Tipo de ServiÃ§o *</label>
+              <label className="text-sm font-semibold text-slate-700 block mb-1">Tipo de Serviço *</label>
               <input value={form.serviceType} onChange={e => setFormField("serviceType", e.target.value)} required
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50"
-                placeholder="Ex: Manta AsfÃ¡ltica" data-testid="input-warranty-service" />
+                placeholder="Ex: Manta Asfáltica" data-testid="input-warranty-service" />
             </div>
             <div>
-              <label className="text-sm font-semibold text-slate-700 block mb-1">Data de InÃ­cio *</label>
+              <label className="text-sm font-semibold text-slate-700 block mb-1">Data de Início *</label>
               <input type="date" value={form.startDate} onChange={e => {
                 setFormField("startDate", e.target.value);
                 setFormField("endDate", computeEndDate(e.target.value, Number(form.warrantyMonths)));
@@ -361,7 +361,7 @@ export default function Warranties() {
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50" />
             </div>
             <div className="col-span-2">
-              <label className="text-sm font-semibold text-slate-700 block mb-1">ObservaÃ§Ãµes</label>
+              <label className="text-sm font-semibold text-slate-700 block mb-1">Observações</label>
               <textarea value={form.notes} onChange={e => setFormField("notes", e.target.value)} rows={2}
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50 resize-none" />
             </div>
@@ -374,10 +374,10 @@ export default function Warranties() {
       </Modal>
 
       {/* Incident Modal */}
-      <Modal isOpen={isIncModal} onClose={() => setIncModal(false)} title={`OcorrÃªncia â€” ${selWarranty?.clientName || ""}`}>
+      <Modal isOpen={isIncModal} onClose={() => setIncModal(false)} title={`Ocorrência — ${selWarranty?.clientName || ""}`}>
         <form onSubmit={e => { e.preventDefault(); if (selWarranty) { setExpanded(selWarranty.id); createInc.mutate({ ...incForm, warrantyId: selWarranty.id, cost: incForm.cost ? Number(incForm.cost) : 0 }); } }} className="space-y-4">
           <div>
-            <label className="text-sm font-semibold text-slate-700 block mb-1">DescriÃ§Ã£o do Problema *</label>
+            <label className="text-sm font-semibold text-slate-700 block mb-1">Descrição do Problema *</label>
             <textarea value={incForm.description} onChange={e => setIncField("description", e.target.value)} required rows={3}
               className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50 resize-none"
               placeholder="Descreva o problema reportado pelo cliente..." data-testid="input-incident-desc" />
@@ -389,14 +389,14 @@ export default function Warranties() {
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50" placeholder="0,00" />
             </div>
             <div>
-              <label className="text-sm font-semibold text-slate-700 block mb-1">TÃ©cnico ResponsÃ¡vel</label>
+              <label className="text-sm font-semibold text-slate-700 block mb-1">Técnico Responsável</label>
               <input value={incForm.technicianName} onChange={e => setIncField("technicianName", e.target.value)}
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50" />
             </div>
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="ghost" className="flex-1" onClick={() => setIncModal(false)}>Cancelar</Button>
-            <Button type="submit" isLoading={createInc.isPending} className="flex-1" data-testid="button-save-incident">Registrar OcorrÃªncia</Button>
+            <Button type="submit" isLoading={createInc.isPending} className="flex-1" data-testid="button-save-incident">Registrar Ocorrência</Button>
           </div>
         </form>
       </Modal>

@@ -38,12 +38,14 @@ import {
 import { motion } from "framer-motion";
 
 import { useLogout, useUser } from "@/hooks/use-auth";
+import { canAccess, canAccessAny, type PermissionKey } from "@/lib/permissions";
 
 interface NavItem {
   name: string;
   path: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  permission?: PermissionKey;
 }
 
 interface NavSection {
@@ -51,6 +53,7 @@ interface NavSection {
   path: string;
   icon: React.ElementType;
   adminOnly?: boolean;
+  permission?: PermissionKey;
   items: NavItem[];
 }
 
@@ -59,6 +62,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Início",
     path: "/",
     icon: LayoutDashboard,
+    permission: "viewDashboard",
     items: [{ name: "Dashboard", path: "/", icon: LayoutDashboard }],
   },
   {
@@ -66,10 +70,11 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/crm",
     icon: MessageSquare,
     adminOnly: true,
+    permission: "viewCrm",
     items: [
-      { name: "CRM & WhatsApp", path: "/crm-whatsapp", icon: Zap },
-      { name: "Leads", path: "/leads", icon: Users },
-      { name: "Clientes", path: "/clients", icon: Building2 },
+      { name: "CRM & WhatsApp", path: "/crm-whatsapp", icon: Zap, permission: "viewCrmWhatsapp" },
+      { name: "Leads", path: "/leads", icon: Users, permission: "viewLeads" },
+      { name: "Clientes", path: "/clients", icon: Building2, permission: "viewClients" },
     ],
   },
   {
@@ -77,20 +82,22 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/orcamentos",
     icon: Briefcase,
     adminOnly: true,
+    permission: "viewQuotes",
     items: [
-      { name: "Orçamentos", path: "/jobs", icon: Briefcase },
-      { name: "Calculadora de Preços", path: "/calculator", icon: Calculator },
-      { name: "Templates", path: "/quote-templates", icon: FileText },
+      { name: "Orçamentos", path: "/jobs", icon: Briefcase, permission: "viewQuotes" },
+      { name: "Calculadora de Preços", path: "/calculator", icon: Calculator, permission: "viewQuoteRules" },
+      { name: "Templates", path: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates" },
     ],
   },
   {
     label: "Obras",
     path: "/obras",
     icon: ClipboardList,
+    permission: "viewWorks",
     items: [
-      { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, adminOnly: true },
-      { name: "Registro de Obra", path: "/registro-obra", icon: PenSquare },
-      { name: "Calendário", path: "/calendar", icon: CalendarIcon, adminOnly: true },
+      { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, adminOnly: true, permission: "viewWorkOrders" },
+      { name: "Registro de Obra", path: "/registro-obra", icon: PenSquare, permission: "viewObraRegistro" },
+      { name: "Calendário", path: "/calendar", icon: CalendarIcon, adminOnly: true, permission: "viewCalendar" },
     ],
   },
   {
@@ -98,10 +105,11 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/estoque",
     icon: Package,
     adminOnly: true,
+    permission: "viewInventory",
     items: [
-      { name: "Estoque Atual", path: "/inventory", icon: Package },
-      { name: "Contagem Física", path: "/contagem-fisica", icon: ListChecks },
-      { name: "Catálogo de Produtos", path: "/catalog", icon: ShoppingCart },
+      { name: "Estoque Atual", path: "/inventory", icon: Package, permission: "viewInventoryCurrent" },
+      { name: "Contagem Física", path: "/contagem-fisica", icon: ListChecks, permission: "viewInventoryCount" },
+      { name: "Movimentações", path: "/inventory", icon: ShoppingCart, permission: "viewInventoryMovements" },
     ],
   },
   {
@@ -109,11 +117,12 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/financeiro",
     icon: DollarSign,
     adminOnly: true,
+    permission: "viewFinancials",
     items: [
-      { name: "Fluxo de Caixa", path: "/financials", icon: DollarSign },
-      { name: "Pagamentos", path: "/payments", icon: CreditCard },
-      { name: "Config. Pagamentos", path: "/pagamentos-config", icon: Tag },
-      { name: "Relatórios", path: "/relatorios", icon: BarChart3 },
+      { name: "Pagamentos", path: "/payments", icon: CreditCard, permission: "viewPayments" },
+      { name: "Fluxo de Caixa", path: "/financials", icon: DollarSign, permission: "viewCashFlow" },
+      { name: "Config. Pagamentos", path: "/pagamentos-config", icon: Tag, permission: "viewFinancialSettings" },
+      { name: "Relatórios", path: "/relatorios", icon: BarChart3, permission: "viewFinancials" },
     ],
   },
   {
@@ -121,11 +130,12 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/equipe",
     icon: Users,
     adminOnly: true,
+    permission: "viewTeam",
     items: [
-      { name: "Produtividade", path: "/equipe-produtividade", icon: Gauge },
-      { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck },
-      { name: "Pós-venda & NPS", path: "/pos-venda", icon: Heart },
-      { name: "Garantias", path: "/garantias", icon: Shield },
+      { name: "Produtividade", path: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity" },
+      { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials" },
+      { name: "Garantias", path: "/garantias", icon: Shield, permission: "viewWarranties" },
+      { name: "Pós-venda & NPS", path: "/pos-venda", icon: Heart, permission: "viewPostSale" },
     ],
   },
   {
@@ -133,16 +143,17 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/configuracoes",
     icon: Settings,
     adminOnly: true,
+    permission: "viewSettings",
     items: [
-      { name: "Status Personalizados", path: "/status-personalizados", icon: Hash },
-      { name: "Regras de Prioridade", path: "/priority-rules", icon: Scale },
-      { name: "Custos, Margens e Zonas", path: "/custos-margens", icon: TrendingDown },
-      { name: "Catálogo de Serviços", path: "/services", icon: Layers },
-      { name: "Usuários", path: "/usuarios", icon: UserCog },
-      { name: "Configurações Gerais", path: "/settings", icon: Settings },
-      { name: "Formas de Pagamento", path: "/formas-pagamento", icon: CreditCard },
-      { name: "Condições de Pagamento", path: "/condicoes-pagamento", icon: Clipboard },
-      { name: "Contratos", path: "/contratos", icon: FileText },
+      { name: "Custos, Margens e Zonas", path: "/custos-margens", icon: TrendingDown, permission: "viewCostSettings" },
+      { name: "Status Personalizados", path: "/status-personalizados", icon: Hash, permission: "viewStatusSettings" },
+      { name: "Regras de Prioridade", path: "/priority-rules", icon: Scale, permission: "viewPriorityRules" },
+      { name: "Usuários", path: "/usuarios", icon: UserCog, permission: "viewUsers" },
+      { name: "Catálogo de Serviços", path: "/services", icon: Layers, permission: "viewQuoteRules" },
+      { name: "Configurações Gerais", path: "/settings", icon: Settings, permission: "viewSettings" },
+      { name: "Formas de Pagamento", path: "/formas-pagamento", icon: CreditCard, permission: "viewFinancialSettings" },
+      { name: "Condições de Pagamento", path: "/condicoes-pagamento", icon: Clipboard, permission: "viewFinancialSettings" },
+      { name: "Contratos", path: "/contratos", icon: FileText, permission: "viewSettings" },
     ],
   },
   {
@@ -150,7 +161,12 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/backups-hub",
     icon: HardDrive,
     adminOnly: true,
-    items: [{ name: "Backups e Restauração", path: "/backups", icon: HardDrive }],
+    permission: "viewBackups",
+    items: [
+      { name: "Backup", path: "/backups", icon: HardDrive, permission: "viewBackupGeneration" },
+      { name: "Restauração", path: "/backups", icon: Shield, permission: "viewRestore" },
+      { name: "Exportações", path: "/backups", icon: FileText, permission: "viewExports" },
+    ],
   },
 ];
 
@@ -162,16 +178,17 @@ const SEARCH_ITEMS = ALL_SECTIONS.flatMap((section) => [
 function NavSectionGroup({
   section,
   location,
-  isAdmin,
+  user,
   onNavClick,
 }: {
   section: NavSection;
   location: string;
-  isAdmin: boolean;
+  user: any;
   onNavClick: () => void;
 }) {
-  const visibleItems = section.items.filter((item) => !item.adminOnly || isAdmin);
-  if (section.adminOnly && !isAdmin) return null;
+  const visibleItems = section.items.filter((item) => canAccess(user, item.permission));
+  const sectionPermissions = [section.permission, ...section.items.map((item) => item.permission)].filter(Boolean) as PermissionKey[];
+  if (!canAccessAny(user, sectionPermissions)) return null;
   if (visibleItems.length === 0) return null;
 
   const hasActive =
@@ -208,8 +225,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   const isAdmin = user?.role === "admin";
+  const userTitle = (user as any)?.jobTitle || (user as any)?.roleLabel || (isAdmin ? "Administrador" : "Funcionário");
+  const visibleSections = ALL_SECTIONS.filter((section) => {
+    const sectionPermissions = [section.permission, ...section.items.map((item) => item.permission)].filter(Boolean) as PermissionKey[];
+    return canAccessAny(user, sectionPermissions);
+  });
+  const visibleSearchItems = visibleSections.flatMap((section) => [
+    { name: section.label, path: section.path, icon: section.icon, permission: section.permission },
+    ...section.items,
+  ]);
   const searchResults = SEARCH_ITEMS
-    .filter((item) => !item.adminOnly || isAdmin)
+    .filter((item) => visibleSearchItems.some((visible) => visible.path === item.path && visible.name === item.name))
     .filter((item) => item.name.toLowerCase().includes(globalSearch.trim().toLowerCase()))
     .slice(0, 6);
 
@@ -272,7 +298,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-2">
           <div className="hidden text-right sm:block">
             <p className="text-xs font-semibold leading-tight text-white">{user?.username}</p>
-            <p className="text-[10px] text-white/60">{isAdmin ? "Admin" : "Func"}</p>
+            <p className="text-[10px] text-white/60">{userTitle}</p>
           </div>
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-sm font-bold text-primary shadow-sm">
             {user?.username.charAt(0).toUpperCase()}
@@ -302,7 +328,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 key={section.label}
                 section={section}
                 location={location}
-                isAdmin={isAdmin}
+                user={user}
                 onNavClick={() => setIsMobileMenuOpen(false)}
               />
             ))}

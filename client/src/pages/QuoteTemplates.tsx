@@ -45,7 +45,7 @@ function parseConfig(raw: string): QuoteTemplateConfig {
   } catch { return DEFAULT_TEMPLATE_CONFIG; }
 }
 
-// Live Previewâ”€
+// Section
 
 function PDFPreview({ config }: { config: QuoteTemplateConfig }) {
   const { headerColor, totalsColor, margins, columns, fontSize, rowPadding, sections } = config;

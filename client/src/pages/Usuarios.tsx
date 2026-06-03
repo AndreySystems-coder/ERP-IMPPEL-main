@@ -39,38 +39,87 @@ interface Role {
 // ─── Permission definitions ─────────────────────────────────────────────────────
 const PERMISSION_GROUPS = [
   {
-    group: "Ordens de Serviço",
+    group: "Módulos principais",
     items: [
-      { key: "viewAllWorkOrders", label: "Ver todas as obras" },
-      { key: "editWorkOrders", label: "Editar ordens de serviço" },
+      { key: "viewDashboard", label: "Dashboard" },
+      { key: "viewCrm", label: "CRM" },
+      { key: "viewQuotes", label: "Orçamentos" },
+      { key: "viewWorks", label: "Obras" },
+      { key: "viewInventory", label: "Estoque" },
+      { key: "viewTeam", label: "Equipe" },
+      { key: "viewFinancials", label: "Financeiro" },
+      { key: "viewSettings", label: "Configurações" },
+      { key: "viewBackups", label: "Backups" },
     ],
   },
   {
-    group: "Materiais",
+    group: "CRM",
     items: [
-      { key: "viewAllMaterials", label: "Ver retiradas de todos os funcionários" },
-      { key: "registrarMaterials", label: "Registrar saídas e retornos" },
+      { key: "viewLeads", label: "Leads" },
+      { key: "viewCrmWhatsapp", label: "WhatsApp" },
+      { key: "viewClients", label: "Clientes" },
+    ],
+  },
+  {
+    group: "Orçamentos",
+    items: [
+      { key: "viewQuotes", label: "Orçamentos" },
+      { key: "viewQuoteTemplates", label: "Templates" },
+      { key: "viewQuoteRules", label: "Regras e catálogo de serviços" },
+    ],
+  },
+  {
+    group: "Obras",
+    items: [
+      { key: "viewWorkOrders", label: "Ordens de Serviço" },
+      { key: "viewAllWorkOrders", label: "Ver todas as Ordens de Serviço" },
+      { key: "editWorkOrders", label: "Editar Ordens de Serviço" },
+      { key: "viewObraRegistro", label: "Registro de Obras" },
+      { key: "viewCalendar", label: "Calendário" },
     ],
   },
   {
     group: "Estoque",
     items: [
-      { key: "viewInventory", label: "Visualizar estoque" },
+      { key: "viewInventoryCurrent", label: "Estoque Atual" },
+      { key: "viewInventoryCount", label: "Contagem Física" },
+      { key: "viewInventoryMovements", label: "Movimentações" },
       { key: "editInventory", label: "Editar produtos do estoque" },
     ],
   },
   {
-    group: "Clientes",
+    group: "Equipe",
     items: [
-      { key: "viewClients", label: "Visualizar clientes" },
-      { key: "editClients", label: "Criar e editar clientes" },
+      { key: "viewProductivity", label: "Produtividade" },
+      { key: "registrarMaterials", label: "Controle de Materiais" },
+      { key: "viewAllMaterials", label: "Ver retiradas de todos os funcionários" },
+      { key: "viewWarranties", label: "Garantias" },
+      { key: "viewPostSale", label: "Pós-venda" },
     ],
   },
   {
-    group: "Financeiro e Dashboard",
+    group: "Financeiro",
     items: [
-      { key: "viewFinancials", label: "Acessar módulo financeiro" },
-      { key: "viewDashboard", label: "Ver dashboard e métricas" },
+      { key: "viewPayments", label: "Pagamentos" },
+      { key: "viewCashFlow", label: "Fluxo de Caixa" },
+      { key: "viewFinancialSettings", label: "Configurações financeiras" },
+    ],
+  },
+  {
+    group: "Configurações",
+    items: [
+      { key: "viewCostSettings", label: "Custos" },
+      { key: "viewStatusSettings", label: "Status" },
+      { key: "viewUsers", label: "Usuários" },
+      { key: "viewPriorityRules", label: "Regras" },
+    ],
+  },
+  {
+    group: "Backups",
+    items: [
+      { key: "viewBackupGeneration", label: "Backup" },
+      { key: "viewRestore", label: "Restauração" },
+      { key: "viewExports", label: "Exportação" },
     ],
   },
 ];

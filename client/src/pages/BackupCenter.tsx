@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  Database, Download, Upload, Clock, FileJson, FileText, Trash2,
+  Database, Upload, Clock, FileJson, FileText, Trash2,
   RefreshCw, History, CheckCircle2, AlertTriangle, Package, Users,
   Briefcase, ClipboardList, ShoppingCart, Layers, PackageCheck, Shield,
   HardDrive,
@@ -136,7 +136,7 @@ export default function BackupCenter() {
   const isAdmin = user?.role === "admin";
   const [history, setHistory] = useState<BackupHistoryEntry[]>([]);
   const [log, setLog] = useState<RestoreLogEntry[]>([]);
-  const [tab, setTab] = useState<"backup" | "history" | "log">("backup");
+  const [tab, setTab] = useState<"backup" | "restore" | "exports">("backup");
   const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
@@ -165,9 +165,9 @@ export default function BackupCenter() {
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900 flex items-center gap-3">
             <HardDrive className="w-8 h-8 text-primary" />
-            Backups & Restauração
+            Backups, Restauração e Exportação
           </h1>
-          <p className="text-slate-500 mt-1">Gere, gerencie e restaure backups de todos os módulos do sistema.</p>
+          <p className="text-slate-500 mt-1">Ações separadas por propósito para evitar confusão operacional.</p>
         </div>
         <button
           onClick={() => setRefresh(r => r + 1)}
@@ -182,7 +182,7 @@ export default function BackupCenter() {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-slate-900">{history.length}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Backups no histórico</p>
+            <p className="text-xs text-slate-500 mt-0.5">Backups gerados</p>
           </CardContent>
         </Card>
         <Card>
@@ -194,133 +194,229 @@ export default function BackupCenter() {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-slate-900">{totalSizeKB > 1024 ? `${(totalSizeKB / 1024).toFixed(1)} MB` : `${totalSizeKB} KB`}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Tamanho total (local)</p>
+            <p className="text-xs text-slate-500 mt-0.5">Volume exportado</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-2xl font-bold text-slate-900">{ALL_BACKUP_TYPES.length}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Módulos disponíveis</p>
+            <p className="text-xs text-slate-500 mt-0.5">Tipos exportáveis</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
-        {(["backup", "history", "log"] as const).map(t => (
+        {(["backup", "restore", "exports"] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
           >
-            {t === "backup" && "📦 Gerar Backups"}
-            {t === "history" && `📂 Histórico (${history.length})`}
-            {t === "log" && `📋 Log de Restaurações (${log.length})`}
+            {t === "backup" && `Backup (${history.length})`}
+            {t === "restore" && `Restauração (${log.length})`}
+            {t === "exports" && "Exportação"}
           </button>
         ))}
       </div>
 
-      {/* Tab: Gerar Backups */}
+      {/* Tab: Backup */}
       {tab === "backup" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {ALL_BACKUP_TYPES.map(cfg => {
-            const Icon = cfg.icon;
-            return (
-              <Card key={cfg.type} className="overflow-hidden hover:shadow-md transition-shadow">
-                <CardContent className="p-5 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.color}`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">{cfg.label}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{cfg.description}</p>
-                    </div>
-                  </div>
-
-                  {/* Last backup info */}
-                  {(() => {
-                    const last = history.find(e => e.type === cfg.type);
-                    return last ? (
-                      <div className="text-xs text-slate-500 flex items-center gap-1.5">
-                        <Clock className="w-3 h-3 shrink-0" />
-                        <span>Último: {fmtDateTime(last.exportedAt)}</span>
+        <div className="space-y-4">
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
+            <h2 className="text-lg font-bold text-slate-900">Backup</h2>
+            <p className="text-sm text-slate-600">Gere cópias de segurança e acompanhe somente o histórico de backups.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {ALL_BACKUP_TYPES.map(cfg => {
+              const Icon = cfg.icon;
+              return (
+                <Card key={cfg.type} className="overflow-hidden hover:shadow-md transition-shadow">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.color}`}>
+                        <Icon className="w-5 h-5" />
                       </div>
-                    ) : (
-                      <div className="text-xs text-slate-400 flex items-center gap-1.5">
-                        <AlertTriangle className="w-3 h-3 shrink-0" />
-                        <span>Nenhum backup gerado ainda</span>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{cfg.label}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{cfg.description}</p>
                       </div>
-                    );
-                  })()}
+                    </div>
 
-                  <div className="pt-1">
+                    {(() => {
+                      const last = history.find(e => e.type === cfg.type);
+                      return last ? (
+                        <div className="text-xs text-slate-500 flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          <span>Último: {fmtDateTime(last.exportedAt)}</span>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>Nenhum backup gerado ainda</span>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="pt-1">
+                      <BackupManager
+                        type={cfg.type}
+                        label={cfg.label}
+                        isAdmin={isAdmin}
+                        adminOnly={false}
+                        showRestore={false}
+                        onRestored={() => setRefresh(r => r + 1)}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <Card className="overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-slate-500" />
+                <span className="text-sm font-semibold text-slate-700">Histórico de Backups</span>
+              </div>
+              {history.length > 0 && (
+                <button onClick={clearHistory} className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors">
+                  Limpar histórico
+                </button>
+              )}
+            </div>
+            {history.length === 0 ? (
+              <div className="p-10 text-center">
+                <Database className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">Nenhum backup gerado ainda</p>
+                <p className="text-sm text-slate-400 mt-1">Gere um backup acima para registrar o histórico local.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {history.map(entry => (
+                  <HistoryRow key={entry.id} entry={entry} onDelete={() => deleteHistoryEntry(entry.id)} />
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Restauração */}
+      {tab === "restore" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
+            <h2 className="text-lg font-bold text-slate-900">Restauração</h2>
+            <p className="text-sm text-slate-600">Restaure somente arquivos JSON de backup já exportados anteriormente.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {ALL_BACKUP_TYPES.map(cfg => {
+              const Icon = cfg.icon;
+              return (
+                <Card key={cfg.type} className="overflow-hidden hover:shadow-md transition-shadow">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.color}`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{cfg.label}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Importar arquivo JSON deste módulo.</p>
+                      </div>
+                    </div>
                     <BackupManager
                       type={cfg.type}
                       label={cfg.label}
                       isAdmin={isAdmin}
                       adminOnly={false}
+                      showBackup={false}
                       onRestored={() => setRefresh(r => r + 1)}
                     />
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <Card className="overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <CheckCircle2 className="w-4 h-4 text-slate-500" />
+              <span className="text-sm font-semibold text-slate-700">Histórico de Restaurações</span>
+            </div>
+            {log.length === 0 ? (
+              <div className="p-10 text-center">
+                <Upload className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">Nenhuma restauração realizada ainda</p>
+                <p className="text-sm text-slate-400 mt-1">O histórico de restaurações aparecerá aqui automaticamente.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {log.map(entry => (
+                  <LogRow key={entry.id} entry={entry} />
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
-      {/* Tab: Histórico */}
-      {tab === "history" && (
-        <Card className="overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-            <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-slate-500" />
-              <span className="text-sm font-semibold text-slate-700">Histórico de Backups Gerados</span>
+      {/* Tab: Exportação */}
+      {tab === "exports" && (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-orange-100 bg-orange-50/60 px-4 py-3">
+            <h2 className="text-lg font-bold text-slate-900">Exportação</h2>
+            <p className="text-sm text-slate-600">Exporte dados administrativos por módulo para análise, conferência ou arquivamento.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {ALL_BACKUP_TYPES.map(cfg => {
+              const Icon = cfg.icon;
+              return (
+                <Card key={cfg.type} className="overflow-hidden hover:shadow-md transition-shadow">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.color}`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{cfg.label}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">{cfg.description}</p>
+                      </div>
+                    </div>
+                    <BackupManager
+                      type={cfg.type}
+                      label={cfg.label}
+                      isAdmin={isAdmin}
+                      adminOnly={false}
+                      showRestore={false}
+                      backupButtonLabel="Exportar"
+                      onRestored={() => setRefresh(r => r + 1)}
+                    />
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          <Card className="overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <FileJson className="w-4 h-4 text-slate-500" />
+              <span className="text-sm font-semibold text-slate-700">Exportações recentes</span>
             </div>
-            {history.length > 0 && (
-              <button onClick={clearHistory} className="text-xs text-red-500 hover:text-red-700 font-medium transition-colors">
-                Limpar histórico
-              </button>
+            {history.length === 0 ? (
+              <div className="p-10 text-center">
+                <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium">Nenhuma exportação recente</p>
+                <p className="text-sm text-slate-400 mt-1">As exportações também ficam registradas no histórico local.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {history.map(entry => (
+                  <HistoryRow key={entry.id} entry={entry} onDelete={() => deleteHistoryEntry(entry.id)} />
+                ))}
+              </div>
             )}
-          </div>
-          {history.length === 0 ? (
-            <div className="p-12 text-center">
-              <Database className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 font-medium">Nenhum backup gerado ainda</p>
-              <p className="text-sm text-slate-400 mt-1">Gere um backup na aba "Gerar Backups" para vê-lo aqui.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {history.map(entry => (
-                <HistoryRow key={entry.id} entry={entry} onDelete={() => deleteHistoryEntry(entry.id)} />
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
-
-      {/* Tab: Log de Restaurações */}
-      {tab === "log" && (
-        <Card className="overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
-            <CheckCircle2 className="w-4 h-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">Log de Restaurações</span>
-          </div>
-          {log.length === 0 ? (
-            <div className="p-12 text-center">
-              <Upload className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 font-medium">Nenhuma restauração realizada ainda</p>
-              <p className="text-sm text-slate-400 mt-1">O histórico de restaurações aparecerá aqui automaticamente.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {log.map(entry => (
-                <LogRow key={entry.id} entry={entry} />
-              ))}
-            </div>
-          )}
-        </Card>
+          </Card>
+        </div>
       )}
     </div>
   );

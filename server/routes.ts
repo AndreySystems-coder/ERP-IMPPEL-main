@@ -26,6 +26,32 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+async function userHasAnyPermission(userId: number, permissionsToCheck: string[]) {
+  const user = await storage.getUser(userId);
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  if (!(user as any).roleId) return false;
+
+  const customRole = await storage.getRole((user as any).roleId);
+  if (!customRole) return false;
+
+  let permissions: Record<string, boolean> = {};
+  try { permissions = JSON.parse(customRole.permissions); } catch {}
+  return permissionsToCheck.some((permission) => permissions[permission]);
+}
+
+function requireAnyPermission(permissionsToCheck: string[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session?.userId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+    if (await userHasAnyPermission(req.session.userId, permissionsToCheck)) {
+      return next();
+    }
+    return res.status(403).json({ message: "Acesso restrito para o cargo atual." });
+  };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -203,13 +229,17 @@ export async function registerRoutes(
     }
     // Attach permissions from the user's custom role (if any)
     let permissions: Record<string, boolean> = {};
+    let roleName: string | null = null;
+    let roleLabel: string | null = null;
     if ((user as any).roleId) {
       const customRole = await storage.getRole((user as any).roleId);
       if (customRole) {
         try { permissions = JSON.parse(customRole.permissions); } catch {}
+        roleName = customRole.name;
+        roleLabel = customRole.label;
       }
     }
-    res.status(200).json({ ...user, permissions });
+    res.status(200).json({ ...user, permissions, roleName, roleLabel });
   });
 
   app.post(api.auth.logout.path, (req, res) => {
@@ -348,16 +378,27 @@ export async function registerRoutes(
 
   // ─── Route-level access control ────────────────────────────────────────────
   // Admin-only API routes
-  const adminOnlyPrefixes = [
-    "/api/clients", "/api/leads", "/api/jobs", "/api/work-orders",
-    "/api/payments", "/api/products", "/api/services", "/api/inventory",
-    "/api/transactions", "/api/settings", "/api/cost-config",
-    "/api/priority-rules", "/api/dashboard", "/api/catalog",
-    "/api/job-tracking", "/api/scheduling",
+  const restrictedPrefixes = [
+    { prefix: "/api/clients", permissions: ["viewClients"] },
+    { prefix: "/api/leads", permissions: ["viewLeads"] },
+    { prefix: "/api/jobs", permissions: ["viewQuotes"] },
+    { prefix: "/api/work-orders", permissions: ["viewWorkOrders", "viewAllWorkOrders"] },
+    { prefix: "/api/payments", permissions: ["viewPayments"] },
+    { prefix: "/api/products", permissions: ["viewInventory", "viewInventoryCurrent"] },
+    { prefix: "/api/services", permissions: ["viewQuoteRules"] },
+    { prefix: "/api/inventory", permissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryMovements", "editInventory"] },
+    { prefix: "/api/transactions", permissions: ["viewFinancials", "viewCashFlow"] },
+    { prefix: "/api/settings", permissions: ["viewSettings"] },
+    { prefix: "/api/cost-config", permissions: ["viewCostSettings"] },
+    { prefix: "/api/priority-rules", permissions: ["viewPriorityRules"] },
+    { prefix: "/api/dashboard", permissions: ["viewDashboard"] },
+    { prefix: "/api/catalog", permissions: ["viewInventory", "viewInventoryCurrent"] },
+    { prefix: "/api/job-tracking", permissions: ["viewWorkOrders", "viewAllWorkOrders"] },
+    { prefix: "/api/scheduling", permissions: ["viewCalendar"] },
   ];
   app.use((req, res, next) => {
-    const isAdminRoute = adminOnlyPrefixes.some(p => req.path.startsWith(p));
-    if (isAdminRoute) return requireAdmin(req, res, next);
+    const restrictedRoute = restrictedPrefixes.find(({ prefix }) => req.path.startsWith(prefix));
+    if (restrictedRoute) return requireAnyPermission(restrictedRoute.permissions)(req, res, next);
     next();
   });
   // Obra registros require at least auth (funcionarios allowed)

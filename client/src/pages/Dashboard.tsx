@@ -35,6 +35,8 @@ export default function Dashboard() {
   const newLeads = (leads as any[]).filter((l: any) => ["New Lead", "Contacted"].includes(l.status)).length;
   const recentJobs = [...(jobs as any[])].sort((a, b) => b.id - a.id).slice(0, 5);
   const recentOrders = [...(workOrders as any[])].sort((a, b) => b.id - a.id).slice(0, 4);
+  const weekday = format(new Date(), "EEEE", { locale: ptBR });
+  const formattedDate = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 
   const kpis = [
     {
@@ -140,14 +142,18 @@ export default function Dashboard() {
   return (
     <div className="space-y-7">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold text-slate-900">
             Painel Principal
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            Visão geral do negócio — {format(new Date(), "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR })}
+            Visão geral da operação IMPPEL.
           </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm sm:text-right">
+          <p className="text-sm font-bold capitalize text-primary">{weekday}</p>
+          <p className="text-xs text-slate-500">{formattedDate}</p>
         </div>
       </div>
 

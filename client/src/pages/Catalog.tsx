@@ -16,7 +16,7 @@ import {
   Grid3X3, List, ShoppingCart,
 } from "lucide-react";
 
-// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Section
 type Product = {
   id: number;
   inventoryId?: number;
@@ -33,21 +33,21 @@ type Product = {
   active: boolean;
 };
 
-// â”€â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Section
 const CATEGORIES = [
-  "Argamassa PolimÃ©rica",
-  "Manta LÃ­quida",
-  "Manta AsfÃ¡ltica",
+  "Argamassa Polimérica",
+  "Manta Líquida",
+  "Manta Asfáltica",
   "Sistema de Drenagem",
   "Primer",
   "Selante PU",
-  "Massa AsfÃ¡ltica",
+  "Massa Asfáltica",
   "Ferramenta",
   "Tela",
-  "GeotÃªxtil",
-  "AcessÃ³rio",
+  "Geotêxtil",
+  "Acessório",
   "EPI",
-  "PÃ³ Mineral",
+  "Pó Mineral",
   "Fita",
   "Sem Categoria",
 ];
@@ -58,7 +58,7 @@ function fmtPrice(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// â”€â”€â”€ Product Form Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Section
 function ProductForm({
   product,
   onClose,
@@ -118,7 +118,7 @@ function ProductForm({
                   <Trash2 className="w-3 h-3 mr-1" /> Remover
                 </Button>
               )}
-              <p className="text-xs text-gray-400">JPG, PNG ou WEBP. Tamanho recomendado: 400Ã—400px</p>
+              <p className="text-xs text-gray-400">JPG, PNG ou WEBP. Tamanho recomendado: 400×400px</p>
             </div>
           </div>
 
@@ -142,7 +142,7 @@ function ProductForm({
           {/* Code + Brand */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Barcode className="w-4 h-4 text-gray-400" /> CÃ³digo / SKU</Label>
+              <Label className="flex items-center gap-1.5"><Barcode className="w-4 h-4 text-gray-400" /> Código / SKU</Label>
               <Input value={form.code || ""} onChange={e => set("code", e.target.value)} placeholder="Ex: 7890137000003" data-testid="input-product-code" />
             </div>
             <div className="space-y-1.5">
@@ -153,16 +153,16 @@ function ProductForm({
 
           {/* Description */}
           <div className="space-y-1.5">
-            <Label>DescriÃ§Ã£o / FunÃ§Ã£o</Label>
+            <Label>Descrição / Função</Label>
             <Textarea value={form.description || ""} onChange={e => set("description", e.target.value)}
-              placeholder="Descreva a funÃ§Ã£o, aplicaÃ§Ã£o e caracterÃ­sticas do produto..." rows={3}
+              placeholder="Descreva a função, aplicação e características do produto..." rows={3}
               data-testid="textarea-product-description" />
           </div>
 
           {/* Price + Unit */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <Label>PreÃ§o de Venda <span className="text-red-500">*</span></Label>
+              <Label>Preço de Venda <span className="text-red-500">*</span></Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-medium">R$</span>
                 <Input type="number" step="0.01" min="0" value={form.salePrice || ""} onChange={e => set("salePrice", parseFloat(e.target.value) || 0)}
@@ -171,10 +171,10 @@ function ProductForm({
             </div>
             <div className="space-y-1.5">
               <Label>Unidade</Label>
-              <Input value={form.unit || "un"} onChange={e => set("unit", e.target.value)} placeholder="un, mÂ², m, L, kg" data-testid="input-unit" />
+              <Input value={form.unit || "un"} onChange={e => set("unit", e.target.value)} placeholder="un, m², m, L, kg" data-testid="input-unit" />
             </div>
             <div className="space-y-1.5">
-              <Label>Desc. MÃ¡x. (%)</Label>
+              <Label>Desc. Máx. (%)</Label>
               <Input type="number" min="0" max="100" value={form.maxDiscount || ""} onChange={e => set("maxDiscount", parseFloat(e.target.value) || 0)}
                 placeholder="0" data-testid="input-max-discount" />
             </div>
@@ -183,14 +183,14 @@ function ProductForm({
           {/* Active toggle */}
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
             <input type="checkbox" id="active-toggle" checked={form.active ?? true} onChange={e => set("active", e.target.checked)} className="w-4 h-4 accent-blue-900" />
-            <label htmlFor="active-toggle" className="text-sm font-medium text-gray-700">Produto ativo (visÃ­vel no catÃ¡logo)</label>
+            <label htmlFor="active-toggle" className="text-sm font-medium text-gray-700">Produto ativo (visível no catálogo)</label>
           </div>
         </div>
 
         <div className="flex gap-3 p-6 pt-0">
           <Button variant="outline" onClick={onClose} className="flex-1" disabled={saving}>Cancelar</Button>
           <Button onClick={() => onSave(form)} disabled={!form.name || saving} className="flex-1 bg-blue-900 hover:bg-blue-800 text-white" data-testid="button-save-product">
-            {saving ? "Salvando..." : product?.id ? "Salvar AlteraÃ§Ãµes" : "Criar Produto"}
+            {saving ? "Salvando..." : product?.id ? "Salvar Alterações" : "Criar Produto"}
           </Button>
         </div>
       </div>
@@ -198,7 +198,7 @@ function ProductForm({
   );
 }
 
-// â”€â”€â”€ Product Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Section
 function ProductCard({
   product, isAdmin, onEdit, onDelete, onToggle, viewMode,
 }: {
@@ -313,7 +313,7 @@ function ProductCard({
           </div>
           {product.maxDiscount > 0 && (
             <Badge variant="outline" className="text-xs text-green-700 border-green-200">
-              Desc. atÃ© {product.maxDiscount}%
+              Desc. até {product.maxDiscount}%
             </Badge>
           )}
         </div>
@@ -322,7 +322,7 @@ function ProductCard({
   );
 }
 
-// â”€â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Section
 export default function Catalog() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -410,8 +410,8 @@ export default function Catalog() {
             <ShoppingCart className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900" data-testid="text-page-title">CatÃ¡logo de Produtos</h1>
-            <p className="text-sm text-gray-500">{products.filter(p => p.active).length} produto(s) ativo(s) Â· {categories.length - 1} categoria(s)</p>
+            <h1 className="text-2xl font-bold text-gray-900" data-testid="text-page-title">Catálogo de Produtos</h1>
+            <p className="text-sm text-gray-500">{products.filter(p => p.active).length} produto(s) ativo(s) · {categories.length - 1} categoria(s)</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -437,7 +437,7 @@ export default function Catalog() {
       <div className="flex gap-3 items-center">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome, cÃ³digo ou fabricante..."
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome, código ou fabricante..."
             className="pl-9" data-testid="input-search-products" />
         </div>
         <div className="flex border border-gray-200 rounded-lg overflow-hidden">
@@ -483,7 +483,7 @@ export default function Catalog() {
           <Package className="w-14 h-14 mx-auto mb-3 opacity-20" />
           <p className="font-semibold text-gray-500">Nenhum produto encontrado</p>
           <p className="text-sm mt-1">
-            {search ? `Nenhum resultado para "${search}"` : isAdmin ? "Clique em 'Novo Produto' para comeÃ§ar." : "Nenhum produto cadastrado ainda."}
+            {search ? `Nenhum resultado para "${search}"` : isAdmin ? "Clique em 'Novo Produto' para começar." : "Nenhum produto cadastrado ainda."}
           </p>
         </CardContent></Card>
       ) : (
@@ -537,17 +537,17 @@ export default function Catalog() {
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
             <p className="text-xl font-bold text-blue-900">{fmtPrice(Math.min(...filtered.map(p => p.salePrice)))}</p>
-            <p className="text-xs text-gray-400">menor preÃ§o</p>
+            <p className="text-xs text-gray-400">menor preço</p>
           </div>
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
             <p className="text-xl font-bold text-blue-900">{fmtPrice(Math.max(...filtered.map(p => p.salePrice)))}</p>
-            <p className="text-xs text-gray-400">maior preÃ§o</p>
+            <p className="text-xs text-gray-400">maior preço</p>
           </div>
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
             <p className="text-xl font-bold text-green-700">{fmtPrice(filtered.reduce((s, p) => s + p.salePrice, 0) / filtered.length)}</p>
-            <p className="text-xs text-gray-400">preÃ§o mÃ©dio</p>
+            <p className="text-xs text-gray-400">preço médio</p>
           </div>
         </div>
       )}

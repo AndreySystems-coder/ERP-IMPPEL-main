@@ -74,7 +74,7 @@ export default function WorkOrders() {
   const [waMessage, setWaMessage] = useState("");
 
   const openWAModal = (wo: any) => {
-    const defaultMsg = `OlÃ¡! ðŸ‘‹ Aqui Ã© da IMPPEL ImpermeabilizaÃ§Ã£o.\n\nInformamos que sua Ordem de ServiÃ§o *OS #${wo.id}* â€” *${wo.serviceType}* estÃ¡ em andamento.\n\nEquipe IMPPEL ðŸ—ï¸`;
+    const defaultMsg = `Olá!  Aqui é da IMPPEL Impermeabilização.\n\nInformamos que sua Ordem de Serviço *OS #${wo.id}* — *${wo.serviceType}* está em andamento.\n\nEquipe IMPPEL `;
     setWaPhone("");
     setWaMessage(defaultMsg);
     setWaWO({ open: true, wo });
@@ -87,7 +87,7 @@ export default function WorkOrders() {
     fetch("/api/whatsapp/log", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: digits, message: waMessage, flowName: `OS #${waWO.wo?.id} â€” AtualizaÃ§Ã£o` }),
+      body: JSON.stringify({ phone: digits, message: waMessage, flowName: `OS #${waWO.wo?.id} — Atualização` }),
     }).catch(() => {});
     window.open(url, "_blank");
     setWaWO({ open: false, wo: null });
@@ -114,7 +114,7 @@ export default function WorkOrders() {
   const [consumoNotes, setConsumoNotes] = useState("");
   const [savingConsumo, setSavingConsumo] = useState(false);
 
-  // â”€â”€ Checklist tÃ©cnico + finalizaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // â”€â”€ Checklist técnico + finalização â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [checklistDone, setChecklistDone] = useState<Record<string, boolean>>({});
   const [finalizando, setFinalizando] = useState(false);
   const [warrantyCreated, setWarrantyCreated] = useState<any>(null);
@@ -145,7 +145,7 @@ export default function WorkOrders() {
   };
 
   // Generic service name patterns (old/placeholder names that mean "no real data yet")
-  const GENERIC_NAMES = new Set(["ServiÃ§o principal", "ServiÃ§o", "Multi-serviÃ§os", "Novo ServiÃ§o"]);
+  const GENERIC_NAMES = new Set(["Serviço principal", "Serviço", "Multi-serviços", "Novo Serviço"]);
   const isGenericProgress = (progress: ServiceProgress[]) =>
     progress.every(sp => GENERIC_NAMES.has(sp.serviceName));
 
@@ -181,7 +181,7 @@ export default function WorkOrders() {
         } catch {}
 
         if (!isGenericProgress(parsed) || !hasRealJobServices) {
-          // Use saved progress â€” apply ceiling to quantities
+          // Use saved progress — apply ceiling to quantities
           const ceiled = parsed.map(sp => ({
             ...sp,
             realMaterials: sp.realMaterials.map(m => ({
@@ -236,7 +236,7 @@ export default function WorkOrders() {
   };
 
   const updateRealMat = (spIdx: number, matIdx: number, rawValue: number) => {
-    // Always ceiling the real quantity â€” we deal with whole packages
+    // Always ceiling the real quantity — we deal with whole packages
     const ceiledQty = rawValue > 0 ? Math.ceil(rawValue) : 0;
     setServiceProgress(prev => prev.map((sp, i) => {
       if (i !== spIdx) return sp;
@@ -250,7 +250,7 @@ export default function WorkOrders() {
     if (!mat) return;
     if (ceiledQty > mat.plannedQty && mat.plannedQty > 0) {
       toast({
-        title: "âš ï¸ Material excedido!",
+        title: "Atenção: Material excedido!",
         description: `${mat.name}: planejado ${mat.plannedQty} un., utilizado ${ceiledQty} un. (+${ceiledQty - mat.plannedQty})`,
         variant: "destructive",
       });
@@ -259,7 +259,7 @@ export default function WorkOrders() {
 
   const addServiceToProgress = () => {
     setServiceProgress(prev => [...prev, {
-      serviceName: "Novo ServiÃ§o", started: false, startDate: "", endDate: "", finished: false,
+      serviceName: "Novo Serviço", started: false, startDate: "", endDate: "", finished: false,
       realMaterials: [], observations: "",
     }]);
   };
@@ -268,7 +268,7 @@ export default function WorkOrders() {
     if (!detailWO) return;
     setSavingObra(true);
     try {
-      const updatedStatus = serviceProgress.every(sp => sp.finished) ? "ConcluÃ­da" : serviceProgress.some(sp => sp.started) ? "Em Andamento" : detailWO.status;
+      const updatedStatus = serviceProgress.every(sp => sp.finished) ? "Concluída" : serviceProgress.some(sp => sp.started) ? "Em Andamento" : detailWO.status;
       await updateWO.mutateAsync({
         id: detailWO.id,
         serviceProgress: JSON.stringify(serviceProgress),
@@ -287,19 +287,19 @@ export default function WorkOrders() {
     if (!detailWO) return;
     const allServicesFinished = serviceProgress.every(sp => sp.finished);
     if (!allServicesFinished) {
-      toast({ title: "Marque todos os serviÃ§os como concluÃ­dos antes de finalizar", variant: "destructive" });
+      toast({ title: "Marque todos os serviços como concluídos antes de finalizar", variant: "destructive" });
       return;
     }
     const checklistComplete = CHECKLIST_ITEMS.every(item => checklistDone[item.key]);
     if (!checklistComplete) {
-      toast({ title: "Checklist tÃ©cnico incompleto. Marque todos os itens antes de finalizar.", variant: "destructive" });
+      toast({ title: "Checklist técnico incompleto. Marque todos os itens antes de finalizar.", variant: "destructive" });
       return;
     }
     // Check pending materials
     if (pendingMaterials.length > 0 && !ignorePendingMaterials) {
       setIgnorePendingMaterials(true);
       toast({
-        title: `âš ï¸ ${pendingMaterials.length} retirada(s) de material sem retorno`,
+        title: `Atenção: ${pendingMaterials.length} retirada(s) de material sem retorno`,
         description: "Confirme novamente para finalizar mesmo assim, ou registre o retorno primeiro no Controle de Materiais.",
         variant: "destructive",
       });
@@ -318,11 +318,11 @@ export default function WorkOrders() {
     setIgnorePendingMaterials(false);
     setFinalizando(true);
     try {
-      // 1. Call finalizar endpoint â†’ marks ConcluÃ­da + creates Garantia
+      // 1. Call finalizar endpoint → marks Concluída + creates Garantia
       const result = await apiRequest("POST", `/api/work-orders/${detailWO.id}/finalizar`);
       setWarrantyCreated(result.warranty);
       setPostSaleCreated(result.postSale);
-      setDetailWO((prev: any) => ({ ...prev, status: "ConcluÃ­da" }));
+      setDetailWO((prev: any) => ({ ...prev, status: "Concluída" }));
       queryClient.invalidateQueries({ queryKey: ["/api/work-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/warranties"] });
       queryClient.invalidateQueries({ queryKey: ["/api/nps-responses"] });
@@ -331,8 +331,8 @@ export default function WorkOrders() {
       // 2. Auto-generate PDF
       generateWorkOrderReport(result.warranty);
       toast({
-        title: "âœ… Obra finalizada com sucesso!",
-        description: "RelatÃ³rio, garantia e pÃ³s-venda foram sinalizados automaticamente.",
+        title: "✓ Obra finalizada com sucesso!",
+        description: "Relatório, garantia e pós-venda foram sinalizados automaticamente.",
       });
     } catch {
       toast({ title: "Erro ao finalizar obra", variant: "destructive" });
@@ -409,7 +409,7 @@ export default function WorkOrders() {
       }
       setConsumoInputs({});
       setConsumoNotes("");
-      toast({ title: `âœ… ${entries.length} lanÃ§amento(s) registrado(s) por ${currentUser?.username}!` });
+      toast({ title: `✓ ${entries.length} lançamento(s) registrado(s) por ${currentUser?.username}!` });
     } catch {
       toast({ title: "Erro ao registrar consumo", variant: "destructive" });
     } finally {
@@ -435,7 +435,7 @@ export default function WorkOrders() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900 flex items-center gap-3">
-            <Calendar className="w-8 h-8 text-primary" /> Ordens de ServiÃ§o
+            <Calendar className="w-8 h-8 text-primary" /> Ordens de Serviço
           </h1>
           <p className="text-slate-500 mt-1">Gerencie ordens, equipes, materiais e o registro de obra.</p>
         </div>
@@ -548,14 +548,14 @@ export default function WorkOrders() {
                 <SiWhatsapp className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-base">Enviar AtualizaÃ§Ã£o via WhatsApp</h2>
-                <p className="text-xs text-gray-400">OS #{waWO.wo?.id} â€” {waWO.wo?.serviceType}</p>
+                <h2 className="font-bold text-gray-900 dark:text-gray-100 text-base">Enviar Atualização via WhatsApp</h2>
+                <p className="text-xs text-gray-400">OS #{waWO.wo?.id} — {waWO.wo?.serviceType}</p>
               </div>
             </div>
             <div className="p-5 space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-gray-400" />NÃºmero do WhatsApp *
+                  <Phone className="w-4 h-4 text-gray-400" />Número do WhatsApp *
                 </label>
                 <input
                   type="tel"
@@ -565,7 +565,7 @@ export default function WorkOrders() {
                   className="w-full px-3.5 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 focus:outline-none focus:border-green-500 text-sm"
                   data-testid="wa-phone-input"
                 />
-                <p className="text-xs text-gray-400">DDD + nÃºmero (cÃ³digo +55 adicionado automaticamente)</p>
+                <p className="text-xs text-gray-400">DDD + número (código +55 adicionado automaticamente)</p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Mensagem</label>
@@ -580,7 +580,7 @@ export default function WorkOrders() {
               </div>
               <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl p-3 flex items-start gap-2 text-xs text-green-700 dark:text-green-400">
                 <MessageCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                O WhatsApp abrirÃ¡ com a mensagem jÃ¡ preenchida â€” basta clicar em Enviar.
+                O WhatsApp abrirá com a mensagem já preenchida — basta clicar em Enviar.
               </div>
             </div>
             <div className="flex gap-2 p-4 border-t border-gray-200 dark:border-gray-700">

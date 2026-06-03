@@ -391,6 +391,9 @@ interface BackupManagerProps {
   onRestored?: () => void;
   adminOnly?: boolean;
   isAdmin?: boolean;
+  showBackup?: boolean;
+  showRestore?: boolean;
+  backupButtonLabel?: string;
 }
 
 const INVALIDATE_KEYS: Record<BackupType, string[]> = {
@@ -405,7 +408,7 @@ const INVALIDATE_KEYS: Record<BackupType, string[]> = {
 };
 
 export default function BackupManager({
-  type, label, onRestored, adminOnly = true, isAdmin = true,
+  type, label, onRestored, adminOnly = true, isAdmin = true, showBackup = true, showRestore = true, backupButtonLabel = "Gerar backup",
 }: BackupManagerProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -517,34 +520,38 @@ export default function BackupManager({
   return (
     <>
       <div className="flex items-center gap-2">
-        <button
-          onClick={handleGenerateBackup}
-          disabled={loadingBackup}
-          data-testid={`button-backup-${type}`}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm"
-          title={`Gerar Backup — ${effectiveLabel}`}
-        >
-          {loadingBackup ? (
-            <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
-          ) : (
-            <>
-              <FileJson className="w-3.5 h-3.5 text-blue-600" />
-              <FileText className="w-3.5 h-3.5 text-red-500" />
-            </>
-          )}
-          <span className="hidden sm:inline">Backup</span>
-          <Download className="w-3.5 h-3.5" />
-        </button>
+        {showBackup && (
+          <button
+            onClick={handleGenerateBackup}
+            disabled={loadingBackup}
+            data-testid={`button-backup-${type}`}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm"
+            title={`Gerar Backup — ${effectiveLabel}`}
+          >
+            {loadingBackup ? (
+              <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
+            ) : (
+              <>
+                <FileJson className="w-3.5 h-3.5 text-blue-600" />
+                <FileText className="w-3.5 h-3.5 text-red-500" />
+              </>
+            )}
+            <span className="hidden sm:inline">{backupButtonLabel}</span>
+            <Download className="w-3.5 h-3.5" />
+          </button>
+        )}
 
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          data-testid={`button-restore-${type}`}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-all shadow-sm"
-          title="Importar Backup Anterior"
-        >
-          <Upload className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Restaurar</span>
-        </button>
+        {showRestore && (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            data-testid={`button-restore-${type}`}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-all shadow-sm"
+            title="Importar Backup Anterior"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Restaurar</span>
+          </button>
+        )}
         <input
           ref={fileInputRef}
           type="file"
