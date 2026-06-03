@@ -17,6 +17,18 @@ export const errorSchemas = {
   internal: z.object({ message: z.string() }),
 };
 
+export const publicUserSchema = z.object({
+  id: z.number(),
+  username: z.string(),
+  role: z.string(),
+  createdAt: z.any().optional(),
+  roleId: z.number().nullable().optional(),
+  jobTitle: z.string().nullable().optional(),
+  permissions: z.record(z.boolean()).optional(),
+  roleName: z.string().nullable().optional(),
+  roleLabel: z.string().nullable().optional(),
+});
+
 export const api = {
   auth: {
     login: {
@@ -24,7 +36,7 @@ export const api = {
       path: '/api/auth/login' as const,
       input: z.object({ username: z.string(), password: z.string() }),
       responses: {
-        200: z.custom<typeof users.$inferSelect>(),
+        200: publicUserSchema,
         401: errorSchemas.validation,
       }
     },
@@ -32,7 +44,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/auth/me' as const,
       responses: {
-        200: z.custom<typeof users.$inferSelect>(),
+        200: publicUserSchema,
         401: errorSchemas.validation,
       }
     },

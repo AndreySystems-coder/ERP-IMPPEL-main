@@ -95,3 +95,54 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+@keyframes login-wave-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(28px, -18px, 0) scale(1.04);
+  }
+}
+
+.login-wave {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(18px);
+  opacity: 0.72;
+  animation: login-wave-drift 16s ease-in-out infinite;
+}
+
+.login-wave-one {
+  width: 34rem;
+  height: 34rem;
+  left: -14rem;
+  top: -12rem;
+  background: rgba(147, 197, 253, 0.7);
+}
+
+.login-wave-two {
+  width: 42rem;
+  height: 42rem;
+  right: -18rem;
+  top: 5rem;
+  background: rgba(30, 58, 138, 0.16);
+  animation-duration: 20s;
+  animation-delay: -6s;
+}
+
+.login-wave-three {
+  width: 26rem;
+  height: 26rem;
+  right: 8%;
+  bottom: -12rem;
+  background: rgba(249, 115, 22, 0.18);
+  animation-duration: 18s;
+  animation-delay: -3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-wave {
+    animation: none;
+  }
+}

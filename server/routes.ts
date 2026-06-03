@@ -191,6 +191,11 @@ export async function registerRoutes(
   // Call seed async (fire and forget for now, or await if preferred)
   seedDatabase().catch(console.error);
 
+  const toPublicUser = (user: any, extras: Record<string, unknown> = {}) => {
+    const { password: _password, ...publicUser } = user || {};
+    return { ...publicUser, ...extras };
+  };
+
   // Auth
   app.post(api.auth.login.path, async (req, res) => {
     try {
@@ -209,7 +214,7 @@ export async function registerRoutes(
       }
       req.session.userId = user.id;
       req.session.userRole = user.role;
-      res.status(200).json(user);
+      res.status(200).json(toPublicUser(user));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(401).json({ message: err.errors[0].message });
@@ -239,7 +244,7 @@ export async function registerRoutes(
         roleLabel = customRole.label;
       }
     }
-    res.status(200).json({ ...user, permissions, roleName, roleLabel });
+    res.status(200).json(toPublicUser(user, { permissions, roleName, roleLabel }));
   });
 
   app.post(api.auth.logout.path, (req, res) => {

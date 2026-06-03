@@ -5,13 +5,19 @@ import { canAccessAny, permissionsForPath } from "@/lib/permissions";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useUser();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  const routePermissions = permissionsForPath(location);
+  const allowed = !!user && (routePermissions.length === 0 || user.role === "admin" || canAccessAny(user as any, routePermissions));
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      setLocation("/login");
+    if (!isLoading) {
+      if (!user) {
+        setLocation("/login");
+      } else if (!allowed) {
+        setLocation("/");
+      }
     }
-  }, [user, isLoading, setLocation]);
+  }, [user, isLoading, allowed, setLocation]);
 
   if (isLoading) {
     return (
@@ -21,7 +27,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) return null;
+  if (!user || !allowed) return null;
 
   return <>{children}</>;
 }
