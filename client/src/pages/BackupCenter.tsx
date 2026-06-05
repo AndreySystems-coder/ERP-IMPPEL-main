@@ -21,7 +21,8 @@ const ALL_BACKUP_TYPES: { type: BackupType; label: string; icon: React.ElementTy
   { type: "clientes", label: "Clientes", icon: Users, color: "text-sky-600 bg-sky-50 border-sky-200", description: "Cadastro completo de clientes" },
   { type: "orcamentos", label: "Orçamentos", icon: Briefcase, color: "text-orange-600 bg-orange-50 border-orange-200", description: "Orçamentos e negociações" },
   { type: "ordens-servico", label: "Ordens de Serviço", icon: ClipboardList, color: "text-rose-600 bg-rose-50 border-rose-200", description: "Ordens de execução de obras" },
-  { type: "garantias", label: "Garantias", icon: Shield, color: "text-teal-600 bg-teal-50 border-teal-200", description: "Garantias e certificados emitidos" },
+  { type: "financeiro", label: "Financeiro", icon: FileText, color: "text-green-600 bg-green-50 border-green-200", description: "Pagamentos, recebimentos e caixa" },
+  { type: "pos-venda", label: "Garantias/Pós-venda", icon: Shield, color: "text-teal-600 bg-teal-50 border-teal-200", description: "Garantias, NPS e manutenções" },
 ];
 
 const MODE_LABEL: Record<string, string> = {
@@ -54,6 +55,10 @@ function getModuleSummary(entry: BackupHistoryEntry): string {
   if (d.clients?.length)     parts.push(`${d.clients.length} clientes`);
   if (d.jobs?.length)        parts.push(`${d.jobs.length} orçamentos`);
   if (d.workOrders?.length)  parts.push(`${d.workOrders.length} ordens`);
+  if (d.payments?.length)    parts.push(`${d.payments.length} pagamentos`);
+  if (d.transactions?.length) parts.push(`${d.transactions.length} movimentos`);
+  if (d.npsResponses?.length) parts.push(`${d.npsResponses.length} NPS`);
+  if (d.maintenanceReminders?.length) parts.push(`${d.maintenanceReminders.length} lembretes`);
   if (d.warranties?.length)  parts.push(`${d.warranties.length} garantias`);
   return parts.join(" · ") || "—";
 }
@@ -131,13 +136,36 @@ function LogRow({ entry }: { entry: RestoreLogEntry }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export default function BackupCenter() {
+export type BackupCenterMode = "backup" | "restore" | "exports";
+
+const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; panelTitle: string; panelDescription: string }> = {
+  backup: {
+    title: "Backup",
+    subtitle: "Gerar cópia segura dos dados",
+    panelTitle: "Gerar cópia segura dos dados",
+    panelDescription: "Cada backup baixa um arquivo JSON restaurável e um PDF de conferência humana.",
+  },
+  exports: {
+    title: "Exportação",
+    subtitle: "Baixar relatórios em PDF",
+    panelTitle: "Baixar relatórios em PDF",
+    panelDescription: "Exportação gera relatórios visuais para conferência. Não gera arquivo técnico de restauração.",
+  },
+  restore: {
+    title: "Restauração",
+    subtitle: "Restaurar dados a partir de backup",
+    panelTitle: "Restaurar dados a partir de backup",
+    panelDescription: "PDF é usado para conferência e relatório. Para restaurar dados, envie o arquivo JSON/CSV gerado no backup.",
+  },
+};
+
+export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterMode }) {
   const { data: user } = useUser();
   const isAdmin = user?.role === "admin";
   const [history, setHistory] = useState<BackupHistoryEntry[]>([]);
   const [log, setLog] = useState<RestoreLogEntry[]>([]);
-  const [tab, setTab] = useState<"backup" | "restore" | "exports">("backup");
   const [refresh, setRefresh] = useState(0);
+  const page = PAGE_COPY[mode];
 
   useEffect(() => {
     setHistory(getBackupHistory());
@@ -165,9 +193,9 @@ export default function BackupCenter() {
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900 flex items-center gap-3">
             <HardDrive className="w-8 h-8 text-primary" />
-            Backups, Restauração e Exportação
+            {page.title}
           </h1>
-          <p className="text-slate-500 mt-1">Ações separadas por propósito para evitar confusão operacional.</p>
+          <p className="text-slate-500 mt-1">{page.subtitle}</p>
         </div>
         <button
           onClick={() => setRefresh(r => r + 1)}
@@ -205,27 +233,12 @@ export default function BackupCenter() {
         </Card>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit">
-        {(["backup", "restore", "exports"] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-          >
-            {t === "backup" && `Backup (${history.length})`}
-            {t === "restore" && `Restauração (${log.length})`}
-            {t === "exports" && "Exportação"}
-          </button>
-        ))}
-      </div>
-
       {/* Tab: Backup */}
-      {tab === "backup" && (
+      {mode === "backup" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3">
-            <h2 className="text-lg font-bold text-slate-900">Backup</h2>
-            <p className="text-sm text-slate-600">Gere cópias de segurança e acompanhe somente o histórico de backups.</p>
+            <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
+            <p className="text-sm text-slate-600">{page.panelDescription}</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
@@ -265,6 +278,7 @@ export default function BackupCenter() {
                         isAdmin={isAdmin}
                         adminOnly={false}
                         showRestore={false}
+                        generatedBy={user?.username}
                         onRestored={() => setRefresh(r => r + 1)}
                       />
                     </div>
@@ -304,11 +318,12 @@ export default function BackupCenter() {
       )}
 
       {/* Tab: Restauração */}
-      {tab === "restore" && (
+      {mode === "restore" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
-            <h2 className="text-lg font-bold text-slate-900">Restauração</h2>
-            <p className="text-sm text-slate-600">Restaure somente arquivos JSON de backup já exportados anteriormente.</p>
+            <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
+            <p className="text-sm text-slate-600">{page.panelDescription}</p>
+            <p className="mt-2 text-xs font-semibold text-amber-700">Aviso de segurança: confira o preview e confirme o modo de restauração antes de aplicar.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
@@ -362,11 +377,11 @@ export default function BackupCenter() {
       )}
 
       {/* Tab: Exportação */}
-      {tab === "exports" && (
+      {mode === "exports" && (
         <div className="space-y-4">
           <div className="rounded-xl border border-orange-100 bg-orange-50/60 px-4 py-3">
-            <h2 className="text-lg font-bold text-slate-900">Exportação</h2>
-            <p className="text-sm text-slate-600">Exporte dados administrativos por módulo para análise, conferência ou arquivamento.</p>
+            <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
+            <p className="text-sm text-slate-600">{page.panelDescription}</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
@@ -389,7 +404,9 @@ export default function BackupCenter() {
                       isAdmin={isAdmin}
                       adminOnly={false}
                       showRestore={false}
-                      backupButtonLabel="Exportar"
+                      purpose="export"
+                      backupButtonLabel="Baixar PDF"
+                      generatedBy={user?.username}
                       onRestored={() => setRefresh(r => r + 1)}
                     />
                   </CardContent>
@@ -397,27 +414,33 @@ export default function BackupCenter() {
               );
             })}
           </div>
-          <Card className="overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
-              <FileJson className="w-4 h-4 text-slate-500" />
-              <span className="text-sm font-semibold text-slate-700">Exportações recentes</span>
-            </div>
-            {history.length === 0 ? (
-              <div className="p-10 text-center">
-                <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium">Nenhuma exportação recente</p>
-                <p className="text-sm text-slate-400 mt-1">As exportações também ficam registradas no histórico local.</p>
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <FileText className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" />
+                <div>
+                  <p className="text-sm font-bold text-slate-800">Exportação é somente relatório</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Estes PDFs servem para conferência, auditoria e compartilhamento. Para restaurar dados, use a tela Restauração com o arquivo JSON gerado na tela Backup.
+                  </p>
+                </div>
               </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {history.map(entry => (
-                  <HistoryRow key={entry.id} entry={entry} onDelete={() => deleteHistoryEntry(entry.id)} />
-                ))}
-              </div>
-            )}
+            </CardContent>
           </Card>
         </div>
       )}
     </div>
   );
+}
+
+export function BackupGenerationPage() {
+  return <BackupCenter mode="backup" />;
+}
+
+export function BackupExportPage() {
+  return <BackupCenter mode="exports" />;
+}
+
+export function BackupRestorePage() {
+  return <BackupCenter mode="restore" />;
 }

@@ -235,11 +235,11 @@ export function BackupsHub() {
     <HubPage
       config={{
         title: "Backups",
-        description: "Backup, restauração e exportações gerais ficam centralizados aqui.",
+        description: "Escolha uma rotina segura: backup técnico, relatório PDF ou restauração controlada.",
         items: [
-          { title: "Backup", description: "Crie e acompanhe cópias de segurança do ERP.", href: "/backups", icon: HardDrive, permission: "viewBackupGeneration", accent: accents.blue },
-          { title: "Exportações", description: "Centralize exportações administrativas e arquivos de apoio.", href: "/backups", icon: FileText, permission: "viewExports", accent: accents.emerald },
-          { title: "Restauração", description: "Acesse a central para restaurar dados quando necessário.", href: "/backups", icon: Shield, permission: "viewRestore", accent: accents.orange },
+          { title: "Backup", description: "Gerar cópia segura dos dados com JSON restaurável e PDF de conferência.", href: "/backups/backup", icon: HardDrive, permission: "viewBackupGeneration", accent: accents.blue },
+          { title: "Exportação", description: "Baixar relatórios visuais em PDF sem gerar arquivo técnico.", href: "/backups/exportacao", icon: FileText, permission: "viewExports", accent: accents.emerald },
+          { title: "Restauração", description: "Restaurar dados a partir de JSON/CSV com preview e confirmação.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
         ],
       }}
     />

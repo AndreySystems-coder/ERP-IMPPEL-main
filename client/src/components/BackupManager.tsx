@@ -18,6 +18,8 @@ export type BackupType =
   | "clientes"
   | "orcamentos"
   | "ordens-servico"
+  | "financeiro"
+  | "pos-venda"
   | "garantias";
 
 export type RestoreMode = "merge" | "overwrite";
@@ -52,6 +54,8 @@ const TYPE_LABELS: Record<BackupType, string> = {
   clientes: "Clientes",
   orcamentos: "Orçamentos",
   "ordens-servico": "Ordens de Serviço",
+  financeiro: "Financeiro",
+  "pos-venda": "Garantias/Pós-venda",
   garantias: "Garantias",
 };
 
@@ -63,6 +67,8 @@ const FILE_LABELS: Record<BackupType, string> = {
   clientes: "Clientes",
   orcamentos: "Orcamentos",
   "ordens-servico": "Ordens_Servico",
+  financeiro: "Financeiro",
+  "pos-venda": "Garantias_Pos_Venda",
   garantias: "Garantias",
 };
 
@@ -105,14 +111,14 @@ export function fmtDateTime(d?: string | Date): string {
   return new Date(d).toLocaleString("pt-BR");
 }
 
-function generateFileBaseName(type: BackupType): string {
+function generateFileBaseName(type: BackupType, prefix = "Backup"): string {
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, "0");
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const yyyy = now.getFullYear();
   const HH = String(now.getHours()).padStart(2, "0");
   const MM = String(now.getMinutes()).padStart(2, "0");
-  return `Backup_${FILE_LABELS[type]}_${dd}-${mm}-${yyyy}_${HH}-${MM}`;
+  return `${prefix}_${FILE_LABELS[type]}_${dd}-${mm}-${yyyy}_${HH}-${MM}`;
 }
 
 function getRecordCount(type: BackupType, backup: any): number {
@@ -124,6 +130,8 @@ function getRecordCount(type: BackupType, backup: any): number {
   if (type === "clientes") return (d.clients || []).length;
   if (type === "orcamentos") return (d.jobs || []).length;
   if (type === "ordens-servico") return (d.workOrders || []).length;
+  if (type === "financeiro") return (d.payments || []).length + (d.transactions || []).length;
+  if (type === "pos-venda") return (d.warranties || []).length + (d.npsResponses || []).length + (d.maintenanceReminders || []).length;
   if (type === "garantias") return (d.warranties || []).length;
   return 0;
 }
@@ -140,16 +148,19 @@ function getPreviewItems(type: BackupType, backup: any): { name: string; detail?
   if (type === "clientes") return toItem(d.clients, "name", r => r.phone || r.email || "—");
   if (type === "orcamentos") return toItem(d.jobs, "clientName", r => r.title || r.status || "—");
   if (type === "ordens-servico") return toItem(d.workOrders, "clientName", r => r.status || "—");
+  if (type === "financeiro") return toItem(d.payments?.length ? d.payments : d.transactions, "clientName", r => r.description || `R$ ${Number(r.amount || 0).toFixed(2)}`);
+  if (type === "pos-venda") return toItem(d.warranties, "clientName", r => r.serviceType || r.status || "—");
   if (type === "garantias") return toItem(d.warranties, "clientName", r => r.serviceName || r.status || "—");
   return [];
 }
 
 // ─── PDF Generation ──────────────────────────────────────────────────────────
-export function generatePDF(type: BackupType, backup: any) {
+export function generatePDF(type: BackupType, backup: any, options: { titlePrefix?: string; generatedBy?: string; filePrefix?: string } = {}) {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const now = new Date().toLocaleString("pt-BR");
   const label = TYPE_LABELS[type];
   const count = getRecordCount(type, backup);
+  const titlePrefix = options.titlePrefix || "Backup";
 
   // Header bar
   doc.setFillColor(15, 23, 42);
@@ -157,10 +168,11 @@ export function generatePDF(type: BackupType, backup: any) {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text(`IMPPEL ERP — Backup ${label}`, 14, 10);
+  doc.text(`IMPPEL ERP — ${titlePrefix} ${label}`, 14, 10);
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.text(`Gerado em: ${now}`, 14, 16);
+  if (options.generatedBy) doc.text(`Responsável: ${options.generatedBy}`, 92, 16);
   doc.text(`Total de registros: ${count}`, 230, 16);
   doc.setTextColor(0, 0, 0);
 
@@ -240,7 +252,30 @@ export function generatePDF(type: BackupType, backup: any) {
     autoTable(doc, {
       startY: 28,
       head: [["Cliente", "Serviço", "Telefone", "Emissão", "Vencimento", "Status"]],
-      body: warranties.map((w: any) => [w.clientName, w.serviceName || "—", w.clientPhone || "—", fmtDate(w.issueDate), fmtDate(w.expiryDate), w.status]),
+      body: warranties.map((w: any) => [w.clientName, w.serviceType || w.serviceName || "—", w.clientPhone || "—", fmtDate(w.startDate || w.issueDate), fmtDate(w.endDate || w.expiryDate), w.status]),
+      styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
+    });
+  } else if (type === "financeiro") {
+    const { payments = [], transactions = [] } = backup.data || {};
+    autoTable(doc, {
+      startY: 28,
+      head: [["Tipo", "Cliente/Categoria", "Descrição", "Valor", "Status", "Data"]],
+      body: [
+        ...payments.map((p: any) => ["Pagamento", p.clientName || "—", p.paymentMethod || "—", `R$ ${Number(p.amount || 0).toFixed(2)}`, p.status || "—", fmtDate(p.date)]),
+        ...transactions.map((t: any) => [t.type || "Movimento", t.category || "—", t.description || "—", `R$ ${Number(t.amount || 0).toFixed(2)}`, "—", fmtDate(t.date)]),
+      ],
+      styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
+    });
+  } else if (type === "pos-venda") {
+    const { warranties = [], npsResponses = [], maintenanceReminders = [] } = backup.data || {};
+    autoTable(doc, {
+      startY: 28,
+      head: [["Módulo", "Cliente", "Serviço", "Status", "Data/Período", "Observação"]],
+      body: [
+        ...warranties.map((w: any) => ["Garantia", w.clientName, w.serviceType || w.serviceName || "—", w.status || "—", `${fmtDate(w.startDate || w.issueDate)} a ${fmtDate(w.endDate || w.expiryDate)}`, w.notes || "—"]),
+        ...npsResponses.map((n: any) => ["NPS", n.clientName, "Pós-venda", n.status || "—", fmtDate(n.sentAt || n.createdAt), n.score ? `Nota ${n.score}` : n.comment || "—"]),
+        ...maintenanceReminders.map((m: any) => ["Manutenção", m.clientName, m.serviceType || "—", "Lembrete", fmtDate(m.completedDate || m.createdAt), m.notes || "—"]),
+      ],
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   }
@@ -251,11 +286,11 @@ export function generatePDF(type: BackupType, backup: any) {
     doc.setPage(i);
     doc.setFontSize(7);
     doc.setTextColor(150);
-    doc.text(`IMPPEL ERP — Backup ${label} — Página ${i} de ${pageCount}`, 14, 205);
+    doc.text(`IMPPEL ERP — ${titlePrefix} ${label} — Página ${i} de ${pageCount}`, 14, 205);
     doc.text("Documento confidencial", 250, 205);
   }
 
-  doc.save(`${generateFileBaseName(type)}.pdf`);
+  doc.save(`${generateFileBaseName(type, options.filePrefix || titlePrefix)}.pdf`);
 }
 
 // ─── Restore Modal ────────────────────────────────────────────────────────────
@@ -394,6 +429,8 @@ interface BackupManagerProps {
   showBackup?: boolean;
   showRestore?: boolean;
   backupButtonLabel?: string;
+  purpose?: "backup" | "export";
+  generatedBy?: string;
 }
 
 const INVALIDATE_KEYS: Record<BackupType, string[]> = {
@@ -404,11 +441,13 @@ const INVALIDATE_KEYS: Record<BackupType, string[]> = {
   clientes: ["/api/clients"],
   orcamentos: ["/api/jobs"],
   "ordens-servico": ["/api/work-orders"],
+  financeiro: ["/api/payments", "/api/transactions", "/api/jobs"],
+  "pos-venda": ["/api/warranties", "/api/nps-responses", "/api/maintenance-reminders"],
   garantias: ["/api/warranties"],
 };
 
 export default function BackupManager({
-  type, label, onRestored, adminOnly = true, isAdmin = true, showBackup = true, showRestore = true, backupButtonLabel = "Gerar backup",
+  type, label, onRestored, adminOnly = true, isAdmin = true, showBackup = true, showRestore = true, backupButtonLabel = "Gerar backup", purpose = "backup", generatedBy,
 }: BackupManagerProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -418,7 +457,7 @@ export default function BackupManager({
 
   const restoreMutation = useMutation({
     mutationFn: ({ backup, mode }: { backup: any; mode: RestoreMode }) =>
-      apiRequest("POST", `/api/backup/restore/${type}?mode=${mode}`, backup),
+      apiRequest("POST", `/api/backup/restore/${type}?mode=${mode}`, backup).then(res => res.json()),
     onSuccess: (res: any, { backup, mode }) => {
       INVALIDATE_KEYS[type].forEach(k => queryClient.invalidateQueries({ queryKey: [k] }));
       // Save restore log
@@ -456,34 +495,44 @@ export default function BackupManager({
   const handleGenerateBackup = async () => {
     setLoadingBackup(true);
     try {
-      const backup = await apiRequest("GET", `/api/backup/${type}`);
-      const baseName = generateFileBaseName(type);
+      const backupRes = await apiRequest("GET", `/api/backup/${type}`);
+      const backup = await backupRes.json();
+      const isExport = purpose === "export";
+      const baseName = generateFileBaseName(type, isExport ? "Relatorio" : "Backup");
       const jsonStr = JSON.stringify(backup, null, 2);
       const sizeKB = Math.round(jsonStr.length / 1024 * 10) / 10;
 
-      // Download JSON
-      const blob = new Blob([jsonStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `${baseName}.json`; a.click();
-      URL.revokeObjectURL(url);
+      if (!isExport) {
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `${baseName}.json`; a.click();
+        URL.revokeObjectURL(url);
+      }
 
-      // Generate PDF
-      generatePDF(type, backup);
+      generatePDF(type, backup, {
+        titlePrefix: isExport ? "Relatório" : "Backup",
+        filePrefix: isExport ? "Relatorio" : "Backup",
+        generatedBy,
+      });
 
-      // Save to history
-      const entry: BackupHistoryEntry = {
-        id: Date.now().toString(36),
-        type,
-        label: effectiveLabel,
-        fileName: baseName,
-        exportedAt: new Date().toISOString(),
-        sizeKB,
-        backup,
-      };
-      saveBackupHistory(entry);
+      if (!isExport) {
+        const entry: BackupHistoryEntry = {
+          id: Date.now().toString(36),
+          type,
+          label: effectiveLabel,
+          fileName: baseName,
+          exportedAt: new Date().toISOString(),
+          sizeKB,
+          backup,
+        };
+        saveBackupHistory(entry);
+      }
 
-      toast({ title: "Backup gerado com sucesso!", description: `${baseName}.json e .pdf baixados (${sizeKB} KB).` });
+      toast({
+        title: isExport ? "Relatório exportado com sucesso!" : "Backup gerado com sucesso!",
+        description: isExport ? `${baseName}.pdf baixado para conferência.` : `${baseName}.json e .pdf baixados (${sizeKB} KB).`,
+      });
     } catch (err: any) {
       toast({ title: "Erro ao gerar backup", description: err.message, variant: "destructive" });
     } finally {
@@ -494,6 +543,11 @@ export default function BackupManager({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      toast({ title: "CSV ainda não suportado", description: "Use o arquivo JSON gerado no backup deste módulo.", variant: "destructive" });
+      e.target.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -555,7 +609,7 @@ export default function BackupManager({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".json"
+          accept=".json,.csv"
           className="hidden"
           onChange={handleFileSelect}
           data-testid={`input-file-restore-${type}`}

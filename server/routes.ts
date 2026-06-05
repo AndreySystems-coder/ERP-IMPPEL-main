@@ -2165,6 +2165,23 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  app.get("/api/backup/financeiro", requireAdmin, async (req, res) => {
+    try {
+      const payments = await storage.getPayments();
+      const transactions = await storage.getTransactions();
+      res.json({ type: "financeiro", version: "1.0", exportedAt: new Date().toISOString(), data: { payments, transactions } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/backup/pos-venda", requireAdmin, async (req, res) => {
+    try {
+      const warranties = await storage.getWarranties();
+      const npsResponses = await storage.getNpsResponses();
+      const maintenanceReminders = await storage.getMaintenanceReminders();
+      res.json({ type: "pos-venda", version: "1.0", exportedAt: new Date().toISOString(), data: { warranties, npsResponses, maintenanceReminders } });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ── Restore endpoints (upsert by name — safe merge, nothing deleted) ──────────
 
   app.post("/api/backup/restore/estoque", requireAdmin, async (req, res) => {
@@ -2353,6 +2370,66 @@ export async function registerRoutes(
     res.json({ message: "Histórico de materiais é somente leitura — não pode ser restaurado automaticamente.", updated: 0, created: 0 });
   });
 
+  app.post("/api/backup/restore/financeiro", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      const mode = (req.query.mode as string) || "merge";
+      if (!data?.payments && !data?.transactions) return res.status(400).json({ message: "Formato de backup inválido" });
+
+      let updated = 0, created = 0, deleted = 0;
+      const payments: any[] = data.payments || [];
+      const transactions: any[] = data.transactions || [];
+
+      if (mode === "overwrite") {
+        const currentPayments = await storage.getPayments();
+        for (const payment of currentPayments) { await storage.deletePayment(payment.id); deleted++; }
+        const currentTransactions = await storage.getTransactions();
+        for (const transaction of currentTransactions) { await storage.deleteTransaction(transaction.id); deleted++; }
+      }
+
+      const existingPayments = mode === "merge" ? await storage.getPayments() : [];
+      const paymentKeys = new Map(existingPayments.map((p: any) => [`${p.jobId}|${p.clientName}|${p.amount}|${p.paymentMethod}|${p.date}`.toLowerCase(), p]));
+      for (const payment of payments) {
+        const key = `${payment.jobId}|${payment.clientName}|${payment.amount}|${payment.paymentMethod}|${payment.date}`.toLowerCase();
+        const found = paymentKeys.get(key);
+        if (found) {
+          await storage.updatePayment(found.id, {
+            status: payment.status ?? found.status,
+            notes: payment.notes ?? found.notes,
+          });
+          updated++;
+        } else {
+          await storage.createPayment({
+            jobId: payment.jobId,
+            clientName: payment.clientName || "",
+            amount: payment.amount ?? 0,
+            paymentMethod: payment.paymentMethod || "pix",
+            date: payment.date ? new Date(payment.date) : undefined,
+            status: payment.status || "completed",
+            notes: payment.notes || "",
+          });
+          created++;
+        }
+      }
+
+      const existingTransactions = mode === "merge" ? await storage.getTransactions() : [];
+      const transactionKeys = new Set(existingTransactions.map((t: any) => `${t.type}|${t.category}|${t.amount}|${t.description}|${t.date}`.toLowerCase()));
+      for (const transaction of transactions) {
+        const key = `${transaction.type}|${transaction.category}|${transaction.amount}|${transaction.description}|${transaction.date}`.toLowerCase();
+        if (mode === "merge" && transactionKeys.has(key)) continue;
+        await storage.createTransaction({
+          type: transaction.type || "outflow",
+          category: transaction.category || "Geral",
+          amount: transaction.amount ?? 0,
+          description: transaction.description || "",
+        });
+        created++;
+      }
+
+      res.json({ message: "Financeiro restaurado com sucesso", updated, created, deleted });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ─── Backup v2 — Clientes, Orçamentos, Ordens de Serviço, Garantias ───────────
 
   app.get("/api/backup/clientes", requireAdmin, async (req, res) => {
@@ -2536,6 +2613,101 @@ export async function registerRoutes(
         }
       }
       res.json({ message: "Garantias restauradas com sucesso", updated, created, deleted });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/pos-venda", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      const mode = (req.query.mode as string) || "merge";
+      if (!data?.warranties && !data?.npsResponses && !data?.maintenanceReminders) return res.status(400).json({ message: "Formato de backup inválido" });
+
+      let updated = 0, created = 0, deleted = 0;
+      const warranties: any[] = data.warranties || [];
+      const npsResponses: any[] = data.npsResponses || [];
+      const maintenanceReminders: any[] = data.maintenanceReminders || [];
+
+      if (mode === "overwrite") {
+        for (const reminder of await storage.getMaintenanceReminders()) { await storage.deleteMaintenanceReminder(reminder.id); deleted++; }
+        for (const response of await storage.getNpsResponses()) { await storage.deleteNpsResponse(response.id); deleted++; }
+        for (const warranty of await storage.getWarranties()) { await storage.deleteWarranty(warranty.id); deleted++; }
+      }
+
+      const existingWarranties = mode === "merge" ? await storage.getWarranties() : [];
+      const warrantiesByKey = new Map(existingWarranties.map((w: any) => [`${w.clientName}||${w.serviceType}`.toLowerCase(), w]));
+      for (const warranty of warranties) {
+        const serviceType = warranty.serviceType || warranty.serviceName || "Serviço";
+        const key = `${warranty.clientName}||${serviceType}`.toLowerCase();
+        const found = warrantiesByKey.get(key);
+        if (found) {
+          await storage.updateWarranty(found.id, { status: warranty.status ?? found.status, notes: warranty.notes ?? found.notes });
+          updated++;
+        } else {
+          await storage.createWarranty({
+            workOrderId: warranty.workOrderId ?? null,
+            jobId: warranty.jobId ?? null,
+            clientName: warranty.clientName,
+            clientPhone: warranty.clientPhone || "",
+            serviceType,
+            warrantyMonths: warranty.warrantyMonths ?? 12,
+            startDate: warranty.startDate || warranty.issueDate,
+            endDate: warranty.endDate || warranty.expiryDate,
+            status: warranty.status || "ativa",
+            notes: warranty.notes || "",
+          });
+          created++;
+        }
+      }
+
+      const existingNps = mode === "merge" ? await storage.getNpsResponses() : [];
+      const npsByKey = new Map(existingNps.map((n: any) => [`${n.clientName}|${n.jobId}|${n.workOrderId}|${n.sentAt}`.toLowerCase(), n]));
+      for (const nps of npsResponses) {
+        const key = `${nps.clientName}|${nps.jobId}|${nps.workOrderId}|${nps.sentAt}`.toLowerCase();
+        const found = npsByKey.get(key);
+        if (found) {
+          await storage.updateNpsResponse(found.id, { score: nps.score ?? found.score, comment: nps.comment ?? found.comment, status: nps.status ?? found.status });
+          updated++;
+        } else {
+          await storage.createNpsResponse({
+            workOrderId: nps.workOrderId ?? null,
+            jobId: nps.jobId ?? null,
+            clientName: nps.clientName,
+            clientPhone: nps.clientPhone || "",
+            sentAt: nps.sentAt ? new Date(nps.sentAt) : undefined,
+            respondedAt: nps.respondedAt ? new Date(nps.respondedAt) : undefined,
+            score: nps.score ?? null,
+            comment: nps.comment || "",
+            status: nps.status || "pendente",
+          });
+          created++;
+        }
+      }
+
+      const existingReminders = mode === "merge" ? await storage.getMaintenanceReminders() : [];
+      const remindersByKey = new Map(existingReminders.map((m: any) => [`${m.clientName}|${m.jobId}|${m.workOrderId}|${m.completedDate}`.toLowerCase(), m]));
+      for (const reminder of maintenanceReminders) {
+        const key = `${reminder.clientName}|${reminder.jobId}|${reminder.workOrderId}|${reminder.completedDate}`.toLowerCase();
+        const found = remindersByKey.get(key);
+        if (found) {
+          await storage.updateMaintenanceReminder(found.id, { notes: reminder.notes ?? found.notes, reminder12SentAt: reminder.reminder12SentAt ?? found.reminder12SentAt, reminder24SentAt: reminder.reminder24SentAt ?? found.reminder24SentAt });
+          updated++;
+        } else {
+          await storage.createMaintenanceReminder({
+            workOrderId: reminder.workOrderId ?? null,
+            jobId: reminder.jobId ?? null,
+            clientName: reminder.clientName,
+            clientPhone: reminder.clientPhone || "",
+            serviceType: reminder.serviceType || "",
+            completedDate: reminder.completedDate || new Date().toISOString().slice(0, 10),
+            reminder12SentAt: reminder.reminder12SentAt ? new Date(reminder.reminder12SentAt) : undefined,
+            reminder24SentAt: reminder.reminder24SentAt ? new Date(reminder.reminder24SentAt) : undefined,
+            notes: reminder.notes || "",
+          });
+          created++;
+        }
+      }
+
+      res.json({ message: "Garantias/Pós-venda restaurado com sucesso", updated, created, deleted });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
