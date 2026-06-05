@@ -10,9 +10,12 @@ export function InventoryMovementHistory({
   monthMovements,
   groupedByDay,
   movSearch,
+  movTypeFilter,
+  showNewMovement = true,
   onMonthChange,
   onNavigateMonth,
   onSearchChange,
+  onTypeFilterChange,
   onDownloadPdf,
   onNewMovement,
   onEditMovement,
@@ -26,9 +29,12 @@ export function InventoryMovementHistory({
   monthMovements: Movement[];
   groupedByDay: [string, Movement[]][];
   movSearch: string;
+  movTypeFilter: "TODOS" | "ENTRADA" | "SAÍDA";
+  showNewMovement?: boolean;
   onMonthChange: (value: string) => void;
   onNavigateMonth: (dir: number) => void;
   onSearchChange: (value: string) => void;
+  onTypeFilterChange: (value: "TODOS" | "ENTRADA" | "SAÍDA") => void;
   onDownloadPdf: () => void;
   onNewMovement: () => void;
   onEditMovement: (movement: Movement) => void;
@@ -59,13 +65,15 @@ export function InventoryMovementHistory({
           <span className="text-sm text-slate-500 sm:ml-2">{monthMovements.length} lançamento(s)</span>
         </div>
 
-        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
+        <div className={`grid w-full grid-cols-1 gap-2 sm:w-auto ${showNewMovement ? "sm:grid-cols-2" : ""}`}>
           <Button variant="outline" onClick={onDownloadPdf} className="flex items-center gap-2" data-testid="button-download-pdf">
             <FileDown className="w-4 h-4" /> PDF {monthLabel(selectedYM)}
           </Button>
-          <Button onClick={onNewMovement} data-testid="button-new-lancamento">
-            <Plus className="w-4 h-4 mr-2" /> Novo Lançamento
-          </Button>
+          {showNewMovement && (
+            <Button onClick={onNewMovement} data-testid="button-new-lancamento">
+              <Plus className="w-4 h-4 mr-2" /> Novo Lançamento
+            </Button>
+          )}
         </div>
       </div>
 
@@ -86,9 +94,21 @@ export function InventoryMovementHistory({
         </div>
       )}
 
-      <div className="flex items-center bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm max-w-sm focus-within:border-primary transition-all">
-        <Search className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-        <input type="text" placeholder="Buscar no mês..." className="w-full bg-transparent border-none focus:outline-none text-slate-900 text-sm" value={movSearch} onChange={event => onSearchChange(event.target.value)} />
+      <div className="grid gap-2 sm:max-w-2xl sm:grid-cols-[1fr_auto]">
+        <div className="flex items-center bg-white border border-slate-200 rounded-xl px-4 py-2.5 shadow-sm focus-within:border-primary transition-all">
+          <Search className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+          <input type="text" placeholder="Buscar por produto, origem ou responsável..." className="w-full bg-transparent border-none focus:outline-none text-slate-900 text-sm" value={movSearch} onChange={event => onSearchChange(event.target.value)} />
+        </div>
+        <select
+          value={movTypeFilter}
+          onChange={event => onTypeFilterChange(event.target.value as "TODOS" | "ENTRADA" | "SAÍDA")}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm focus:outline-none focus:border-primary"
+          data-testid="select-movement-type-filter"
+        >
+          <option value="TODOS">Todos os tipos</option>
+          <option value="ENTRADA">Entradas</option>
+          <option value="SAÍDA">Saídas/Ajustes</option>
+        </select>
       </div>
 
       {groupedByDay.length === 0 ? (

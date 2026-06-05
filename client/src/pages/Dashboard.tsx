@@ -121,7 +121,7 @@ export default function Dashboard() {
       label: "Contagem Física",
       desc: "Atualizar saldo do estoque",
       icon: Warehouse,
-      href: "/contagem-fisica",
+      href: "/estoque/contagem-rapida",
       color: "from-violet-600 to-violet-700",
     },
   ];
@@ -264,7 +264,7 @@ export default function Dashboard() {
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <Package className="w-4 h-4 text-red-500" /> Estoque Baixo
               </h3>
-              <Link href="/inventory" className="text-xs text-primary font-semibold hover:underline">Estoque</Link>
+              <Link href="/estoque/atual" className="text-xs text-primary font-semibold hover:underline">Estoque</Link>
             </div>
             {lowStock === 0 ? (
               <p className="px-4 py-5 text-xs text-emerald-600 font-semibold text-center flex items-center justify-center gap-1">

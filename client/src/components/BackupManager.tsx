@@ -543,15 +543,29 @@ export default function BackupManager({
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.name.toLowerCase().endsWith(".csv")) {
-      toast({ title: "CSV ainda não suportado", description: "Use o arquivo JSON gerado no backup deste módulo.", variant: "destructive" });
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith(".pdf")) {
+      toast({
+        title: "PDF não é restaurado automaticamente",
+        description: "PDF é indicado para conferência. Para restauração segura, prefira TXT estruturado ou arquivo técnico restaurável.",
+        variant: "destructive",
+      });
+      e.target.value = "";
+      return;
+    }
+    if (lowerName.endsWith(".csv")) {
+      toast({ title: "CSV ainda não suportado", description: "Use JSON ou TXT estruturado gerado a partir do backup deste módulo.", variant: "destructive" });
       e.target.value = "";
       return;
     }
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const parsed = JSON.parse(evt.target?.result as string);
+        const content = String(evt.target?.result || "").trim();
+        const jsonStart = content.indexOf("{");
+        const jsonEnd = content.lastIndexOf("}");
+        const jsonContent = jsonStart >= 0 && jsonEnd > jsonStart ? content.slice(jsonStart, jsonEnd + 1) : content;
+        const parsed = JSON.parse(jsonContent);
         if (!parsed.type || !parsed.data) {
           toast({ title: "Arquivo inválido", description: "O arquivo não é um backup válido do IMPPEL ERP.", variant: "destructive" });
           return;
@@ -562,7 +576,7 @@ export default function BackupManager({
         }
         setPendingRestore(parsed);
       } catch {
-        toast({ title: "Erro ao ler arquivo", description: "O arquivo não é um JSON válido.", variant: "destructive" });
+        toast({ title: "Erro ao ler arquivo", description: "Envie um JSON válido ou TXT estruturado contendo o JSON do backup.", variant: "destructive" });
       }
     };
     reader.readAsText(file);
@@ -609,7 +623,7 @@ export default function BackupManager({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".json,.csv"
+          accept=".json,.txt,.csv,.pdf"
           className="hidden"
           onChange={handleFileSelect}
           data-testid={`input-file-restore-${type}`}

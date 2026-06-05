@@ -163,11 +163,11 @@ export function InventoryHub() {
     <HubPage
       config={{
         title: "Estoque",
-        description: "Controle saldo, movimentações, contagem física e catálogo de produtos.",
+        description: "Controle saldo, contagens físicas e auditoria de movimentações.",
         items: [
-          { title: "Estoque Atual", description: "Produtos, entradas, saídas, ajustes e histórico.", href: "/inventory", icon: Package, permission: "viewInventoryCurrent", accent: accents.blue },
-          { title: "Contagem Física", description: "Conferência rápida para reduzir erros de estoque.", href: "/contagem-fisica", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
-          { title: "Movimentações", description: "Entradas, saídas e ajustes dentro do estoque.", href: "/inventory", icon: ShoppingCart, permission: "viewInventoryMovements", accent: accents.orange },
+          { title: "Estoque Atual", description: "Saldos, mínimos, status e resumo de entradas e saídas.", href: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent", accent: accents.blue },
+          { title: "Contagem Rápida", description: "Cole ou importe TXT para gerar ajustes com preview.", href: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
+          { title: "Movimentações", description: "Audite entradas, saídas, ajustes, datas e origens.", href: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements", accent: accents.orange },
         ],
       }}
     />

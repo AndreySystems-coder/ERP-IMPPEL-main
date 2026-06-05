@@ -107,9 +107,9 @@ const ALL_SECTIONS: NavSection[] = [
     adminOnly: true,
     permission: "viewInventory",
     items: [
-      { name: "Estoque Atual", path: "/inventory", icon: Package, permission: "viewInventoryCurrent" },
-      { name: "Contagem Física", path: "/contagem-fisica", icon: ListChecks, permission: "viewInventoryCount" },
-      { name: "Movimentações", path: "/inventory", icon: ShoppingCart, permission: "viewInventoryMovements" },
+      { name: "Estoque Atual", path: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent" },
+      { name: "Contagem Rápida", path: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount" },
+      { name: "Movimentações", path: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements" },
     ],
   },
   {

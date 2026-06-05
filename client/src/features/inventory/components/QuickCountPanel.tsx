@@ -1,4 +1,4 @@
-import { CheckCircle, ScanLine, X, Zap } from "lucide-react";
+import { CheckCircle, FileText, ScanLine, Upload, X, Zap } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -8,6 +8,7 @@ export function QuickCountPanel({
   applied,
   canProcess,
   onTextChange,
+  onImportFile,
   onClear,
   onProcess,
 }: {
@@ -15,6 +16,7 @@ export function QuickCountPanel({
   applied: boolean;
   canProcess: boolean;
   onTextChange: (value: string) => void;
+  onImportFile: (file: File) => void;
   onClear: () => void;
   onProcess: () => void;
 }) {
@@ -32,6 +34,9 @@ export function QuickCountPanel({
           </p>
           <p className="text-xs text-orange-600 mt-1 font-semibold">
             Formato aceito: <span className="font-mono bg-orange-100 px-1 rounded">Viaplus 1000 - 45</span> ou <span className="font-mono bg-orange-100 px-1 rounded">Broxa: 12</span>
+          </p>
+          <p className="text-xs text-orange-600 mt-1">
+            TXT estruturado pode ser importado. PDF fica como importação assistida: confira o conteúdo extraído antes de aplicar qualquer ajuste.
           </p>
         </div>
       </div>
@@ -57,11 +62,35 @@ export function QuickCountPanel({
               <ScanLine className="w-4 h-4 text-orange-500" />
               Cole a lista de contagem aqui
             </label>
-            {text && (
-              <button type="button" onClick={onClear} className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors">
-                <X className="w-3.5 h-3.5" /> Limpar
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700">
+                <input
+                  type="file"
+                  accept=".txt,.pdf"
+                  className="hidden"
+                  onChange={event => {
+                    const file = event.target.files?.[0];
+                    if (file) onImportFile(file);
+                    event.currentTarget.value = "";
+                  }}
+                  data-testid="input-rapida-file"
+                />
+                <span className="flex items-center gap-1.5">
+                  <Upload className="h-3.5 w-3.5" />
+                  TXT/PDF
+                </span>
+              </label>
+              {text && (
+                <button type="button" onClick={onClear} className="text-xs text-slate-400 hover:text-red-500 flex items-center gap-1 transition-colors">
+                  <X className="w-3.5 h-3.5" /> Limpar
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            <FileText className="mr-1.5 inline h-3.5 w-3.5 text-slate-400" />
+            Para PDF, use somente como apoio de conferência. A aplicação dos ajustes continua dependendo do preview e da confirmação.
           </div>
 
           <textarea

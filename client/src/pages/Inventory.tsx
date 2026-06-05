@@ -226,7 +226,36 @@ function generateMovementPDF(selectedYM: string, movements: Movement[], items: I
   doc.save(filename);
 }
 
-export default function Inventory() {
+export type InventoryMode = "current" | "quick-count" | "movements";
+
+const INVENTORY_PAGE_COPY: Record<InventoryMode, { title: string; description: string }> = {
+  current: {
+    title: "Estoque Atual",
+    description: "Veja o saldo atual dos produtos.",
+  },
+  "quick-count": {
+    title: "Contagem Rápida",
+    description: "Cole ou envie uma contagem para ajustar o estoque.",
+  },
+  movements: {
+    title: "Movimentações",
+    description: "Acompanhe tudo que entrou, saiu ou foi ajustado.",
+  },
+};
+
+export function InventoryCurrentPage() {
+  return <Inventory mode="current" />;
+}
+
+export function InventoryQuickCountPage() {
+  return <Inventory mode="quick-count" />;
+}
+
+export function InventoryMovementsPage() {
+  return <Inventory mode="movements" />;
+}
+
+export default function Inventory({ mode = "current" }: { mode?: InventoryMode }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: items = [], isLoading } = useInventory();
@@ -234,7 +263,6 @@ export default function Inventory() {
   const updateItem = useUpdateInventory();
   const deleteItem = useDeleteInventory();
 
-  const [activeTab, setActiveTab] = useState<"produtos" | "movimentacoes" | "rapida">("produtos");
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -255,6 +283,7 @@ export default function Inventory() {
   const [batchItems, setBatchItems] = useState<BatchItem[]>([{ inventoryId: "", quantity: "", type: "ENTRADA", searchText: "", dropdownOpen: false }]);
   const [batchNotes, setBatchNotes] = useState("");
   const [movSearch, setMovSearch] = useState("");
+  const [movTypeFilter, setMovTypeFilter] = useState<"TODOS" | "ENTRADA" | "SAÍDA">("TODOS");
 
   // Edit movement modal
   const [editMovement, setEditMovement] = useState<Movement | null>(null);
@@ -266,6 +295,7 @@ export default function Inventory() {
 
   // Contagem Física Rápida
   const [rapidaText, setRapidaText] = useState("");
+  const [rapidaDate, setRapidaDate] = useState(new Date().toISOString().split("T")[0]);
   const [rapidaPreview, setRapidaPreview] = useState<RapidaRow[]>([]);
   const [rapidaConfirmZerar, setRapidaConfirmZerar] = useState(false);
 
@@ -291,8 +321,9 @@ export default function Inventory() {
         const q = movSearch.toLowerCase();
         return !q || m.productName.toLowerCase().includes(q) || (m.notes || "").toLowerCase().includes(q);
       })
+      .filter(m => movTypeFilter === "TODOS" || m.type === movTypeFilter)
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [movements, selectedYM, movSearch]);
+  }, [movements, selectedYM, movSearch, movTypeFilter]);
 
   // Group by date
   const groupedByDay = useMemo(() => {
@@ -465,6 +496,36 @@ export default function Inventory() {
     setRapidaApplied(false);
   };
 
+  const handleRapidaFileImport = (file: File) => {
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith(".pdf")) {
+      toast({
+        title: "PDF exige importação assistida",
+        description: "PDF é usado para conferência. Extraia ou copie o texto e confira o preview antes de aplicar ajustes.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!lowerName.endsWith(".txt")) {
+      toast({ title: "Formato não suportado", description: "Importe um TXT estruturado ou cole a contagem no campo.", variant: "destructive" });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = event => {
+      const importedText = String(event.target?.result || "");
+      setRapidaText(importedText);
+      setRapidaPreview([]);
+      setRapidaConfirmZerar(false);
+      setRapidaApplied(false);
+      toast({ title: "TXT importado", description: "Confira a contagem e gere o preview antes de aplicar." });
+    };
+    reader.onerror = () => {
+      toast({ title: "Erro ao ler TXT", description: "Não foi possível importar o arquivo.", variant: "destructive" });
+    };
+    reader.readAsText(file);
+  };
+
 
   const applyRapida = useMutation({
     mutationFn: (payload: any) => apiRequest("POST", "/api/inventory-movements/batch", payload),
@@ -499,8 +560,8 @@ export default function Inventory() {
       });
       return;
     }
-    const today = new Date().toISOString().split("T")[0];
-    const todayFmt = new Date().toLocaleDateString("pt-BR");
+    const today = rapidaDate;
+    const todayFmt = fmtDate(today);
     const batchPayload = {
       date: today,
       notes: `Contagem Física Completa - ${todayFmt}`,
@@ -580,43 +641,50 @@ export default function Inventory() {
   const rapidaNoMatch      = rapidaCountedRows.filter(r => !r.matchedItem);
   const rapidaDupes        = rapidaCountedRows.filter(r => r.isDuplicate);
   const rapidaTotalAcoes   = rapidaEntradas.length + rapidaSaidasCont.length + rapidaToZeroRows.length;
+  const pageCopy = INVENTORY_PAGE_COPY[mode];
+  const currentEntries = (movements as Movement[]).filter(m => m.type === "ENTRADA").reduce((sum, movement) => sum + movement.quantity, 0);
+  const currentExits = (movements as Movement[]).filter(m => m.type === "SAÍDA").reduce((sum, movement) => sum + movement.quantity, 0);
+  const emptyStockCount = (items as InventoryItem[]).filter(i => i.quantity <= 0).length;
 
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Estoque</h1>
-            <p className="text-sm text-slate-500">Estoque atual, movimentacoes e contagem fisica em uma unica area.</p>
+            <h1 className="text-2xl font-bold text-slate-900">{pageCopy.title}</h1>
+            <p className="text-sm text-slate-500">{pageCopy.description}</p>
           </div>
-          <Button onClick={openNew} data-testid="button-add-inventory-item">
-            Adicionar Item ao Estoque
-          </Button>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {[
-            { key: "produtos", label: "Estoque Atual", hint: `${(items as InventoryItem[]).length} itens cadastrados` },
-            { key: "movimentacoes", label: "Entrada / Saida / Ajuste", hint: "Historico e lancamentos" },
-            { key: "rapida", label: "Contagem Fisica", hint: "Fluxo guiado de conferencia" },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key as "produtos" | "movimentacoes" | "rapida")}
-              className={`rounded-lg border px-3 py-3 text-left transition-colors ${
-                activeTab === tab.key
-                  ? "border-primary bg-primary/5 text-primary"
-                  : "border-slate-200 bg-slate-50 text-slate-600 hover:border-primary/30 hover:bg-white"
-              }`}
-            >
-              <span className="block text-sm font-bold">{tab.label}</span>
-              <span className="mt-0.5 block text-xs">{tab.hint}</span>
-            </button>
-          ))}
+          {mode === "current" && (
+            <Button onClick={openNew} data-testid="button-add-inventory-item">
+              Adicionar Item ao Estoque
+            </Button>
+          )}
         </div>
       </div>
-      {activeTab === "produtos" && (
+      {mode === "current" && (
         <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <Card className="p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">Produtos</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{(items as InventoryItem[]).length}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">Estoque baixo</p>
+              <p className="mt-1 text-2xl font-bold text-amber-600">{lowStockCount}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">Sem estoque</p>
+              <p className="mt-1 text-2xl font-bold text-red-600">{emptyStockCount}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">Entradas</p>
+              <p className="mt-1 text-2xl font-bold text-green-700">{currentEntries}</p>
+            </Card>
+            <Card className="p-4">
+              <p className="text-xs font-semibold uppercase text-slate-500">Saídas/Ajustes</p>
+              <p className="mt-1 text-2xl font-bold text-red-700">{currentExits}</p>
+            </Card>
+          </div>
           <DuplicateProductsAlert duplicateNameGroups={duplicateNameGroups} />
           <InventoryProductList
             items={filteredItems}
@@ -629,8 +697,7 @@ export default function Inventory() {
           />
         </>
       )}
-      {/* --- TAB: MOVIMENTAÇÕES --- */}
-      {activeTab === "movimentacoes" && (
+      {mode === "movements" && (
         <div className="space-y-4">
           <InventoryMovementHistory
             selectedYM={selectedYM}
@@ -639,9 +706,12 @@ export default function Inventory() {
             monthMovements={monthMovements}
             groupedByDay={groupedByDay}
             movSearch={movSearch}
+            movTypeFilter={movTypeFilter}
+            showNewMovement={false}
             onMonthChange={setSelectedYM}
             onNavigateMonth={navigateMonth}
             onSearchChange={setMovSearch}
+            onTypeFilterChange={setMovTypeFilter}
             onDownloadPdf={() => generateMovementPDF(selectedYM, movements as Movement[], items as InventoryItem[])}
             onNewMovement={() => {
               setShowBatchForm(value => !value);
@@ -678,14 +748,24 @@ export default function Inventory() {
           )}
         </div>
       )}
-      {/* --- TAB: CONTAGEM FÍSICA RÁPIDA ------ */}
-      {activeTab === "rapida" && (
+      {mode === "quick-count" && (
         <div className="space-y-5">
+          <Card className="p-4">
+            <label className="text-sm font-semibold text-slate-700">Data da contagem</label>
+            <input
+              type="date"
+              value={rapidaDate}
+              onChange={event => setRapidaDate(event.target.value)}
+              className="mt-2 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:outline-none focus:border-orange-400 sm:max-w-xs"
+              data-testid="input-rapida-date"
+            />
+          </Card>
           <QuickCountPanel
             text={rapidaText}
             applied={rapidaApplied}
             canProcess={!!rapidaText.trim()}
             onTextChange={value => { setRapidaText(value); setRapidaPreview([]); setRapidaConfirmZerar(false); }}
+            onImportFile={handleRapidaFileImport}
             onClear={() => { setRapidaText(""); setRapidaPreview([]); setRapidaConfirmZerar(false); setRapidaApplied(false); }}
             onProcess={processRapida}
           />

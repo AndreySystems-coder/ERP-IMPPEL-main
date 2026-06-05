@@ -155,7 +155,7 @@ const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; pan
     title: "Restauração",
     subtitle: "Restaurar dados a partir de backup",
     panelTitle: "Restaurar dados a partir de backup",
-    panelDescription: "PDF é usado para conferência e relatório. Para restaurar dados, envie o arquivo JSON/CSV gerado no backup.",
+    panelDescription: "Restaure com preview e confirmação usando JSON ou TXT estruturado. PDF é usado para conferência e relatório.",
   },
 };
 
@@ -323,7 +323,8 @@ export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterM
           <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
             <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
             <p className="text-sm text-slate-600">{page.panelDescription}</p>
-            <p className="mt-2 text-xs font-semibold text-amber-700">Aviso de segurança: confira o preview e confirme o modo de restauração antes de aplicar.</p>
+            <p className="mt-2 text-xs font-semibold text-amber-700">PDF é indicado para conferência. Para restauração segura, prefira TXT estruturado ou arquivo técnico restaurável.</p>
+            <p className="mt-1 text-xs text-slate-600">Aviso de segurança: confira o preview e confirme o modo de restauração antes de aplicar.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
@@ -337,7 +338,7 @@ export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterM
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-800">{cfg.label}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">Importar arquivo JSON deste módulo.</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Importar JSON ou TXT estruturado deste módulo.</p>
                       </div>
                     </div>
                     <BackupManager

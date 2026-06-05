@@ -10,7 +10,7 @@ import CostConfig from "@/pages/CostConfig";
 import CrmWhatsapp from "@/pages/CrmWhatsapp";
 import Dashboard from "@/pages/Dashboard";
 import Financials from "@/pages/Financials";
-import Inventory from "@/pages/Inventory";
+import Inventory, { InventoryCurrentPage, InventoryMovementsPage, InventoryQuickCountPage } from "@/pages/Inventory";
 import Jobs from "@/pages/Jobs";
 import Leads from "@/pages/Leads";
 import Login from "@/pages/Login";
@@ -80,6 +80,9 @@ export const adminRoutes: AppRoute[] = [
   { path: "/services", component: ServicesCatalog, access: "admin", withLayout: true },
   { path: "/clients", component: Clients, access: "admin", withLayout: true },
   { path: "/calculator", component: PriceCalculator, access: "admin", withLayout: true },
+  { path: "/estoque/atual", component: InventoryCurrentPage, access: "admin", withLayout: true },
+  { path: "/estoque/contagem-rapida", component: InventoryQuickCountPage, access: "admin", withLayout: true },
+  { path: "/estoque/movimentacoes", component: InventoryMovementsPage, access: "admin", withLayout: true },
   { path: "/inventory", component: Inventory, access: "admin", withLayout: true },
   { path: "/financials", component: Financials, access: "admin", withLayout: true },
   { path: "/settings", component: Settings, access: "admin", withLayout: true },
