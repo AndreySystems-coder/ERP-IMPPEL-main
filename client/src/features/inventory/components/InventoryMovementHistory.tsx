@@ -11,6 +11,7 @@ export function InventoryMovementHistory({
   groupedByDay,
   movSearch,
   movTypeFilter,
+  showDownloadPdf = true,
   showNewMovement = true,
   onMonthChange,
   onNavigateMonth,
@@ -30,6 +31,7 @@ export function InventoryMovementHistory({
   groupedByDay: [string, Movement[]][];
   movSearch: string;
   movTypeFilter: "TODOS" | "ENTRADA" | "SAÍDA";
+  showDownloadPdf?: boolean;
   showNewMovement?: boolean;
   onMonthChange: (value: string) => void;
   onNavigateMonth: (dir: number) => void;
@@ -65,10 +67,12 @@ export function InventoryMovementHistory({
           <span className="text-sm text-slate-500 sm:ml-2">{monthMovements.length} lançamento(s)</span>
         </div>
 
-        <div className={`grid w-full grid-cols-1 gap-2 sm:w-auto ${showNewMovement ? "sm:grid-cols-2" : ""}`}>
-          <Button variant="outline" onClick={onDownloadPdf} className="flex items-center gap-2" data-testid="button-download-pdf">
-            <FileDown className="w-4 h-4" /> PDF {monthLabel(selectedYM)}
-          </Button>
+        <div className={`grid w-full grid-cols-1 gap-2 sm:w-auto ${showDownloadPdf && showNewMovement ? "sm:grid-cols-2" : ""}`}>
+          {showDownloadPdf && (
+            <Button variant="outline" onClick={onDownloadPdf} className="flex items-center gap-2" data-testid="button-download-pdf">
+              <FileDown className="w-4 h-4" /> PDF {monthLabel(selectedYM)}
+            </Button>
+          )}
           {showNewMovement && (
             <Button onClick={onNewMovement} data-testid="button-new-lancamento">
               <Plus className="w-4 h-4 mr-2" /> Novo Lançamento

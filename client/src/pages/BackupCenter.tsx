@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useMutation } from "@tanstack/react-query";
 import {
   Database, Upload, Clock, FileJson, FileText, Trash2,
   RefreshCw, History, CheckCircle2, AlertTriangle, Package, Users,
@@ -11,6 +12,7 @@ import BackupManager, {
   type BackupType, type BackupHistoryEntry, type RestoreLogEntry,
 } from "@/components/BackupManager";
 import { useUser } from "@/hooks/use-auth";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const ALL_BACKUP_TYPES: { type: BackupType; label: string; icon: React.ElementType; color: string; description: string }[] = [
@@ -135,6 +137,162 @@ function LogRow({ entry }: { entry: RestoreLogEntry }) {
   );
 }
 
+type TextPreview = {
+  type: BackupType;
+  backup: any;
+  rows: { name: string; detail: string }[];
+};
+
+function parseNumber(value?: string) {
+  if (!value) return 0;
+  return Number(value.replace(/\./g, "").replace(",", ".")) || 0;
+}
+
+function parseTextRestore(type: BackupType, text: string): TextPreview {
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const rows: { name: string; detail: string }[] = [];
+
+  if (type === "estoque") {
+    const items = lines.map(line => {
+      const match = line.match(/(?:produto|material)\s*:\s*([^,;]+).*?(?:quantidade|qtd)\s*:\s*([\d.,]+)/i);
+      if (!match) return null;
+      const item = { name: match[1].trim(), type: "material", unit: "unid", quantity: parseNumber(match[2]), minStock: 0, pricePerUnit: 0 };
+      rows.push({ name: item.name, detail: `${item.quantity} ${item.unit}` });
+      return item;
+    }).filter(Boolean);
+    if (!items.length) throw new Error("Use linhas como: Produto: Manta asfáltica, quantidade: 20");
+    return { type, rows, backup: { type, version: "text-preview", exportedAt: new Date().toISOString(), data: { items } } };
+  }
+
+  if (type === "produtos") {
+    const products = lines.map(line => {
+      const match = line.match(/produto\s*:\s*([^,;]+)(?:.*?(?:preço|valor)\s*:\s*([\d.,]+))?/i);
+      if (!match) return null;
+      const product = { name: match[1].trim(), description: "", category: "Sem Categoria", brand: "", unit: "un", salePrice: parseNumber(match[2]), commission: 0, maxDiscount: 0, active: true };
+      rows.push({ name: product.name, detail: product.salePrice ? `R$ ${product.salePrice}` : "Produto sem preço informado" });
+      return product;
+    }).filter(Boolean);
+    if (!products.length) throw new Error("Use linhas como: Produto: Primer, preço: 120");
+    return { type, rows, backup: { type, version: "text-preview", exportedAt: new Date().toISOString(), data: { products } } };
+  }
+
+  if (type === "servicos") {
+    const services = lines.map(line => {
+      const match = line.match(/servi[cç]o\s*:\s*([^,;]+)(?:.*?(?:preço|valor)\s*:\s*([\d.,]+))?/i);
+      if (!match) return null;
+      const service = { name: match[1].trim(), description: "", pricePerUnit: parseNumber(match[2]), laborCostPerM2: 0, transportCostPerM2: 0, materialConsumptionPerM2: 0, serviceMaterials: null };
+      rows.push({ name: service.name, detail: service.pricePerUnit ? `R$ ${service.pricePerUnit}` : "Serviço sem preço informado" });
+      return service;
+    }).filter(Boolean);
+    if (!services.length) throw new Error("Use linhas como: Serviço: Impermeabilização de laje, preço: 1500");
+    return { type, rows, backup: { type, version: "text-preview", exportedAt: new Date().toISOString(), data: { services } } };
+  }
+
+  if (type === "clientes") {
+    const clients = lines.map(line => {
+      const match = line.match(/(?:cliente|nome)\s*:\s*([^,;]+)(?:.*?(?:telefone|fone)\s*:\s*([^,;]+))?/i);
+      if (!match) return null;
+      const client = { name: match[1].trim(), phone: match[2]?.trim() || "", email: "", city: "", cpfCnpj: "" };
+      rows.push({ name: client.name, detail: client.phone || "Cliente sem telefone informado" });
+      return client;
+    }).filter(Boolean);
+    if (!clients.length) throw new Error("Use linhas como: Cliente: João Silva, telefone: 15999999999");
+    return { type, rows, backup: { type, version: "text-preview", exportedAt: new Date().toISOString(), data: { clients } } };
+  }
+
+  throw new Error("Este módulo ainda exige arquivo técnico restaurável. Use texto estruturado para Estoque, Produtos, Serviços ou Clientes.");
+}
+
+function AssistedRestorePanel({ modules, onRestored }: { modules: typeof ALL_BACKUP_TYPES; onRestored: () => void }) {
+  const [type, setType] = useState<BackupType>("estoque");
+  const [text, setText] = useState("");
+  const [preview, setPreview] = useState<TextPreview | null>(null);
+  const [error, setError] = useState("");
+
+  const restoreMutation = useMutation({
+    mutationFn: (backup: any) => apiRequest("POST", `/api/backup/restore/${type}?mode=merge`, backup).then(response => response.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+      setText("");
+      setPreview(null);
+      onRestored();
+    },
+  });
+
+  const buildPreview = () => {
+    try {
+      setError("");
+      setPreview(parseTextRestore(type, text));
+    } catch (err: any) {
+      setPreview(null);
+      setError(err.message || "Não foi possível interpretar o texto.");
+    }
+  };
+
+  const handlePdf = (file?: File) => {
+    if (!file) return;
+    setError("PDF não será restaurado automaticamente. Use texto estruturado para gerar preview ou envie um arquivo técnico restaurável do backup.");
+  };
+
+  return (
+    <Card>
+      <CardContent className="space-y-4 p-5">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Restaurar por PDF ou Texto</h2>
+          <p className="text-sm text-slate-600">Restaure dados com PDF ou texto, sempre com preview antes de aplicar.</p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-slate-700">Módulo</label>
+            <select value={type} onChange={event => { setType(event.target.value as BackupType); setPreview(null); setError(""); }} className="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm">
+              {modules.map(module => <option key={module.type} value={module.type}>{module.label}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-slate-700">Restaurar por PDF</label>
+            <input type="file" accept=".pdf" onChange={event => handlePdf(event.target.files?.[0])} className="block min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-slate-700">Restaurar por Texto</label>
+          <textarea
+            value={text}
+            onChange={event => { setText(event.target.value); setPreview(null); }}
+            rows={5}
+            placeholder={"Produto: Manta asfáltica, quantidade: 20\nProduto: Primer, quantidade: 8\nServiço: Impermeabilização de laje, preço: 1500"}
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+          />
+        </div>
+
+        {error && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{error}</div>}
+
+        {preview && (
+          <div className="rounded-xl border border-slate-200">
+            <div className="border-b bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">Preview dos dados</div>
+            <div className="divide-y">
+              {preview.rows.map((row, index) => (
+                <div key={`${row.name}-${index}`} className="flex justify-between gap-3 px-3 py-2 text-sm">
+                  <span className="font-medium text-slate-800">{row.name}</span>
+                  <span className="text-slate-500">{row.detail}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={buildPreview} disabled={!text.trim()} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Gerar preview</button>
+          <button type="button" onClick={() => preview && restoreMutation.mutate(preview.backup)} disabled={!preview || restoreMutation.isPending} className="rounded-xl bg-blue-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            Confirmar restauração
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export type BackupCenterMode = "backup" | "restore" | "exports";
 
@@ -143,7 +301,7 @@ const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; pan
     title: "Backup",
     subtitle: "Gerar cópia segura dos dados",
     panelTitle: "Gerar cópia segura dos dados",
-    panelDescription: "Cada backup baixa um arquivo JSON restaurável e um PDF de conferência humana.",
+    panelDescription: "Gere um PDF organizado para conferência e segurança dos dados.",
   },
   exports: {
     title: "Exportação",
@@ -278,6 +436,7 @@ export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterM
                         isAdmin={isAdmin}
                         adminOnly={false}
                         showRestore={false}
+                        backupButtonLabel="Gerar PDF"
                         generatedBy={user?.username}
                         onRestored={() => setRefresh(r => r + 1)}
                       />
@@ -326,6 +485,7 @@ export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterM
             <p className="mt-2 text-xs font-semibold text-amber-700">PDF é indicado para conferência. Para restauração segura, prefira TXT estruturado ou arquivo técnico restaurável.</p>
             <p className="mt-1 text-xs text-slate-600">Aviso de segurança: confira o preview e confirme o modo de restauração antes de aplicar.</p>
           </div>
+          <AssistedRestorePanel modules={ALL_BACKUP_TYPES} onRestored={() => setRefresh(r => r + 1)} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
               const Icon = cfg.icon;

@@ -6,6 +6,7 @@ export type PaymentJob = Job;
 
 export type PaymentFormState = {
   jobId: string;
+  clientName: string;
   amount: string;
   paymentMethod: string;
   status: string;

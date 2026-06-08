@@ -235,11 +235,10 @@ export function BackupsHub() {
     <HubPage
       config={{
         title: "Backups",
-        description: "Escolha uma rotina segura: backup técnico, relatório PDF ou restauração controlada.",
+        description: "Escolha uma rotina segura: backup em PDF ou restauração controlada.",
         items: [
-          { title: "Backup", description: "Gerar cópia segura dos dados com JSON restaurável e PDF de conferência.", href: "/backups/backup", icon: HardDrive, permission: "viewBackupGeneration", accent: accents.blue },
-          { title: "Exportação", description: "Baixar relatórios visuais em PDF sem gerar arquivo técnico.", href: "/backups/exportacao", icon: FileText, permission: "viewExports", accent: accents.emerald },
-          { title: "Restauração", description: "Restaurar dados a partir de JSON/CSV com preview e confirmação.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
+          { title: "Backup", description: "Gerar PDFs organizados dos dados para conferência e segurança.", href: "/backups/backup", icon: HardDrive, permission: "viewBackupGeneration", accent: accents.blue },
+          { title: "Restauração", description: "Restaurar dados com PDF ou texto, sempre com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
         ],
       }}
     />

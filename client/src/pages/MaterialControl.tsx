@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, DollarSign, History, Package, Users } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, ClipboardList, DollarSign, History, Package, Users } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,7 +39,7 @@ function ErrorState() {
 export default function MaterialControl() {
   const { data: currentUser } = useUser();
   const isAdmin = (currentUser as any)?.role === "admin";
-  const [tab, setTab] = useState("saida");
+  const [tab, setTab] = useState("diario");
 
   const inventoryQuery = useQuery<InventoryItem[]>({ queryKey: ["/api/inventory"] });
   const usersQuery = useQuery<UserItem[]>({ queryKey: ["/api/users"] });
@@ -126,9 +126,10 @@ export default function MaterialControl() {
 
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="flex w-full justify-start overflow-x-auto">
-              <TabsTrigger value="saida" data-testid="tab-saida" className="shrink-0"><ArrowDownCircle className="mr-1 h-3 w-3" /> Saída</TabsTrigger>
+              <TabsTrigger value="diario" data-testid="tab-controle-diario" className="shrink-0"><ClipboardList className="mr-1 h-3 w-3" /> Controle Diário</TabsTrigger>
+              <TabsTrigger value="saida" data-testid="tab-saida" className="shrink-0"><ArrowDownCircle className="mr-1 h-3 w-3" /> Saídas</TabsTrigger>
               <TabsTrigger value="retorno" data-testid="tab-retorno" className="shrink-0"><ArrowUpCircle className="mr-1 h-3 w-3" /> Retorno</TabsTrigger>
-              <TabsTrigger value="responsabilidade" data-testid="tab-responsabilidade" className="shrink-0"><Users className="mr-1 h-3 w-3" /> Responsabilidade</TabsTrigger>
+              <TabsTrigger value="responsabilidade" data-testid="tab-responsabilidade" className="shrink-0"><Users className="mr-1 h-3 w-3" /> Responsabilidades</TabsTrigger>
               <TabsTrigger value="descontos" data-testid="tab-descontos" className="relative shrink-0">
                 <DollarSign className="mr-1 h-3 w-3" /> Descontos
                 {pendingDiscounts.length > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">{pendingDiscounts.length}</span>}
@@ -136,8 +137,20 @@ export default function MaterialControl() {
               <TabsTrigger value="historico" data-testid="tab-historico" className="shrink-0"><History className="mr-1 h-3 w-3" /> Histórico</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="saida" className="mt-4">
+            <TabsContent value="diario" className="mt-4 space-y-3">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                <h2 className="text-base font-bold text-slate-900">Controle Diário de Materiais</h2>
+                <p className="text-sm text-slate-600">Registre manualmente os materiais levados pelos funcionários.</p>
+              </div>
               <WithdrawalForm inventory={inventory} users={users} workOrders={workOrders} currentUser={currentUser as any} isAdmin={true} />
+            </TabsContent>
+
+            <TabsContent value="saida" className="mt-4">
+              <MovementHistoryPanel
+                withdrawals={pendingWithdrawals}
+                title="Saídas em aberto"
+                description="Materiais que saíram com funcionários e ainda aguardam retorno, conferência ou responsabilidade."
+              />
             </TabsContent>
 
             <TabsContent value="retorno" className="mt-4">

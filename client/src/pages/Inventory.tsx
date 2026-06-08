@@ -226,12 +226,101 @@ function generateMovementPDF(selectedYM: string, movements: Movement[], items: I
   doc.save(filename);
 }
 
+function generateCurrentStockPDF(items: InventoryItem[], movements: Movement[]) {
+  const doc = new jsPDF();
+  const generatedAt = new Date().toLocaleString("pt-BR");
+  const recentMovements = [...movements]
+    .sort((a, b) => `${b.date}-${b.id}`.localeCompare(`${a.date}-${a.id}`))
+    .slice(0, 20);
+  const entradas = movements.filter(m => m.type === "ENTRADA").reduce((sum, movement) => sum + movement.quantity, 0);
+  const saidas = movements.filter(m => m.type === "SAÍDA").reduce((sum, movement) => sum + movement.quantity, 0);
+
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, 210, 28, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.text("IMPPEL - Relatório do Estoque Atual", 14, 12);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`Gerado em: ${generatedAt}`, 14, 21);
+  doc.setTextColor(0, 0, 0);
+
+  const lowStock = items.filter(item => item.quantity <= item.minStock).length;
+  const emptyStock = items.filter(item => item.quantity <= 0).length;
+
+  autoTable(doc, {
+    startY: 34,
+    head: [["Produtos", "Estoque baixo", "Sem estoque", "Entradas", "Saídas/Ajustes"]],
+    body: [[String(items.length), String(lowStock), String(emptyStock), String(entradas), String(saidas)]],
+    styles: { fontSize: 9, halign: "center" },
+    headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold" },
+  });
+
+  const summaryY = (doc as any).lastAutoTable.finalY + 10;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text("Saldo final de cada item", 14, summaryY);
+  autoTable(doc, {
+    startY: summaryY + 4,
+    head: [["Produto", "Tipo", "Unidade", "Saldo atual", "Mínimo", "Status"]],
+    body: [...items]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(item => [
+        item.name,
+        item.type || "Geral",
+        item.unit || "unid",
+        String(item.quantity),
+        String(item.minStock),
+        item.quantity <= 0 ? "Sem estoque" : item.quantity <= item.minStock ? "Estoque baixo" : "OK",
+      ]),
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold" },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+  });
+
+  const recentY = Math.min(((doc as any).lastAutoTable.finalY || 0) + 10, 260);
+  if (recentMovements.length > 0) {
+    if (recentY > 230) doc.addPage();
+    const y = recentY > 230 ? 18 : recentY;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Movimentações recentes", 14, y);
+    autoTable(doc, {
+      startY: y + 4,
+      head: [["Data", "Produto", "Tipo", "Qtd", "Origem/Observação"]],
+      body: recentMovements.map(movement => [
+        fmtDate(movement.date),
+        movement.productName,
+        movement.type,
+        String(movement.quantity),
+        movement.notes || "-",
+      ]),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+    });
+  }
+
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text(`IMPPEL ERP - Estoque Atual - Página ${i} de ${pageCount}`, 14, 290);
+  }
+
+  const now = new Date();
+  const fileDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  doc.save(`IMPPEL_Estoque_Atual_${fileDate}.pdf`);
+}
+
 export type InventoryMode = "current" | "quick-count" | "movements";
 
 const INVENTORY_PAGE_COPY: Record<InventoryMode, { title: string; description: string }> = {
   current: {
     title: "Estoque Atual",
-    description: "Veja o saldo atual dos produtos.",
+    description: "Veja o saldo atual e baixe o relatório em PDF.",
   },
   "quick-count": {
     title: "Contagem Rápida",
@@ -655,9 +744,14 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
             <p className="text-sm text-slate-500">{pageCopy.description}</p>
           </div>
           {mode === "current" && (
-            <Button onClick={openNew} data-testid="button-add-inventory-item">
-              Adicionar Item ao Estoque
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => generateCurrentStockPDF(items as InventoryItem[], movements as Movement[])} data-testid="button-current-stock-pdf">
+                Baixar relatório do estoque atual
+              </Button>
+              <Button onClick={openNew} data-testid="button-add-inventory-item">
+                Adicionar Item ao Estoque
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -707,6 +801,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
             groupedByDay={groupedByDay}
             movSearch={movSearch}
             movTypeFilter={movTypeFilter}
+            showDownloadPdf={false}
             showNewMovement={false}
             onMonthChange={setSelectedYM}
             onNavigateMonth={navigateMonth}

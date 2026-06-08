@@ -16,6 +16,7 @@ import { formatCurrency, formatDate, getPaymentSearchText, paymentMethodLabels, 
 
 const emptyPaymentForm = (): PaymentFormState => ({
   jobId: "",
+  clientName: "",
   amount: "",
   paymentMethod: "transfer",
   status: "completed",
@@ -97,6 +98,7 @@ export default function Payments() {
     setEditingPayment(payment);
     setForm({
       jobId: String(payment.jobId),
+      clientName: payment.clientName,
       amount: String(payment.amount),
       paymentMethod: payment.paymentMethod,
       status: payment.status,
@@ -114,9 +116,17 @@ export default function Payments() {
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const selectedJob = jobs.find(job => job.id === Number(form.jobId));
+    if (!selectedJob) {
+      toast({
+        title: "Selecione um orçamento",
+        description: "Para evitar pagamento solto, vincule o pagamento a um orçamento do cliente.",
+        variant: "destructive",
+      });
+      return;
+    }
     const payload = {
-      jobId: Number(form.jobId),
-      clientName: selectedJob?.clientName || editingPayment?.clientName || "",
+      jobId: selectedJob.id,
+      clientName: selectedJob.clientName || form.clientName || editingPayment?.clientName || "",
       amount: Number(form.amount),
       paymentMethod: form.paymentMethod,
       status: form.status,

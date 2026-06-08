@@ -23,6 +23,28 @@ type PaymentFormModalProps = {
 export function PaymentFormModal({ open, payment, form, jobs, isSaving = false, onClose, onChange, onSubmit }: PaymentFormModalProps) {
   const setField = (field: keyof PaymentFormState, value: string) => onChange({ ...form, [field]: value });
   const selectedJob = jobs.find(job => String(job.id) === form.jobId);
+  const clientNames = Array.from(new Set(jobs.map(job => job.clientName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const clientJobs = form.clientName ? jobs.filter(job => job.clientName === form.clientName) : jobs;
+  const getJobAmount = (job: PaymentJob) => Number((job as any).realPriceSold || (job as any).totalPrice || (job as any).finalPrice || 0);
+  const setJob = (jobId: string) => {
+    const job = jobs.find(item => String(item.id) === jobId);
+    onChange({
+      ...form,
+      jobId,
+      clientName: job?.clientName || form.clientName,
+      amount: job ? String(getJobAmount(job)) : form.amount,
+    });
+  };
+  const setClient = (clientName: string) => {
+    const matches = jobs.filter(job => job.clientName === clientName);
+    const firstJob = matches.length === 1 ? matches[0] : undefined;
+    onChange({
+      ...form,
+      clientName,
+      jobId: firstJob ? String(firstJob.id) : "",
+      amount: firstJob ? String(getJobAmount(firstJob)) : "",
+    });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -32,26 +54,53 @@ export function PaymentFormModal({ open, payment, form, jobs, isSaving = false, 
         </DialogHeader>
 
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>Orçamento *</Label>
-            <select
-              value={form.jobId}
-              onChange={event => setField("jobId", event.target.value)}
-              required
-              className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-              data-testid="select-job"
-            >
-              <option value="">Selecione um orçamento</option>
-              {jobs.map(job => (
-                <option key={job.id} value={String(job.id)}>
-                  {job.clientName} - {formatCurrency(job.realPriceSold || 0)}
-                </option>
-              ))}
-            </select>
-            {selectedJob && (
-              <p className="text-xs text-slate-500">Cliente selecionado: {selectedJob.clientName}</p>
-            )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Cliente</Label>
+              <select
+                value={form.clientName}
+                onChange={event => setClient(event.target.value)}
+                className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                data-testid="select-payment-client"
+              >
+                <option value="">Selecionar cliente</option>
+                {clientNames.map(clientName => (
+                  <option key={clientName} value={clientName}>{clientName}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Orçamento vinculado *</Label>
+              <select
+                value={form.jobId}
+                onChange={event => setJob(event.target.value)}
+                required
+                className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                data-testid="select-job"
+              >
+                <option value="">Selecione um orçamento</option>
+                {clientJobs.map(job => (
+                  <option key={job.id} value={String(job.id)}>
+                    #{job.id} - {job.clientName} - {formatCurrency(getJobAmount(job))}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {selectedJob ? (
+            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              Orçamento #{selectedJob.id} selecionado para {selectedJob.clientName}. Valor sugerido: {formatCurrency(getJobAmount(selectedJob))}.
+            </div>
+          ) : form.clientName ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Cliente selecionado. Escolha um orçamento da lista para manter o pagamento com referência.
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Selecione um orçamento para preencher cliente e valor automaticamente, ou selecione um cliente para ver os orçamentos disponíveis.
+            </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">

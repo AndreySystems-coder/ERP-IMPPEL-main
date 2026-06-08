@@ -14,6 +14,10 @@ type EmployeeKit = {
     qtyInHand: number;
     days: number;
     withdrawalId: number;
+    clientName: string | null;
+    workOrderId: number | null;
+    createdAt: string;
+    notes: string | null;
   }[];
 };
 
@@ -37,6 +41,10 @@ function buildEmployeeKits(withdrawals: Withdrawal[]) {
           qtyInHand: inHand,
           days: daysSince(withdrawal.createdAt),
           withdrawalId: withdrawal.id,
+          clientName: withdrawal.clientName,
+          workOrderId: withdrawal.workOrderId,
+          createdAt: withdrawal.createdAt,
+          notes: withdrawal.notes,
         });
       }
     }
@@ -99,13 +107,16 @@ export function ResponsibilityPanel({ pendingWithdrawals }: { pendingWithdrawals
                     >
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{item.productName}</p>
-                        <p className="text-xs text-gray-500">Saída #{item.withdrawalId}</p>
+                        <p className="text-xs text-gray-500">Saída #{item.withdrawalId} · {item.workOrderId ? `OS #${item.workOrderId}` : item.clientName || "Sem destino vinculado"}</p>
+                        <p className="text-xs text-gray-400">Data de saída: {new Date(item.createdAt).toLocaleDateString("pt-BR")}</p>
+                        {item.notes && <p className="mt-1 text-xs text-gray-500">Obs.: {item.notes}</p>}
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold">{item.qtyInHand} {item.unit}</p>
                         <p className={`text-xs ${item.days > 3 ? "font-medium text-red-600" : "text-gray-400"}`}>
                           <CalendarClock className="mr-1 inline h-3 w-3" />{item.days}d atrás
                         </p>
+                        <p className="mt-1 text-[11px] font-semibold text-blue-700">Retorno/Desconto</p>
                       </div>
                     </div>
                   ))}
@@ -127,9 +138,12 @@ export function ResponsibilityPanel({ pendingWithdrawals }: { pendingWithdrawals
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm text-gray-600">Resumo geral</CardTitle>
+          <CardTitle className="text-sm text-gray-600">Resumo geral e resolução</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Para resolver uma responsabilidade, registre o retorno como devolvido, perdido ou danificado. Valores de responsabilidade/desconto aparecem na aba Descontos para aprovação interna.
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-sm">
               <thead>
