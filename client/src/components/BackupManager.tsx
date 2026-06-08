@@ -3,7 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Download, Upload, FileJson, FileText, AlertTriangle, CheckCircle2, X,
+  Download, Upload, FileText, AlertTriangle, CheckCircle2, X,
   ShieldAlert,
 } from "lucide-react";
 import jsPDF from "jspdf";
@@ -506,14 +506,6 @@ export default function BackupManager({
       const jsonStr = JSON.stringify(backup, null, 2);
       const sizeKB = Math.round(jsonStr.length / 1024 * 10) / 10;
 
-      if (!isExport) {
-        const blob = new Blob([jsonStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url; a.download = `${baseName}.json`; a.click();
-        URL.revokeObjectURL(url);
-      }
-
       generatePDF(type, backup, {
         titlePrefix: isExport ? "Relatório" : "Backup",
         filePrefix: isExport ? "Relatorio" : "Backup",
@@ -535,7 +527,7 @@ export default function BackupManager({
 
       toast({
         title: isExport ? "Relatório exportado com sucesso!" : "Backup gerado com sucesso!",
-        description: isExport ? `${baseName}.pdf baixado para conferência.` : `${baseName}.json e .pdf baixados (${sizeKB} KB).`,
+        description: `${baseName}.pdf baixado para conferência segura.`,
       });
     } catch (err: any) {
       toast({ title: "Erro ao gerar backup", description: err.message, variant: "destructive" });
@@ -551,14 +543,14 @@ export default function BackupManager({
     if (lowerName.endsWith(".pdf")) {
       toast({
         title: "PDF não é restaurado automaticamente",
-        description: "PDF é indicado para conferência. Para restauração segura, prefira TXT estruturado ou arquivo técnico restaurável.",
+        description: "PDF é indicado para conferência. Para restauração segura, use a tela Restauração e gere um preview antes de confirmar.",
         variant: "destructive",
       });
       e.target.value = "";
       return;
     }
     if (lowerName.endsWith(".csv")) {
-      toast({ title: "CSV ainda não suportado", description: "Use JSON ou TXT estruturado gerado a partir do backup deste módulo.", variant: "destructive" });
+      toast({ title: "CSV ainda não suportado", description: "Use texto estruturado na tela Restauração para gerar preview antes de aplicar.", variant: "destructive" });
       e.target.value = "";
       return;
     }
@@ -580,7 +572,7 @@ export default function BackupManager({
         }
         setPendingRestore(parsed);
       } catch {
-        toast({ title: "Erro ao ler arquivo", description: "Envie um JSON válido ou TXT estruturado contendo o JSON do backup.", variant: "destructive" });
+        toast({ title: "Erro ao ler arquivo", description: "Não foi possível interpretar o arquivo com segurança. Use a restauração por texto com preview.", variant: "destructive" });
       }
     };
     reader.readAsText(file);
@@ -603,10 +595,7 @@ export default function BackupManager({
             {loadingBackup ? (
               <span className="w-3.5 h-3.5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin" />
             ) : (
-              <>
-                <FileJson className="w-3.5 h-3.5 text-blue-600" />
-                <FileText className="w-3.5 h-3.5 text-red-500" />
-              </>
+              <FileText className="w-3.5 h-3.5 text-red-500" />
             )}
             <span className="hidden sm:inline">{backupButtonLabel}</span>
             <Download className="w-3.5 h-3.5" />

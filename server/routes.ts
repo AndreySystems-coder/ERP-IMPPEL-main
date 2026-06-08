@@ -387,11 +387,11 @@ export async function registerRoutes(
     { prefix: "/api/clients", permissions: ["viewClients"] },
     { prefix: "/api/leads", permissions: ["viewLeads"] },
     { prefix: "/api/jobs", permissions: ["viewQuotes"] },
-    { prefix: "/api/work-orders", permissions: ["viewWorkOrders", "viewAllWorkOrders"] },
+    { prefix: "/api/work-orders", permissions: ["viewWorkOrders", "viewAllWorkOrders"], readPermissions: ["viewWorkOrders", "viewAllWorkOrders", "registrarMaterials"] },
     { prefix: "/api/payments", permissions: ["viewPayments"] },
     { prefix: "/api/products", permissions: ["viewInventory", "viewInventoryCurrent"] },
     { prefix: "/api/services", permissions: ["viewQuoteRules"] },
-    { prefix: "/api/inventory", permissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryMovements", "editInventory"] },
+    { prefix: "/api/inventory", permissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryMovements", "editInventory"], readPermissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryMovements", "editInventory", "registrarMaterials"] },
     { prefix: "/api/transactions", permissions: ["viewFinancials", "viewCashFlow"] },
     { prefix: "/api/settings", permissions: ["viewSettings"] },
     { prefix: "/api/cost-config", permissions: ["viewCostSettings"] },
@@ -403,7 +403,12 @@ export async function registerRoutes(
   ];
   app.use((req, res, next) => {
     const restrictedRoute = restrictedPrefixes.find(({ prefix }) => req.path.startsWith(prefix));
-    if (restrictedRoute) return requireAnyPermission(restrictedRoute.permissions)(req, res, next);
+    if (restrictedRoute) {
+      const permissions = req.method === "GET" && "readPermissions" in restrictedRoute
+        ? (restrictedRoute.readPermissions || restrictedRoute.permissions)
+        : restrictedRoute.permissions;
+      return requireAnyPermission(permissions)(req, res, next);
+    }
     next();
   });
   // Obra registros require at least auth (funcionarios allowed)
@@ -2367,7 +2372,57 @@ export async function registerRoutes(
   });
 
   app.post("/api/backup/restore/materiais", requireAdmin, async (req, res) => {
-    res.json({ message: "Histórico de materiais é somente leitura — não pode ser restaurado automaticamente.", updated: 0, created: 0 });
+    try {
+      const { data } = req.body;
+      if (!data?.withdrawals) return res.status(400).json({ message: "Formato de backup inválido" });
+
+      const existing = await storage.getMaterialWithdrawals();
+      const existingKeys = new Set(existing.map((withdrawal: any) =>
+        `${withdrawal.username}|${withdrawal.workOrderId || ""}|${withdrawal.notes || ""}`.toLowerCase()
+      ));
+
+      let created = 0;
+      let skipped = 0;
+      for (const withdrawal of data.withdrawals || []) {
+        const key = `${withdrawal.username}|${withdrawal.workOrderId || ""}|${withdrawal.notes || ""}`.toLowerCase();
+        if (existingKeys.has(key)) {
+          skipped++;
+          continue;
+        }
+
+        const items = Array.isArray(withdrawal.items) ? withdrawal.items : [];
+        if (!withdrawal.username || items.length === 0) {
+          skipped++;
+          continue;
+        }
+
+        await storage.createMaterialWithdrawal({
+          userId: Number(withdrawal.userId || 0),
+          username: String(withdrawal.username),
+          workOrderId: withdrawal.workOrderId ? Number(withdrawal.workOrderId) : null,
+          jobId: withdrawal.jobId ? Number(withdrawal.jobId) : null,
+          clientName: withdrawal.clientName || null,
+          status: withdrawal.status || "pendente",
+          withdrawalPhoto: withdrawal.withdrawalPhoto || "restauracao-assistida",
+          withdrawalSignature: withdrawal.withdrawalSignature || "restauracao-assistida",
+          notes: withdrawal.notes || "Origem: RESTAURACAO_ASSISTIDA_TEXTO",
+          returnPhoto: withdrawal.returnPhoto || null,
+          returnSignature: withdrawal.returnSignature || null,
+          returnNotes: withdrawal.returnNotes || null,
+        } as any, items.map((item: any) => ({
+          withdrawalId: 0,
+          inventoryId: Number(item.inventoryId || 0),
+          productName: String(item.productName || item.materialName || item.name || "Material"),
+          unit: item.unit || "unid",
+          quantity: Math.ceil(Number(item.quantity || 0)),
+          returnedQuantity: item.returnedQuantity ? Math.ceil(Number(item.returnedQuantity)) : null,
+          condition: item.condition || "bom",
+        })));
+        created++;
+      }
+
+      res.json({ message: "Controle de materiais restaurado por texto assistido", updated: 0, created, skipped });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   app.post("/api/backup/restore/financeiro", requireAdmin, async (req, res) => {

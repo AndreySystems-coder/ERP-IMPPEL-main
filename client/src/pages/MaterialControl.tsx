@@ -42,14 +42,14 @@ export default function MaterialControl() {
   const [tab, setTab] = useState("diario");
 
   const inventoryQuery = useQuery<InventoryItem[]>({ queryKey: ["/api/inventory"] });
-  const usersQuery = useQuery<UserItem[]>({ queryKey: ["/api/users"] });
+  const usersQuery = useQuery<UserItem[]>({ queryKey: ["/api/users"], enabled: isAdmin });
   const workOrdersQuery = useQuery<WorkOrder[]>({ queryKey: ["/api/work-orders"] });
   const withdrawalsQuery = useQuery<Withdrawal[]>({ queryKey: ["/api/material-withdrawals"] });
-  const discountRulesQuery = useQuery<DiscountRule[]>({ queryKey: ["/api/salary-discount-rules"] });
-  const salaryDiscountsQuery = useQuery<SalaryDiscount[]>({ queryKey: ["/api/salary-discounts"] });
+  const discountRulesQuery = useQuery<DiscountRule[]>({ queryKey: ["/api/salary-discount-rules"], enabled: isAdmin });
+  const salaryDiscountsQuery = useQuery<SalaryDiscount[]>({ queryKey: ["/api/salary-discounts"], enabled: isAdmin });
 
   const inventory = inventoryQuery.data ?? [];
-  const users = usersQuery.data ?? [];
+  const users = usersQuery.data ?? (currentUser ? [currentUser as UserItem] : []);
   const workOrders = workOrdersQuery.data ?? [];
   const withdrawals = withdrawalsQuery.data ?? [];
   const discountRules = discountRulesQuery.data ?? [];
@@ -60,8 +60,8 @@ export default function MaterialControl() {
   const returnedCount = withdrawals.filter(withdrawal => withdrawal.status === "retornado").length;
   const overdueCount = pendingWithdrawals.filter(withdrawal => daysSince(withdrawal.createdAt) > 3).length;
 
-  const isLoadingCore = inventoryQuery.isLoading || usersQuery.isLoading || workOrdersQuery.isLoading || withdrawalsQuery.isLoading;
-  const hasCoreError = inventoryQuery.isError || usersQuery.isError || workOrdersQuery.isError || withdrawalsQuery.isError;
+  const isLoadingCore = inventoryQuery.isLoading || (isAdmin && usersQuery.isLoading) || workOrdersQuery.isLoading || withdrawalsQuery.isLoading;
+  const hasCoreError = inventoryQuery.isError || (isAdmin && usersQuery.isError) || workOrdersQuery.isError || withdrawalsQuery.isError;
 
   if (!isAdmin) {
     return (
