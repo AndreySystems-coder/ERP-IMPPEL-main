@@ -154,7 +154,9 @@ function parseTextRestore(type: BackupType, text: string): TextPreview {
 
   if (type === "estoque") {
     const items = lines.map(line => {
-      const match = line.match(/(?:produto|material)\s*:\s*([^,;]+).*?(?:quantidade|qtd)\s*:\s*([\d.,]+)/i);
+      const match =
+        line.match(/(?:produto|material)\s*:\s*([^,;]+).*?(?:quantidade|qtd)\s*:\s*([\d.,]+)/i) ||
+        line.match(/^(.+?)\s*[-–:]\s*([\d.,]+)\s*(?:un|unid|unidade|unidades|kg|m|m2|m²|lt|l)?/i);
       if (!match) return null;
       const item = { name: match[1].trim(), type: "material", unit: "unid", quantity: parseNumber(match[2]), minStock: 0, pricePerUnit: 0 };
       rows.push({ name: item.name, detail: `${item.quantity} ${item.unit}` });
@@ -166,7 +168,9 @@ function parseTextRestore(type: BackupType, text: string): TextPreview {
 
   if (type === "produtos") {
     const products = lines.map(line => {
-      const match = line.match(/produto\s*:\s*([^,;]+)(?:.*?(?:preço|valor)\s*:\s*([\d.,]+))?/i);
+      const match =
+        line.match(/produto\s*:\s*([^,;]+)(?:.*?(?:preço|valor)\s*:\s*R?\$?\s*([\d.,]+))?/i) ||
+        line.match(/^(.+?)\s*[-–:]\s*R?\$?\s*([\d.,]+)/i);
       if (!match) return null;
       const product = { name: match[1].trim(), description: "", category: "Sem Categoria", brand: "", unit: "un", salePrice: parseNumber(match[2]), commission: 0, maxDiscount: 0, active: true };
       rows.push({ name: product.name, detail: product.salePrice ? `R$ ${product.salePrice}` : "Produto sem preço informado" });
@@ -178,7 +182,9 @@ function parseTextRestore(type: BackupType, text: string): TextPreview {
 
   if (type === "servicos") {
     const services = lines.map(line => {
-      const match = line.match(/servi[cç]o\s*:\s*([^,;]+)(?:.*?(?:preço|valor)\s*:\s*([\d.,]+))?/i);
+      const match =
+        line.match(/servi[cç]o\s*:\s*([^,;]+)(?:.*?(?:preço|valor)\s*:\s*R?\$?\s*([\d.,]+))?/i) ||
+        line.match(/^(.+?)\s*[-–:]\s*R?\$?\s*([\d.,]+)/i);
       if (!match) return null;
       const service = { name: match[1].trim(), description: "", pricePerUnit: parseNumber(match[2]), laborCostPerM2: 0, transportCostPerM2: 0, materialConsumptionPerM2: 0, serviceMaterials: null };
       rows.push({ name: service.name, detail: service.pricePerUnit ? `R$ ${service.pricePerUnit}` : "Serviço sem preço informado" });
@@ -205,9 +211,11 @@ function parseTextRestore(type: BackupType, text: string): TextPreview {
 
 function AssistedRestorePanel({ modules, onRestored }: { modules: typeof ALL_BACKUP_TYPES; onRestored: () => void }) {
   const [type, setType] = useState<BackupType>("estoque");
+  const [method, setMethod] = useState<"texto" | "pdf">("texto");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<TextPreview | null>(null);
   const [error, setError] = useState("");
+  const selectedModule = modules.find(module => module.type === type) || modules[0];
 
   const restoreMutation = useMutation({
     mutationFn: (backup: any) => apiRequest("POST", `/api/backup/restore/${type}?mode=merge`, backup).then(response => response.json()),
@@ -231,65 +239,115 @@ function AssistedRestorePanel({ modules, onRestored }: { modules: typeof ALL_BAC
 
   const handlePdf = (file?: File) => {
     if (!file) return;
-    setError("PDF não será restaurado automaticamente. Use texto estruturado para gerar preview ou envie um arquivo técnico restaurável do backup.");
+    setPreview(null);
+    setError("Não foi possível interpretar este PDF com segurança. Use um PDF gerado pelo Backup do ERP ou restaure por texto.");
   };
 
   return (
-    <Card>
-      <CardContent className="space-y-4 p-5">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900">Restaurar por PDF ou Texto</h2>
-          <p className="text-sm text-slate-600">Restaure dados com PDF ou texto, sempre com preview antes de aplicar.</p>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700">Módulo</label>
-            <select value={type} onChange={event => { setType(event.target.value as BackupType); setPreview(null); setError(""); }} className="min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm">
-              {modules.map(module => <option key={module.type} value={module.type}>{module.label}</option>)}
-            </select>
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="space-y-4 p-5">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">1. Escolha o módulo</h2>
+            <p className="text-sm text-slate-600">O módulo selecionado define como o texto ou PDF será interpretado para gerar o preview.</p>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700">Restaurar por PDF</label>
-            <input type="file" accept=".pdf" onChange={event => handlePdf(event.target.files?.[0])} className="block min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {modules.map(module => {
+              const Icon = module.icon;
+              const selected = module.type === type;
+              return (
+                <button
+                  key={module.type}
+                  type="button"
+                  onClick={() => { setType(module.type); setPreview(null); setError(""); }}
+                  className={`rounded-xl border p-4 text-left transition-all ${selected ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100" : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"}`}
+                  data-testid={`button-select-restore-${module.type}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${module.color}`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900">{module.label}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{module.description}</p>
+                      {selected && <span className="mt-2 inline-flex rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-bold text-white">Selecionado</span>}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-slate-700">Restaurar por Texto</label>
-          <textarea
-            value={text}
-            onChange={event => { setText(event.target.value); setPreview(null); }}
-            rows={5}
-            placeholder={"Produto: Manta asfáltica, quantidade: 20\nProduto: Primer, quantidade: 8\nServiço: Impermeabilização de laje, preço: 1500"}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-          />
-        </div>
+      <Card>
+        <CardContent className="space-y-4 p-5">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">2. Escolha o método</h2>
+            <p className="text-sm text-slate-600">Módulo selecionado: <strong>{selectedModule.label}</strong>. Gere o preview antes de confirmar.</p>
+          </div>
 
-        {error && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{error}</div>}
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => { setMethod("texto"); setPreview(null); setError(""); }}
+              className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold ${method === "texto" ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-700"}`}
+            >
+              Restaurar por Texto
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMethod("pdf"); setPreview(null); setError(""); }}
+              className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold ${method === "pdf" ? "border-amber-500 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-700"}`}
+            >
+              Restaurar por PDF
+            </button>
+          </div>
 
-        {preview && (
-          <div className="rounded-xl border border-slate-200">
-            <div className="border-b bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">Preview dos dados</div>
-            <div className="divide-y">
-              {preview.rows.map((row, index) => (
-                <div key={`${row.name}-${index}`} className="flex justify-between gap-3 px-3 py-2 text-sm">
-                  <span className="font-medium text-slate-800">{row.name}</span>
-                  <span className="text-slate-500">{row.detail}</span>
-                </div>
-              ))}
+          {method === "texto" ? (
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-slate-700">Texto estruturado</label>
+              <textarea
+                value={text}
+                onChange={event => { setText(event.target.value); setPreview(null); }}
+                rows={5}
+                placeholder={"Manta asfáltica - 20 unidades\nPrimer - 8 unidades\nImpermeabilização de laje - R$ 1500"}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+              />
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-slate-700">PDF gerado pelo Backup do ERP</label>
+              <input type="file" accept=".pdf" onChange={event => handlePdf(event.target.files?.[0])} className="block min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+              <p className="text-xs text-slate-500">O ERP tenta reconhecer PDFs gerados pelo próprio Backup. Se não conseguir validar com segurança, a restauração fica bloqueada.</p>
+            </div>
+          )}
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <button type="button" onClick={buildPreview} disabled={!text.trim()} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Gerar preview</button>
-          <button type="button" onClick={() => preview && restoreMutation.mutate(preview.backup)} disabled={!preview || restoreMutation.isPending} className="rounded-xl bg-blue-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            Confirmar restauração
-          </button>
-        </div>
-      </CardContent>
-    </Card>
+          {error && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{error}</div>}
+
+          {preview && (
+            <div className="rounded-xl border border-slate-200">
+              <div className="border-b bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">3. Preview dos dados</div>
+              <div className="divide-y">
+                {preview.rows.map((row, index) => (
+                  <div key={`${row.name}-${index}`} className="flex justify-between gap-3 px-3 py-2 text-sm">
+                    <span className="font-medium text-slate-800">{row.name}</span>
+                    <span className="text-slate-500">{row.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button type="button" onClick={buildPreview} disabled={method !== "texto" || !text.trim()} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Gerar preview</button>
+            <button type="button" onClick={() => preview && restoreMutation.mutate(preview.backup)} disabled={!preview || restoreMutation.isPending} className="rounded-xl bg-blue-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+              Confirmar restauração
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -486,34 +544,6 @@ export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterM
             <p className="mt-1 text-xs text-slate-600">Aviso de segurança: confira o preview e confirme o modo de restauração antes de aplicar.</p>
           </div>
           <AssistedRestorePanel modules={ALL_BACKUP_TYPES} onRestored={() => setRefresh(r => r + 1)} />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {ALL_BACKUP_TYPES.map(cfg => {
-              const Icon = cfg.icon;
-              return (
-                <Card key={cfg.type} className="overflow-hidden hover:shadow-md transition-shadow">
-                  <CardContent className="p-5 space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.color}`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">{cfg.label}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">Importar JSON ou TXT estruturado deste módulo.</p>
-                      </div>
-                    </div>
-                    <BackupManager
-                      type={cfg.type}
-                      label={cfg.label}
-                      isAdmin={isAdmin}
-                      adminOnly={false}
-                      showBackup={false}
-                      onRestored={() => setRefresh(r => r + 1)}
-                    />
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
 
           <Card className="overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">

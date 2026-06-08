@@ -131,11 +131,13 @@ export function QuotesHub() {
     <HubPage
       config={{
         title: "Orçamentos",
-        description: "Crie propostas, calcule margens, aplique zonas e gere PDFs profissionais.",
+        description: "Crie propostas e gerencie catálogos de serviços e materiais usados nos orçamentos.",
         items: [
           { title: "Orçamentos", description: "Lista, criação, edição, PDF e envio por WhatsApp.", href: "/jobs", icon: Briefcase, permission: "viewQuotes", accent: accents.blue },
-          { title: "Templates", description: "Layout, cores, seções e preview dos PDFs.", href: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates", accent: accents.emerald },
+          { title: "Catálogo de Serviços", description: "Serviços, custos por m² e materiais usados na proposta.", href: "/services", icon: Layers, permission: "viewQuoteRules", accent: accents.emerald },
+          { title: "Catálogo de Materiais", description: "Produtos/materiais com preço, comissão e desconto máximo.", href: "/catalog", icon: Package, permission: "viewQuoteRules", accent: accents.orange },
           { title: "Calculadora de Preços", description: "Simulações rápidas de custo, margem e zona.", href: "/calculator", icon: Calculator, permission: "viewQuoteRules", accent: accents.orange },
+          { title: "Templates", description: "Layout, cores, seções e preview dos PDFs.", href: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates", accent: accents.violet },
         ],
       }}
     />
@@ -217,7 +219,6 @@ export function SettingsHub() {
         items: [
           { title: "Status", description: "Etapas e status usados nos fluxos.", href: "/status-personalizados", icon: Hash, permission: "viewStatusSettings", accent: accents.blue },
           { title: "Usuários", description: "Acessos, cargos e permissões internas.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
-          { title: "Catálogo de Serviços", description: "Serviços, custos por m² e descrições técnicas.", href: "/services", icon: Layers, permission: "viewQuoteRules", accent: accents.emerald },
           { title: "Custos", description: "Margens, custos, Zona A/B/C e acréscimos regionais.", href: "/custos-margens", icon: TrendingDown, permission: "viewCostSettings", accent: accents.orange },
           { title: "Regras", description: "Critérios para score e recomendação de serviços.", href: "/priority-rules", icon: Scale, permission: "viewPriorityRules", accent: accents.violet },
           { title: "Configurações Gerais", description: "Parâmetros gerais do ERP.", href: "/settings", icon: Settings, permission: "viewSettings", accent: accents.blue },

@@ -176,6 +176,10 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
   doc.text(`Total de registros: ${count}`, 230, 16);
   doc.setTextColor(0, 0, 0);
 
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Estrutura ERP: módulo=${label}; tipo=${type}; data=${now}; registros=${count}`, 14, 26);
+
   const headStyle = { fillColor: [15, 23, 42] as [number, number, number], textColor: 255 as unknown as [number, number, number], fontStyle: "bold" as const };
   const altRow = { fillColor: [245, 247, 250] as [number, number, number] };
   const baseStyle = { fontSize: 8, cellPadding: 2 };

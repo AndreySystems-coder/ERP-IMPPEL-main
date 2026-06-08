@@ -85,6 +85,8 @@ const ALL_SECTIONS: NavSection[] = [
     permission: "viewQuotes",
     items: [
       { name: "Orçamentos", path: "/jobs", icon: Briefcase, permission: "viewQuotes" },
+      { name: "Catálogo de Serviços", path: "/services", icon: Layers, permission: "viewQuoteRules" },
+      { name: "Catálogo de Materiais", path: "/catalog", icon: Package, permission: "viewQuoteRules" },
       { name: "Calculadora de Preços", path: "/calculator", icon: Calculator, permission: "viewQuoteRules" },
       { name: "Templates", path: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates" },
     ],
@@ -149,7 +151,6 @@ const ALL_SECTIONS: NavSection[] = [
       { name: "Status Personalizados", path: "/status-personalizados", icon: Hash, permission: "viewStatusSettings" },
       { name: "Regras de Prioridade", path: "/priority-rules", icon: Scale, permission: "viewPriorityRules" },
       { name: "Usuários", path: "/usuarios", icon: UserCog, permission: "viewUsers" },
-      { name: "Catálogo de Serviços", path: "/services", icon: Layers, permission: "viewQuoteRules" },
       { name: "Configurações Gerais", path: "/settings", icon: Settings, permission: "viewSettings" },
       { name: "Formas de Pagamento", path: "/formas-pagamento", icon: CreditCard, permission: "viewFinancialSettings" },
       { name: "Condições de Pagamento", path: "/condicoes-pagamento", icon: Clipboard, permission: "viewFinancialSettings" },
