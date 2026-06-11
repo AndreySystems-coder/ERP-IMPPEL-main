@@ -26,18 +26,56 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-async function userHasAnyPermission(userId: number, permissionsToCheck: string[]) {
+const DEFAULT_EMPLOYEE_PERMISSIONS = new Set([
+  "viewWorks",
+  "viewObraRegistro",
+  "viewTeam",
+  "registrarMaterials",
+]);
+
+const COMPATIBLE_PERMISSIONS: Record<string, string[]> = {
+  viewCrm: ["viewLeads", "viewCrmWhatsapp", "viewClients"],
+  viewQuotes: ["viewQuoteTemplates", "viewQuoteRules"],
+  viewWorks: ["viewWorkOrders", "viewObraRegistro", "viewCalendar"],
+  viewWorkOrders: ["viewAllWorkOrders"],
+  viewInventory: ["viewInventoryCurrent", "viewInventoryCount", "viewInventoryMovements"],
+  viewInventoryCurrent: ["viewInventory"],
+  viewInventoryMovements: ["viewInventory"],
+  viewTeam: ["viewProductivity", "registrarMaterials", "viewWarranties", "viewPostSale"],
+  viewFinancials: ["viewPayments", "viewCashFlow", "viewFinancialSettings"],
+  viewCashFlow: ["viewFinancials"],
+  viewSettings: ["viewCostSettings", "viewStatusSettings", "viewUsers", "viewPriorityRules"],
+  viewBackups: ["viewBackupGeneration", "viewRestore", "viewExports"],
+};
+
+function permissionMatches(permissions: Record<string, boolean>, permission: string) {
+  if (permissions[permission]) return true;
+  return (COMPATIBLE_PERMISSIONS[permission] || []).some((key) => permissions[key]);
+}
+
+async function getEffectiveUserPermissions(userId: number) {
   const user = await storage.getUser(userId);
-  if (!user) return false;
-  if (user.role === "admin") return true;
-  if (!(user as any).roleId) return false;
+  if (!user) return null;
+  if (user.role === "admin") return { user, isAdmin: true, permissions: null as Record<string, boolean> | null };
+
+  if (!(user as any).roleId) {
+    const permissions = Object.fromEntries(Array.from(DEFAULT_EMPLOYEE_PERMISSIONS).map((permission) => [permission, true]));
+    return { user, isAdmin: false, permissions };
+  }
 
   const customRole = await storage.getRole((user as any).roleId);
-  if (!customRole) return false;
-
   let permissions: Record<string, boolean> = {};
-  try { permissions = JSON.parse(customRole.permissions); } catch {}
-  return permissionsToCheck.some((permission) => permissions[permission]);
+  if (customRole) {
+    try { permissions = JSON.parse(customRole.permissions); } catch {}
+  }
+  return { user, isAdmin: false, permissions };
+}
+
+async function userHasAnyPermission(userId: number, permissionsToCheck: string[]) {
+  const effective = await getEffectiveUserPermissions(userId);
+  if (!effective) return false;
+  if (effective.isAdmin) return true;
+  return permissionsToCheck.some((permission) => permissionMatches(effective.permissions || {}, permission));
 }
 
 function requireAnyPermission(permissionsToCheck: string[]) {
@@ -400,6 +438,18 @@ export async function registerRoutes(
     { prefix: "/api/catalog", permissions: ["viewInventory", "viewInventoryCurrent"] },
     { prefix: "/api/job-tracking", permissions: ["viewWorkOrders", "viewAllWorkOrders"] },
     { prefix: "/api/scheduling", permissions: ["viewCalendar"] },
+    { prefix: "/api/obra-registros", permissions: ["viewObraRegistro"] },
+    { prefix: "/api/obra-consumo-logs", permissions: ["registrarMaterials", "viewWorkOrders", "viewAllWorkOrders"] },
+    { prefix: "/api/job-statuses", permissions: ["viewStatusSettings"] },
+    { prefix: "/api/payment-methods", permissions: ["viewFinancialSettings"] },
+    { prefix: "/api/payment-conditions", permissions: ["viewFinancialSettings"] },
+    { prefix: "/api/contracts", permissions: ["viewSettings"] },
+    { prefix: "/api/warranties", permissions: ["viewWarranties"] },
+    { prefix: "/api/warranty-incidents", permissions: ["viewWarranties"] },
+    { prefix: "/api/production-logs", permissions: ["viewProductivity"] },
+    { prefix: "/api/nps-responses", permissions: ["viewPostSale"] },
+    { prefix: "/api/maintenance-reminders", permissions: ["viewPostSale"] },
+    { prefix: "/api/material-withdrawals", permissions: ["registrarMaterials", "viewAllMaterials"] },
   ];
   app.use((req, res, next) => {
     const restrictedRoute = restrictedPrefixes.find(({ prefix }) => req.path.startsWith(prefix));
@@ -1921,12 +1971,17 @@ export async function registerRoutes(
   });
 
   // ─── Material Withdrawals (Controle de Materiais) ────────────────────────────
+  const canManageAllMaterials = async (req: Request) => {
+    const userId = req.session?.userId;
+    if (!userId) return false;
+    return userHasAnyPermission(userId, ["viewAllMaterials"]);
+  };
+
   app.get("/api/material-withdrawals", requireAuth, async (req, res) => {
     try {
       const all = await storage.getMaterialWithdrawals();
-      const isAdmin = req.session.userRole === "admin";
-      // Non-admin users see only their own withdrawals
-      const filtered = isAdmin ? all : all.filter((w: any) => w.userId === req.session.userId);
+      const canSeeAll = await canManageAllMaterials(req);
+      const filtered = canSeeAll ? all : all.filter((w: any) => Number(w.userId) === Number(req.session.userId));
       res.json(filtered);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -1935,16 +1990,22 @@ export async function registerRoutes(
     try {
       const w = await storage.getMaterialWithdrawal(Number(req.params.id));
       if (!w) return res.status(404).json({ message: "Não encontrado" });
-      const isAdmin = req.session.userRole === "admin";
-      if (!isAdmin && (w as any).userId !== req.session.userId) return res.status(403).json({ message: "Acesso negado" });
+      const canSeeAll = await canManageAllMaterials(req);
+      if (!canSeeAll && Number((w as any).userId) !== Number(req.session.userId)) return res.status(403).json({ message: "Acesso negado" });
       res.json(w);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   app.post("/api/material-withdrawals", requireAuth, async (req, res) => {
     try {
+      const sessionUser = await storage.getUser(Number(req.session.userId));
+      if (!sessionUser) return res.status(401).json({ message: "Não autenticado" });
+      const canCreateForOthers = await canManageAllMaterials(req);
       const { userId, username, workOrderId, jobId, clientName, withdrawalPhoto, withdrawalSignature, notes, items } = req.body;
-      if (!userId || !username) return res.status(400).json({ message: "userId e username são obrigatórios" });
+      const effectiveUserId = canCreateForOthers && userId ? Number(userId) : Number(req.session.userId);
+      const effectiveUser = effectiveUserId === Number(req.session.userId) ? sessionUser : await storage.getUser(effectiveUserId);
+      const effectiveUsername = canCreateForOthers && username ? String(username) : effectiveUser?.username || sessionUser.username;
+      if (!effectiveUserId || !effectiveUsername) return res.status(400).json({ message: "Usuário responsável é obrigatório" });
       if (!items || items.length === 0) return res.status(400).json({ message: "Pelo menos um item é obrigatório" });
       if (!withdrawalPhoto) return res.status(400).json({ message: "Foto da retirada é obrigatória" });
       if (!withdrawalSignature) return res.status(400).json({ message: "Assinatura é obrigatória" });
@@ -1955,7 +2016,7 @@ export async function registerRoutes(
       const month = months[now.getMonth()];
 
       const withdrawal = await storage.createMaterialWithdrawal(
-        { userId, username, workOrderId: workOrderId || null, jobId: jobId || null, clientName: clientName || null,
+        { userId: effectiveUserId, username: effectiveUsername, workOrderId: workOrderId || null, jobId: jobId || null, clientName: clientName || null,
           status: "pendente", withdrawalPhoto, withdrawalSignature, notes: notes || null,
           returnPhoto: null, returnSignature: null, returnNotes: null },
         items.map((i: any) => ({ withdrawalId: 0, inventoryId: i.inventoryId, productName: i.productName, unit: i.unit || "unid", quantity: i.quantity }))
@@ -1970,7 +2031,7 @@ export async function registerRoutes(
           quantity: item.quantity,
           date: dateStr,
           month,
-          notes: `Origem: RETIRADA_MATERIAL | Retirada #${withdrawal.id}${workOrderId ? " | OS #" + workOrderId : ""} | Responsavel: ${username}${clientName ? " | Cliente: " + clientName : ""}`,
+          notes: `Origem: RETIRADA_MATERIAL | Retirada #${withdrawal.id}${workOrderId ? " | OS #" + workOrderId : ""} | Responsavel: ${effectiveUsername}${clientName ? " | Cliente: " + clientName : ""}`,
         });
       }
 
@@ -1983,6 +2044,8 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       const existing = await storage.getMaterialWithdrawal(id);
       if (!existing) return res.status(404).json({ message: "Saída não encontrada" });
+      const canReturnAll = await canManageAllMaterials(req);
+      if (!canReturnAll && Number((existing as any).userId) !== Number(req.session.userId)) return res.status(403).json({ message: "Acesso negado" });
       if (existing.status === "retornado") return res.status(400).json({ message: "Já retornado" });
 
       const { returnPhoto, returnSignature, returnNotes, items } = req.body;
