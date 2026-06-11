@@ -30,13 +30,13 @@ export function InventoryMovementHistory({
   monthMovements: Movement[];
   groupedByDay: [string, Movement[]][];
   movSearch: string;
-  movTypeFilter: "TODOS" | "ENTRADA" | "SAÍDA";
+  movTypeFilter: "TODOS" | "ENTRADA" | "SAÍDA" | "AJUSTE";
   showDownloadPdf?: boolean;
   showNewMovement?: boolean;
   onMonthChange: (value: string) => void;
   onNavigateMonth: (dir: number) => void;
   onSearchChange: (value: string) => void;
-  onTypeFilterChange: (value: "TODOS" | "ENTRADA" | "SAÍDA") => void;
+  onTypeFilterChange: (value: "TODOS" | "ENTRADA" | "SAÍDA" | "AJUSTE") => void;
   onDownloadPdf: () => void;
   onNewMovement: () => void;
   onEditMovement: (movement: Movement) => void;
@@ -105,13 +105,14 @@ export function InventoryMovementHistory({
         </div>
         <select
           value={movTypeFilter}
-          onChange={event => onTypeFilterChange(event.target.value as "TODOS" | "ENTRADA" | "SAÍDA")}
+          onChange={event => onTypeFilterChange(event.target.value as "TODOS" | "ENTRADA" | "SAÍDA" | "AJUSTE")}
           className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm focus:outline-none focus:border-primary"
           data-testid="select-movement-type-filter"
         >
           <option value="TODOS">Todos os tipos</option>
           <option value="ENTRADA">Entradas</option>
-          <option value="SAÍDA">Saídas/Ajustes</option>
+          <option value="SAÍDA">Saídas</option>
+          <option value="AJUSTE">Ajuste por inventário</option>
         </select>
       </div>
 
@@ -145,7 +146,9 @@ export function InventoryMovementHistory({
                       <tr key={movement.id} className="hover:bg-slate-50 transition-colors group" data-testid={`row-movement-${movement.id}`}>
                         <td className="px-5 py-3 font-semibold text-slate-800">{movement.productName}</td>
                         <td className="px-4 py-3">
-                          {movement.type === "ENTRADA" ? (
+                          {String(movement.notes || "").includes("AJUSTE_POR_INVENTARIO") ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full"><ClipboardList className="w-3 h-3" /> AJUSTE</span>
+                          ) : movement.type === "ENTRADA" ? (
                             <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full"><TrendingUp className="w-3 h-3" /> ENTRADA</span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><TrendingDown className="w-3 h-3" /> SAÍDA</span>

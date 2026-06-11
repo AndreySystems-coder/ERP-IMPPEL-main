@@ -17,6 +17,7 @@ export type Movement = {
   date: string;
   month?: string;
   notes?: string;
+  createdAt?: string;
 };
 
 export type BatchItem = {

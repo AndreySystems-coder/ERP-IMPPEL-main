@@ -14,6 +14,7 @@ import { InventoryProductList } from "@/features/inventory/components/InventoryP
 import { QuickCountPanel } from "@/features/inventory/components/QuickCountPanel";
 import { QuickCountPreview } from "@/features/inventory/components/QuickCountPreview";
 import type { BatchItem, InventoryItem, Movement, QuickCountRow as RapidaRow } from "@/features/inventory/types";
+import { useUser } from "@/hooks/use-auth";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -347,6 +348,7 @@ export function InventoryMovementsPage() {
 export default function Inventory({ mode = "current" }: { mode?: InventoryMode }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: currentUser } = useUser();
   const { data: items = [], isLoading } = useInventory();
   const createItem = useCreateInventory();
   const updateItem = useUpdateInventory();
@@ -372,7 +374,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const [batchItems, setBatchItems] = useState<BatchItem[]>([{ inventoryId: "", quantity: "", type: "ENTRADA", searchText: "", dropdownOpen: false }]);
   const [batchNotes, setBatchNotes] = useState("");
   const [movSearch, setMovSearch] = useState("");
-  const [movTypeFilter, setMovTypeFilter] = useState<"TODOS" | "ENTRADA" | "SAÍDA">("TODOS");
+  const [movTypeFilter, setMovTypeFilter] = useState<"TODOS" | "ENTRADA" | "SAÍDA" | "AJUSTE">("TODOS");
 
   // Edit movement modal
   const [editMovement, setEditMovement] = useState<Movement | null>(null);
@@ -410,9 +412,52 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
         const q = movSearch.toLowerCase();
         return !q || m.productName.toLowerCase().includes(q) || (m.notes || "").toLowerCase().includes(q);
       })
-      .filter(m => movTypeFilter === "TODOS" || m.type === movTypeFilter)
+      .filter(m => {
+        if (movTypeFilter === "TODOS") return true;
+        if (movTypeFilter === "AJUSTE") return String(m.notes || "").includes("AJUSTE_POR_INVENTARIO");
+        return m.type === movTypeFilter;
+      })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [movements, selectedYM, movSearch, movTypeFilter]);
+
+  const recountHistory = useMemo(() => {
+    const groups = new Map<string, {
+      key: string;
+      date: string;
+      user: string;
+      analyzed: number;
+      adjusted: number;
+      entries: number;
+      exits: number;
+      createdAt?: string;
+    }>();
+
+    (movements as Movement[])
+      .filter(movement => String(movement.notes || "").includes("AJUSTE_POR_INVENTARIO"))
+      .forEach(movement => {
+        const notes = movement.notes || "";
+        const key = `${movement.date}|${notes}`;
+        const user = notes.match(/Usuario:\s*([^|]+)/)?.[1]?.trim() || "Não informado";
+        const analyzed = Number(notes.match(/Itens analisados:\s*(\d+)/)?.[1] || 0);
+        const current = groups.get(key) || {
+          key,
+          date: movement.date,
+          user,
+          analyzed,
+          adjusted: 0,
+          entries: 0,
+          exits: 0,
+          createdAt: movement.createdAt,
+        };
+        current.adjusted += 1;
+        if (movement.type === "ENTRADA") current.entries += 1;
+        if (movement.type === "SAÍDA") current.exits += 1;
+        current.analyzed = Math.max(current.analyzed, analyzed);
+        groups.set(key, current);
+      });
+
+    return Array.from(groups.values()).sort((a, b) => `${b.date}-${b.createdAt || ""}`.localeCompare(`${a.date}-${a.createdAt || ""}`));
+  }, [movements]);
 
   // Group by date
   const groupedByDay = useMemo(() => {
@@ -651,9 +696,12 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
     }
     const today = rapidaDate;
     const todayFmt = fmtDate(today);
+    const adjustmentCount = validRows.length;
+    const analyzedCount = rapidaPreview.filter(row => row.matchedItem && !row.isDuplicate).length;
+    const userName = (currentUser as any)?.username || "Não informado";
     const batchPayload = {
       date: today,
-      notes: `Contagem Física Completa - ${todayFmt}`,
+      notes: `Origem: AJUSTE_POR_INVENTARIO | Recontagem ${todayFmt} | Usuario: ${userName} | Itens analisados: ${analyzedCount} | Ajustes: ${adjustmentCount}`,
       items: validRows.map(r => ({
         inventoryId: r.matchedItem!.id,
         productName: r.matchedItem!.name,
@@ -793,35 +841,6 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
       )}
       {mode === "movements" && (
         <div className="space-y-4">
-          <InventoryMovementHistory
-            selectedYM={selectedYM}
-            availableMonths={availableMonths}
-            monthLabel={ymLabel}
-            monthMovements={monthMovements}
-            groupedByDay={groupedByDay}
-            movSearch={movSearch}
-            movTypeFilter={movTypeFilter}
-            showDownloadPdf={false}
-            showNewMovement={false}
-            onMonthChange={setSelectedYM}
-            onNavigateMonth={navigateMonth}
-            onSearchChange={setMovSearch}
-            onTypeFilterChange={setMovTypeFilter}
-            onDownloadPdf={() => generateMovementPDF(selectedYM, movements as Movement[], items as InventoryItem[])}
-            onNewMovement={() => {
-              setShowBatchForm(value => !value);
-              if (!showBatchForm) {
-                setBatchDate(new Date().toISOString().split("T")[0]);
-                setBatchItems([{ inventoryId: "", quantity: "", type: "ENTRADA", searchText: "", dropdownOpen: false }]);
-                setBatchNotes("");
-              }
-            }}
-            onEditMovement={openEditMovement}
-            onDeleteMovement={handleDeleteMovement}
-            formatDate={fmtDate}
-            isDeleting={deleteMovement.isPending}
-          />
-
           {showBatchForm && (
             <InventoryMovementForm
               items={sortedInventory}
@@ -841,6 +860,35 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
               formatDate={fmtDate}
             />
           )}
+
+          <InventoryMovementHistory
+            selectedYM={selectedYM}
+            availableMonths={availableMonths}
+            monthLabel={ymLabel}
+            monthMovements={monthMovements}
+            groupedByDay={groupedByDay}
+            movSearch={movSearch}
+            movTypeFilter={movTypeFilter}
+            showDownloadPdf={true}
+            showNewMovement={true}
+            onMonthChange={setSelectedYM}
+            onNavigateMonth={navigateMonth}
+            onSearchChange={setMovSearch}
+            onTypeFilterChange={setMovTypeFilter}
+            onDownloadPdf={() => generateMovementPDF(selectedYM, movements as Movement[], items as InventoryItem[])}
+            onNewMovement={() => {
+              setShowBatchForm(value => !value);
+              if (!showBatchForm) {
+                setBatchDate(new Date().toISOString().split("T")[0]);
+                setBatchItems([{ inventoryId: "", quantity: "", type: "ENTRADA", searchText: "", dropdownOpen: false }]);
+                setBatchNotes("");
+              }
+            }}
+            onEditMovement={openEditMovement}
+            onDeleteMovement={handleDeleteMovement}
+            formatDate={fmtDate}
+            isDeleting={deleteMovement.isPending}
+          />
         </div>
       )}
       {mode === "quick-count" && (
@@ -880,6 +928,40 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
               onApply={handleApplyRapida}
             />
           )}
+          <Card className="overflow-hidden">
+            <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
+              <h2 className="text-sm font-bold text-slate-800">Histórico de Recontagens</h2>
+              <p className="text-xs text-slate-500">Auditoria das contagens físicas aplicadas ao estoque.</p>
+            </div>
+            {recountHistory.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-slate-400">
+                Nenhuma recontagem aplicada ainda.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {recountHistory.slice(0, 12).map(recount => (
+                  <div key={recount.key} className="grid gap-3 px-5 py-4 text-sm sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
+                    <div>
+                      <p className="font-semibold text-slate-900">{fmtDate(recount.date)}</p>
+                      <p className="text-xs text-slate-500">Usuário: {recount.user}</p>
+                    </div>
+                    <div className="rounded-lg bg-blue-50 px-3 py-2 text-blue-800">
+                      <p className="text-[11px] font-semibold uppercase">Itens analisados</p>
+                      <p className="text-lg font-bold">{recount.analyzed || "-"}</p>
+                    </div>
+                    <div className="rounded-lg bg-orange-50 px-3 py-2 text-orange-800">
+                      <p className="text-[11px] font-semibold uppercase">Ajustes</p>
+                      <p className="text-lg font-bold">{recount.adjusted}</p>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {recount.entries > 0 && <p>{recount.entries} entrada(s)</p>}
+                      {recount.exits > 0 && <p>{recount.exits} saída(s)</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
       )}
 

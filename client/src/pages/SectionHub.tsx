@@ -168,8 +168,8 @@ export function InventoryHub() {
         description: "Controle saldo, contagens físicas e auditoria de movimentações.",
         items: [
           { title: "Estoque Atual", description: "Saldos, mínimos, status e resumo de entradas e saídas.", href: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent", accent: accents.blue },
-          { title: "Contagem Rápida", description: "Cole ou importe TXT para gerar ajustes com preview.", href: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
           { title: "Movimentações", description: "Audite entradas, saídas, ajustes, datas e origens.", href: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements", accent: accents.orange },
+          { title: "Contagem Rápida", description: "Auditoria física com processamento de lista e ajustes automáticos.", href: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
         ],
       }}
     />
