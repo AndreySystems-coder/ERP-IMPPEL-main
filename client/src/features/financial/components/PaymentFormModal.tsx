@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { PaymentFormState, PaymentJob, PaymentRecord } from "@/features/financial/types";
 import { formatCurrency } from "@/features/financial/utils";
+import { asArray } from "@/lib/safeData";
 
 type PaymentFormModalProps = {
   open: boolean;
@@ -22,12 +23,13 @@ type PaymentFormModalProps = {
 
 export function PaymentFormModal({ open, payment, form, jobs, isSaving = false, onClose, onChange, onSubmit }: PaymentFormModalProps) {
   const setField = (field: keyof PaymentFormState, value: string) => onChange({ ...form, [field]: value });
-  const selectedJob = jobs.find(job => String(job.id) === form.jobId);
-  const clientNames = Array.from(new Set(jobs.map(job => job.clientName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-  const clientJobs = form.clientName ? jobs.filter(job => job.clientName === form.clientName) : jobs;
+  const jobsList = asArray<PaymentJob>(jobs);
+  const selectedJob = jobsList.find(job => String(job.id) === form.jobId);
+  const clientNames = Array.from(new Set(jobsList.map(job => job.clientName).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+  const clientJobs = form.clientName ? jobsList.filter(job => job.clientName === form.clientName) : jobsList;
   const getJobAmount = (job: PaymentJob) => Number((job as any).realPriceSold || (job as any).totalPrice || (job as any).finalPrice || 0);
   const setJob = (jobId: string) => {
-    const job = jobs.find(item => String(item.id) === jobId);
+    const job = jobsList.find(item => String(item.id) === jobId);
     onChange({
       ...form,
       jobId,
@@ -36,7 +38,7 @@ export function PaymentFormModal({ open, payment, form, jobs, isSaving = false, 
     });
   };
   const setClient = (clientName: string) => {
-    const matches = jobs.filter(job => job.clientName === clientName);
+    const matches = jobsList.filter(job => job.clientName === clientName);
     const firstJob = matches.length === 1 ? matches[0] : undefined;
     onChange({
       ...form,

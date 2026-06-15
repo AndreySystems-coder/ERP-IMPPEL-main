@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Package, Search, X } from "lucide-react";
 
 import type { InventoryItem } from "@/features/materials/types";
+import { asArray } from "@/lib/safeData";
 
 export function MaterialAutocomplete({
   inventory,
@@ -14,15 +15,16 @@ export function MaterialAutocomplete({
 }) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
-  const selectedItem = inventory.find((item) => item.id === Number(selectedId));
+  const inventoryList = asArray<InventoryItem>(inventory);
+  const selectedItem = inventoryList.find((item) => item.id === Number(selectedId));
 
   useEffect(() => {
     if (selectedItem) setSearch(selectedItem.name);
   }, [selectedItem]);
 
   const filtered = useMemo(
-    () => inventory.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()) && search.length > 0).slice(0, 8),
-    [inventory, search],
+    () => inventoryList.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()) && search.length > 0).slice(0, 8),
+    [inventoryList, search],
   );
 
   if (selectedId && selectedItem) {

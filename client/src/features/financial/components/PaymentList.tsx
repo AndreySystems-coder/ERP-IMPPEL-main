@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { PaymentRecord } from "@/features/financial/types";
 import { formatCurrency, formatDate, paymentMethodLabels, paymentStatusClasses, paymentStatusLabels } from "@/features/financial/utils";
+import { asArray } from "@/lib/safeData";
 
 type PaymentListProps = {
   payments: PaymentRecord[];
@@ -24,18 +25,20 @@ type PaymentListProps = {
 };
 
 export function PaymentList({ payments, isLoading = false, onEdit, onDelete }: PaymentListProps) {
+  const paymentsList = asArray<PaymentRecord>(payments);
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950">
       <div className="border-b border-slate-100 px-4 py-4 dark:border-slate-800 sm:px-5">
         <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Pagamentos registrados</h2>
-        <p className="text-sm text-slate-500">{payments.length} pagamento(s) na visualização atual</p>
+        <p className="text-sm text-slate-500">{paymentsList.length} pagamento(s) na visualização atual</p>
       </div>
 
       {isLoading ? (
         <div className="space-y-3 p-4">
           {[1, 2, 3].map(item => <div key={item} className="h-24 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-900" />)}
         </div>
-      ) : payments.length === 0 ? (
+      ) : paymentsList.length === 0 ? (
         <div className="py-14 text-center text-slate-400">
           <ReceiptText className="mx-auto mb-3 h-11 w-11 opacity-40" />
           <p className="font-medium text-slate-500 dark:text-slate-300">Nenhum pagamento encontrado</p>
@@ -44,7 +47,7 @@ export function PaymentList({ payments, isLoading = false, onEdit, onDelete }: P
       ) : (
         <>
           <div className="grid gap-3 p-4 lg:hidden">
-            {payments.map(payment => <PaymentCard key={payment.id} payment={payment} onEdit={onEdit} onDelete={onDelete} />)}
+            {paymentsList.map(payment => <PaymentCard key={payment.id} payment={payment} onEdit={onEdit} onDelete={onDelete} />)}
           </div>
           <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-sm">
@@ -59,7 +62,7 @@ export function PaymentList({ payments, isLoading = false, onEdit, onDelete }: P
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {payments.map(payment => (
+                {paymentsList.map(payment => (
                   <tr key={payment.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/60" data-testid={`row-payment-${payment.id}`}>
                     <td className="px-5 py-3 font-medium text-slate-900 dark:text-slate-100">{payment.clientName}</td>
                     <td className="px-4 py-3 font-semibold text-slate-900 dark:text-slate-100">{formatCurrency(payment.amount)}</td>

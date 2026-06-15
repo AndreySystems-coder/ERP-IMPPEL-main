@@ -6,6 +6,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { asArray } from "@/lib/safeData";
 
 type ProductionLog = {
   id: number;
@@ -28,6 +29,7 @@ export default function TeamProductivity() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: logs = [], isLoading } = useQuery<ProductionLog[]>({ queryKey: ["/api/production-logs"] });
+  const logsList = asArray<ProductionLog>(logs);
 
   const [tab, setTab]   = useState<"registros" | "resumo">("registros");
   const [isModal, setModal] = useState(false);
@@ -96,7 +98,7 @@ export default function TeamProductivity() {
   // ─── Summary per technician ───────────────────────────────────────────────
   type TechSummary = { hours: number; m2: number; days: Set<string>; services: Set<string>; count: number };
   const summary: Record<string, TechSummary> = {};
-  (logs as ProductionLog[]).forEach(log => {
+  logsList.forEach(log => {
     if (!summary[log.technicianName]) {
       summary[log.technicianName] = { hours: 0, m2: 0, days: new Set(), services: new Set(), count: 0 };
     }
@@ -108,8 +110,8 @@ export default function TeamProductivity() {
   });
 
   const techList = Object.entries(summary).sort((a, b) => b[1].m2 - a[1].m2);
-  const totalM2    = (logs as ProductionLog[]).reduce((s, l) => s + (l.squareMeters || 0), 0);
-  const totalHours = (logs as ProductionLog[]).reduce((s, l) => s + (l.hoursWorked || 0), 0);
+  const totalM2    = logsList.reduce((s, l) => s + (l.squareMeters || 0), 0);
+  const totalHours = logsList.reduce((s, l) => s + (l.hoursWorked || 0), 0);
   const avgM2h     = totalHours > 0 ? (totalM2 / totalHours).toFixed(2) : "—";
 
   return (
@@ -157,7 +159,7 @@ export default function TeamProductivity() {
         <Card>
           {isLoading ? (
             <div className="p-6 space-y-3">{[1,2,3].map(i => <div key={i} className="h-14 bg-slate-100 rounded-lg animate-pulse" />)}</div>
-          ) : (logs as ProductionLog[]).length === 0 ? (
+          ) : logsList.length === 0 ? (
             <div className="text-center py-14 text-slate-400">
               <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">Nenhum registro de produção ainda</p>
@@ -165,7 +167,7 @@ export default function TeamProductivity() {
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {(logs as ProductionLog[]).map(log => (
+              {logsList.map(log => (
                 <div key={log.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition-colors" data-testid={`row-prodlog-${log.id}`}>
                   <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
                     <span className="text-primary font-bold text-sm">{log.technicianName.charAt(0).toUpperCase()}</span>

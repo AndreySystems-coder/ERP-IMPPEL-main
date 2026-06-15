@@ -2,15 +2,17 @@ import { AlertCircle, CheckCircle2, Clock, DollarSign } from "lucide-react";
 
 import type { PaymentRecord } from "@/features/financial/types";
 import { formatCurrency } from "@/features/financial/utils";
+import { asArray } from "@/lib/safeData";
 
 type PaymentsSummaryCardsProps = {
   payments: PaymentRecord[];
 };
 
 export function PaymentsSummaryCards({ payments }: PaymentsSummaryCardsProps) {
-  const completed = payments.filter(payment => payment.status === "completed");
-  const pending = payments.filter(payment => payment.status === "pending");
-  const failed = payments.filter(payment => payment.status === "failed");
+  const paymentsList = asArray<PaymentRecord>(payments);
+  const completed = paymentsList.filter(payment => payment.status === "completed");
+  const pending = paymentsList.filter(payment => payment.status === "pending");
+  const failed = paymentsList.filter(payment => payment.status === "failed");
   const totalReceived = completed.reduce((sum, payment) => sum + payment.amount, 0);
 
   return (

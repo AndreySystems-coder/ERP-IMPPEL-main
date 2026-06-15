@@ -62,6 +62,7 @@ const DEFAULT_EMPLOYEE_PERMISSIONS: PermissionKey[] = ["viewWorks", "viewObraReg
 
 export function canAccess(user: PermissionUser | null | undefined, permission?: PermissionKey) {
   if (!permission) return true;
+  if (permission === "viewDashboard") return !!user;
   if (user?.role === "admin") return true;
 
   const permissions = user?.permissions || {};

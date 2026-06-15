@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { asArray } from "@/lib/safeData";
 import { useUser } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -158,13 +159,15 @@ export default function Usuarios() {
   const [rolePermissions, setRolePermissions] = useState<Record<string, boolean>>({});
 
   // ── Queries ──────────────────────────────────────────────────────────────────
-  const { data: users = [], isLoading: loadingUsers } = useQuery<UserItem[]>({
+  const { data: usersData = [], isLoading: loadingUsers } = useQuery<UserItem[]>({
     queryKey: ["/api/users"],
   });
 
   const { data: rolesData = [], isLoading: loadingRoles } = useQuery<Role[]>({
     queryKey: ["/api/roles"],
   });
+  const users = asArray<UserItem>(usersData);
+  const roles = asArray<Role>(rolesData);
 
   // ── User mutations ────────────────────────────────────────────────────────────
   const createMutation = useMutation({
@@ -271,7 +274,7 @@ export default function Usuarios() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="usuarios" data-testid="tab-usuarios"><Users className="w-4 h-4 mr-2" />Usuários ({users.length})</TabsTrigger>
-          <TabsTrigger value="cargos" data-testid="tab-cargos"><Settings2 className="w-4 h-4 mr-2" />Cargos e Permissões ({rolesData.length})</TabsTrigger>
+          <TabsTrigger value="cargos" data-testid="tab-cargos"><Settings2 className="w-4 h-4 mr-2" />Cargos e Permissões ({roles.length})</TabsTrigger>
         </TabsList>
 
         {/* ── ABA USUÁRIOS ─────────────────────────────────────────────────────── */}
@@ -312,7 +315,7 @@ export default function Usuarios() {
                         <SelectTrigger data-testid="select-role"><SelectValue placeholder="Selecionar cargo..." /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">Sem cargo específico</SelectItem>
-                          {rolesData.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
+                          {roles.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>
@@ -411,7 +414,7 @@ export default function Usuarios() {
                                   <SelectTrigger className="h-8 text-xs w-48" data-testid={`select-cargo-${u.id}`}><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="none">Sem cargo específico</SelectItem>
-                                    {rolesData.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
+                                    {roles.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -537,14 +540,14 @@ export default function Usuarios() {
           {/* Roles list */}
           {loadingRoles ? (
             <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-24 bg-slate-200 rounded-xl animate-pulse" />)}</div>
-          ) : rolesData.length === 0 ? (
+          ) : roles.length === 0 ? (
             <Card><CardContent className="py-12 text-center text-gray-500">
               <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p>Nenhum cargo criado ainda</p>
             </CardContent></Card>
           ) : (
             <div className="space-y-3">
-              {rolesData.map(role => {
+              {roles.map(role => {
                 const perms = parsePermissions(role.permissions);
                 const enabledCount = Object.values(perms).filter(Boolean).length;
                 const totalPerms = PERMISSION_GROUPS.reduce((s, g) => s + g.items.length, 0);

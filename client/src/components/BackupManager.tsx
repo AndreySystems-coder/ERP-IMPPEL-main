@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { asArray } from "@/lib/safeData";
 import {
   Download, Upload, FileText, AlertTriangle, CheckCircle2, X,
   ShieldAlert,
@@ -80,7 +81,7 @@ const HISTORY_KEY = "imppel_backup_history";
 const LOG_KEY = "imppel_restore_log";
 
 export function getBackupHistory(): BackupHistoryEntry[] {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
+  try { return asArray<BackupHistoryEntry>(JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]")); } catch { return []; }
 }
 
 function saveBackupHistory(entry: BackupHistoryEntry) {
@@ -91,7 +92,7 @@ function saveBackupHistory(entry: BackupHistoryEntry) {
 }
 
 export function getRestoreLog(): RestoreLogEntry[] {
-  try { return JSON.parse(localStorage.getItem(LOG_KEY) || "[]"); } catch { return []; }
+  try { return asArray<RestoreLogEntry>(JSON.parse(localStorage.getItem(LOG_KEY) || "[]")); } catch { return []; }
 }
 
 function saveRestoreLog(entry: RestoreLogEntry) {
@@ -123,23 +124,23 @@ function generateFileBaseName(type: BackupType, prefix = "Backup"): string {
 
 function getRecordCount(type: BackupType, backup: any): number {
   const d = backup.data || {};
-  if (type === "estoque") return (d.items || []).length;
-  if (type === "produtos") return (d.products || []).length;
-  if (type === "servicos") return (d.services || []).length;
-  if (type === "materiais") return (d.withdrawals || []).length;
-  if (type === "clientes") return (d.clients || []).length;
-  if (type === "orcamentos") return (d.jobs || []).length;
-  if (type === "ordens-servico") return (d.workOrders || []).length;
-  if (type === "financeiro") return (d.payments || []).length + (d.transactions || []).length;
-  if (type === "pos-venda") return (d.warranties || []).length + (d.npsResponses || []).length + (d.maintenanceReminders || []).length;
-  if (type === "garantias") return (d.warranties || []).length;
+  if (type === "estoque") return asArray(d.items).length;
+  if (type === "produtos") return asArray(d.products).length;
+  if (type === "servicos") return asArray(d.services).length;
+  if (type === "materiais") return asArray(d.withdrawals).length;
+  if (type === "clientes") return asArray(d.clients).length;
+  if (type === "orcamentos") return asArray(d.jobs).length;
+  if (type === "ordens-servico") return asArray(d.workOrders).length;
+  if (type === "financeiro") return asArray(d.payments).length + asArray(d.transactions).length;
+  if (type === "pos-venda") return asArray(d.warranties).length + asArray(d.npsResponses).length + asArray(d.maintenanceReminders).length;
+  if (type === "garantias") return asArray(d.warranties).length;
   return 0;
 }
 
 function getPreviewItems(type: BackupType, backup: any): { name: string; detail?: string }[] {
   const d = backup.data || {};
-  const toItem = (arr: any[], nameKey: string, detailFn?: (r: any) => string) =>
-    (arr || []).slice(0, 5).map((r: any) => ({ name: r[nameKey] || "—", detail: detailFn?.(r) }));
+  const toItem = (arr: unknown, nameKey: string, detailFn?: (r: any) => string) =>
+    asArray<any>(arr).slice(0, 5).map((r: any) => ({ name: r[nameKey] || "—", detail: detailFn?.(r) }));
 
   if (type === "estoque") return toItem(d.items, "name", r => `${r.quantity} ${r.unit || "un"}`);
   if (type === "produtos") return toItem(d.products, "name", r => `R$ ${Number(r.salePrice || 0).toFixed(2)}`);
@@ -148,7 +149,7 @@ function getPreviewItems(type: BackupType, backup: any): { name: string; detail?
   if (type === "clientes") return toItem(d.clients, "name", r => r.phone || r.email || "—");
   if (type === "orcamentos") return toItem(d.jobs, "clientName", r => r.title || r.status || "—");
   if (type === "ordens-servico") return toItem(d.workOrders, "clientName", r => r.status || "—");
-  if (type === "financeiro") return toItem(d.payments?.length ? d.payments : d.transactions, "clientName", r => r.description || `R$ ${Number(r.amount || 0).toFixed(2)}`);
+  if (type === "financeiro") return toItem(asArray(d.payments).length ? d.payments : d.transactions, "clientName", r => r.description || `R$ ${Number(r.amount || 0).toFixed(2)}`);
   if (type === "pos-venda") return toItem(d.warranties, "clientName", r => r.serviceType || r.status || "—");
   if (type === "garantias") return toItem(d.warranties, "clientName", r => r.serviceName || r.status || "—");
   return [];
@@ -185,7 +186,8 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
   const baseStyle = { fontSize: 8, cellPadding: 2 };
 
   if (type === "estoque") {
-    const { items = [], movements = [] } = backup.data || {};
+    const items = asArray<any>(backup.data?.items);
+    const movements = asArray<any>(backup.data?.movements);
     autoTable(doc, {
       startY: 28,
       head: [["Produto", "Tipo", "Unidade", "Qtd. Atual", "Mín.", "Preço Unit."]],
@@ -204,7 +206,7 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       });
     }
   } else if (type === "produtos") {
-    const { products = [] } = backup.data || {};
+    const products = asArray<any>(backup.data?.products);
     autoTable(doc, {
       startY: 28,
       head: [["Produto", "Categoria", "Marca", "Unid.", "Preço Venda", "Desc. Máx.", "Ativo"]],
@@ -212,7 +214,7 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "servicos") {
-    const { services = [] } = backup.data || {};
+    const services = asArray<any>(backup.data?.services);
     autoTable(doc, {
       startY: 28,
       head: [["Serviço", "Descrição", "R$/m²", "Mão de Obra/m²", "Transporte/m²"]],
@@ -220,15 +222,15 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "materiais") {
-    const { withdrawals = [] } = backup.data || {};
+    const withdrawals = asArray<any>(backup.data?.withdrawals);
     autoTable(doc, {
       startY: 28,
       head: [["#", "Data", "Técnico", "OS", "Materiais", "Status"]],
-      body: withdrawals.map((w: any) => [w.id, fmtDate(w.createdAt), w.username || "—", w.workOrderId ? `#${w.workOrderId}` : "—", (w.items || []).map((i: any) => `${i.productName} (${i.quantity})`).join(", "), w.status]),
+      body: withdrawals.map((w: any) => [w.id, fmtDate(w.createdAt), w.username || "—", w.workOrderId ? `#${w.workOrderId}` : "—", asArray<any>(w.items).map((i: any) => `${i.productName} (${i.quantity})`).join(", "), w.status]),
       styles: { fontSize: 7, cellPadding: 2 }, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "clientes") {
-    const { clients = [] } = backup.data || {};
+    const clients = asArray<any>(backup.data?.clients);
     autoTable(doc, {
       startY: 28,
       head: [["Nome", "Telefone", "Email", "Cidade", "CPF/CNPJ"]],
@@ -236,7 +238,7 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "orcamentos") {
-    const { jobs = [] } = backup.data || {};
+    const jobs = asArray<any>(backup.data?.jobs);
     autoTable(doc, {
       startY: 28,
       head: [["Cliente", "Título", "Status", "Valor Total", "Data"]],
@@ -244,7 +246,7 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "ordens-servico") {
-    const { workOrders = [] } = backup.data || {};
+    const workOrders = asArray<any>(backup.data?.workOrders);
     autoTable(doc, {
       startY: 28,
       head: [["#", "Cliente", "Serviço", "Técnico", "Status", "Data Prevista"]],
@@ -252,7 +254,7 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "garantias") {
-    const { warranties = [] } = backup.data || {};
+    const warranties = asArray<any>(backup.data?.warranties);
     autoTable(doc, {
       startY: 28,
       head: [["Cliente", "Serviço", "Telefone", "Emissão", "Vencimento", "Status"]],
@@ -260,7 +262,8 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "financeiro") {
-    const { payments = [], transactions = [] } = backup.data || {};
+    const payments = asArray<any>(backup.data?.payments);
+    const transactions = asArray<any>(backup.data?.transactions);
     autoTable(doc, {
       startY: 28,
       head: [["Tipo", "Cliente/Categoria", "Descrição", "Valor", "Status", "Data"]],
@@ -271,7 +274,9 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "pos-venda") {
-    const { warranties = [], npsResponses = [], maintenanceReminders = [] } = backup.data || {};
+    const warranties = asArray<any>(backup.data?.warranties);
+    const npsResponses = asArray<any>(backup.data?.npsResponses);
+    const maintenanceReminders = asArray<any>(backup.data?.maintenanceReminders);
     autoTable(doc, {
       startY: 28,
       head: [["Módulo", "Cliente", "Serviço", "Status", "Data/Período", "Observação"]],

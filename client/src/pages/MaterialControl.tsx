@@ -14,6 +14,7 @@ import { WithdrawalForm } from "@/features/materials/components/WithdrawalForm";
 import { daysSince } from "@/features/materials/material-control-utils";
 import type { DiscountRule, InventoryItem, SalaryDiscount, UserItem, Withdrawal, WorkOrder } from "@/features/materials/types";
 import { useUser } from "@/hooks/use-auth";
+import { asArray } from "@/lib/safeData";
 
 function LoadingState() {
   return (
@@ -48,12 +49,12 @@ export default function MaterialControl() {
   const discountRulesQuery = useQuery<DiscountRule[]>({ queryKey: ["/api/salary-discount-rules"], enabled: isAdmin });
   const salaryDiscountsQuery = useQuery<SalaryDiscount[]>({ queryKey: ["/api/salary-discounts"], enabled: isAdmin });
 
-  const inventory = inventoryQuery.data ?? [];
-  const users = usersQuery.data ?? (currentUser ? [currentUser as UserItem] : []);
-  const workOrders = workOrdersQuery.data ?? [];
-  const withdrawals = withdrawalsQuery.data ?? [];
-  const discountRules = discountRulesQuery.data ?? [];
-  const salaryDiscounts = salaryDiscountsQuery.data ?? [];
+  const inventory = asArray<InventoryItem>(inventoryQuery.data);
+  const users = usersQuery.data ? asArray<UserItem>(usersQuery.data) : (currentUser ? [currentUser as UserItem] : []);
+  const workOrders = asArray<WorkOrder>(workOrdersQuery.data);
+  const withdrawals = asArray<Withdrawal>(withdrawalsQuery.data);
+  const discountRules = asArray<DiscountRule>(discountRulesQuery.data);
+  const salaryDiscounts = asArray<SalaryDiscount>(salaryDiscountsQuery.data);
 
   const pendingWithdrawals = withdrawals.filter(withdrawal => withdrawal.status !== "retornado");
   const pendingDiscounts = salaryDiscounts.filter(discount => discount.status === "pendente");

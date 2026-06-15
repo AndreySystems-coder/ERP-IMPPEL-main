@@ -12,6 +12,7 @@ import { WorkOrderList } from "@/features/work-orders/components/WorkOrderList";
 import { CHECKLIST_ITEMS, STATUS_COLORS } from "@/features/work-orders/constants";
 import type { ServiceProgress, WorkOrderMaterialReconciliationResponse } from "@/features/work-orders/types";
 import { buildProgressFromJob, ceilQty, getExceededMaterials } from "@/features/work-orders/utils";
+import { asArray } from "@/lib/safeData";
 
 const apiRequest = async (method: string, path: string, body?: any) => {
   const res = await fetch(path, {
@@ -38,6 +39,8 @@ export default function WorkOrders() {
     queryKey: ["/api/jobs"],
     queryFn: () => apiRequest("GET", "/api/jobs"),
   });
+  const workOrdersList = asArray<any>(workOrders);
+  const jobsList = asArray<any>(jobs);
 
   const createWO = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/work-orders", data),
@@ -121,7 +124,7 @@ export default function WorkOrders() {
   const [postSaleCreated, setPostSaleCreated] = useState<any>(null);
   const [ignorePendingMaterials, setIgnorePendingMaterials] = useState(false);
 
-  const filteredWO = workOrders.filter(
+  const filteredWO = workOrdersList.filter(
     (w: any) =>
       w.clientName.toLowerCase().includes(search.toLowerCase()) ||
       w.serviceType.toLowerCase().includes(search.toLowerCase())
@@ -165,7 +168,7 @@ export default function WorkOrders() {
       setChecklistDone({});
     }
 
-    const relatedJob = jobs.find((j: any) => j.id === wo.jobId) || null;
+    const relatedJob = jobsList.find((j: any) => j.id === wo.jobId) || null;
 
     // Check for saved progress
     if (wo.serviceProgress) {
@@ -296,10 +299,10 @@ export default function WorkOrders() {
       return;
     }
     // Check pending materials
-    if (pendingMaterials.length > 0 && !ignorePendingMaterials) {
+    if (pendingMaterialsList.length > 0 && !ignorePendingMaterials) {
       setIgnorePendingMaterials(true);
       toast({
-        title: `Atenção: ${pendingMaterials.length} retirada(s) de material sem retorno`,
+        title: `Atenção: ${pendingMaterialsList.length} retirada(s) de material sem retorno`,
         description: "Confirme novamente para finalizar mesmo assim, ou registre o retorno primeiro no Controle de Materiais.",
         variant: "destructive",
       });
@@ -347,6 +350,7 @@ export default function WorkOrders() {
     queryFn: () => detailWO ? apiRequest("GET", `/api/work-orders/${detailWO.id}/pending-materials`) : Promise.resolve([]),
     enabled: !!detailWO,
   });
+  const pendingMaterialsList = asArray<any>(pendingMaterials);
 
   const { data: materialReconciliation = null, isLoading: isLoadingMaterialReconciliation } = useQuery<WorkOrderMaterialReconciliationResponse | null>({
     queryKey: ["/api/work-orders", detailWO?.id, "material-reconciliation"],
@@ -360,6 +364,7 @@ export default function WorkOrders() {
     queryFn: () => detailWO ? apiRequest("GET", `/api/obra-consumo-logs?workOrderId=${detailWO.id}`) : Promise.resolve([]),
     enabled: !!detailWO,
   });
+  const consumoLogsList = asArray<any>(consumoLogs);
 
   const createConsumoMut = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/obra-consumo-logs", data),
@@ -477,8 +482,8 @@ export default function WorkOrders() {
         consumoInputs={consumoInputs}
         consumoNotes={consumoNotes}
         savingConsumo={savingConsumo}
-        consumoLogs={consumoLogs as any[]}
-        pendingMaterials={pendingMaterials}
+        consumoLogs={consumoLogsList}
+        pendingMaterials={pendingMaterialsList}
         materialReconciliation={materialReconciliation}
         isLoadingMaterialReconciliation={isLoadingMaterialReconciliation}
         ignorePendingMaterials={ignorePendingMaterials}
@@ -493,7 +498,7 @@ export default function WorkOrders() {
         onTabChange={setActiveDetailTab}
         onGenerateReport={() => generateWorkOrderReport()}
         onResetFromJob={() => {
-          const relatedJob = jobs.find((job: any) => job.id === detailWO?.jobId) || null;
+          const relatedJob = jobsList.find((job: any) => job.id === detailWO?.jobId) || null;
           setServiceProgress(buildProgressFromJob(detailWO, relatedJob));
         }}
         onUpdateService={updateSP}

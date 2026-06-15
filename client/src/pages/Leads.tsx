@@ -6,12 +6,14 @@ import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { Plus, Search, Trash2, Edit2, Phone, Mail, Clock, Users } from "lucide-react";
 import { format } from "date-fns";
+import { asArray } from "@/lib/safeData";
 
 export default function Leads() {
   const { data: leads = [], isLoading } = useLeads();
   const createLead = useCreateLead();
   const updateLead = useUpdateLead();
   const deleteLead = useDeleteLead();
+  const leadsList = asArray<any>(leads);
 
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,7 +26,7 @@ export default function Leads() {
   const [status, setStatus] = useState("New Lead");
   const [notes, setNotes] = useState("");
 
-  const filteredLeads = leads.filter(l => 
+  const filteredLeads = leadsList.filter(l =>
     l.name.toLowerCase().includes(search.toLowerCase()) || 
     l.status.toLowerCase().includes(search.toLowerCase())
   );

@@ -2,6 +2,7 @@ import { ArrowUpRight, ClipboardList, Loader2, RefreshCw, XCircle } from "lucide
 
 import { Button } from "@/components/ui/button";
 import { CrmConversationCard } from "@/features/crm-whatsapp/components/CrmConversationCard";
+import { asArray } from "@/lib/safeData";
 import type { WhatsappSendLog } from "@shared/schema";
 
 type CrmContactHistoryProps = {
@@ -11,8 +12,9 @@ type CrmContactHistoryProps = {
 };
 
 export function CrmContactHistory({ logs, isLoading = false, onRefresh }: CrmContactHistoryProps) {
-  const sentCount = logs.filter(log => log.status !== "error").length;
-  const errorCount = logs.filter(log => log.status === "error").length;
+  const logsList = asArray<WhatsappSendLog>(logs);
+  const sentCount = logsList.filter(log => log.status !== "error").length;
+  const errorCount = logsList.filter(log => log.status === "error").length;
 
   return (
     <section className="space-y-3">
@@ -21,7 +23,7 @@ export function CrmContactHistory({ logs, isLoading = false, onRefresh }: CrmCon
           <div>
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Histórico de conversas</h2>
             <p className="text-sm text-slate-500">
-              {logs.length > 0 ? `${logs.length} envio(s) registrado(s)` : "Nenhuma conversa registrada ainda"}
+              {logsList.length > 0 ? `${logsList.length} envio(s) registrado(s)` : "Nenhuma conversa registrada ainda"}
             </p>
           </div>
 
@@ -50,7 +52,7 @@ export function CrmContactHistory({ logs, isLoading = false, onRefresh }: CrmCon
             <div key={item} className="h-28 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-900" />
           ))}
         </div>
-      ) : logs.length === 0 ? (
+      ) : logsList.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white py-14 text-center text-slate-400 dark:border-slate-800 dark:bg-slate-950">
           <ClipboardList className="mx-auto mb-3 h-10 w-10 opacity-50" />
           <p className="font-medium text-slate-500 dark:text-slate-300">Nenhum envio registrado ainda.</p>
@@ -58,7 +60,7 @@ export function CrmContactHistory({ logs, isLoading = false, onRefresh }: CrmCon
         </div>
       ) : (
         <div className="grid gap-3">
-          {logs.map((log, index) => (
+          {logsList.map((log, index) => (
             <CrmConversationCard key={log.id} log={log} index={index} />
           ))}
         </div>

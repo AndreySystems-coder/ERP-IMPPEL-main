@@ -14,6 +14,7 @@ import { SiWhatsapp } from "react-icons/si";
 import { useLocation } from "wouter";
 import { gerarOrcamentoPDF, mergeQuoteTemplateConfig } from "@/lib/orcamentoPDF";
 import type { MaterialDisplayMode, QuoteTemplateConfig } from "@/lib/orcamentoPDF";
+import { asArray } from "@/lib/safeData";
 import { useJobStatuses } from "@/hooks/use-job-statuses";
 import { QuoteClientSection } from "@/features/quotes/components/QuoteClientSection";
 import { QuoteFinancialAnalysis } from "@/features/quotes/components/QuoteFinancialAnalysis";
@@ -81,10 +82,19 @@ export default function Jobs() {
   const { data: paymentMethodsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-methods"] });
   const { data: paymentConditionsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-conditions"] });
   const { data: settings = [] } = useSettings();
+  const jobsList = asArray<any>(jobs);
+  const servicesList = asArray<any>(services);
+  const clientsList = asArray<any>(clients);
+  const jobStatuses = asArray<any>(jobStatusConfigs);
+  const inventoryItemsList = asArray<any>(inventoryItems);
+  const workOrdersList = asArray<any>(workOrders);
+  const paymentMethods = asArray<any>(paymentMethodsList);
+  const paymentConditions = asArray<any>(paymentConditionsList);
+  const settingsList = asArray<any>(settings);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: priorityRules } = usePriorityRules();
-  const { jobsWithScores } = useJobScoring(jobs);
+  const { jobsWithScores } = useJobScoring(jobsList);
   const createJob = useCreateJob();
   const updateJob = useUpdateJob();
   const deleteJob = useDeleteJob();
@@ -147,7 +157,7 @@ export default function Jobs() {
     setMultiItems(prev => prev.map(item => item._id !== id ? item : { ...item, description }));
   };
   const handleItemService = (id: string, svcName: string) => {
-    const svc = services.find(s => s.name === svcName);
+    const svc = servicesList.find(s => s.name === svcName);
     setMultiItems(prev => prev.map(item => {
       if (item._id !== id) return item;
       const unitPrice = svc ? (svc.pricePerUnit ?? 0).toFixed(2) : "";
@@ -162,7 +172,7 @@ export default function Jobs() {
   // Budget calculation
   const distKm = Number(distanceKm) || 0;
   const getSetting = (key: string, defaultValue: number) => {
-    const setting = (settings as any[]).find((item: any) => item.key === key);
+    const setting = settingsList.find((item: any) => item.key === key);
     return Number(setting?.value ?? defaultValue);
   };
   const normalizePercent = (value: number) => (value > 1 ? value / 100 : value);
@@ -178,7 +188,7 @@ export default function Jobs() {
     if (!costConfig || multiItems.length === 0) return null;
     let totalMaterialBase = 0, totalLabor = 0, totalTransport = 0;
     multiItems.forEach(item => {
-      const svc = services.find(s => s.name === item.name);
+      const svc = servicesList.find(s => s.name === item.name);
       const area = Number(item.area) || 0;
       if (!svc || area === 0) return;
       const calc = calculateTotalCost(
@@ -194,7 +204,7 @@ export default function Jobs() {
     const directCost = totalMaterial + totalLabor + totalTransport;
     const suggestedPrice = directCost > 0 ? directCost / (1 - costConfig.minMarginPercent) : 0;
     return { materialCost: totalMaterial, baseMaterialCost: totalMaterialBase, materialRegionalIncrease, regionalAdjustmentPercent, laborCost: totalLabor, transportCost: totalTransport, directCost, suggestedPrice };
-  }, [multiItems, distKm, services, costConfig, regionalAdjustmentPercent]);
+  }, [multiItems, distKm, servicesList, costConfig, regionalAdjustmentPercent]);
 
   const filteredJobs = jobsWithScores.filter(j => 
     j.clientName.toLowerCase().includes(search.toLowerCase()) || 
@@ -240,8 +250,8 @@ export default function Jobs() {
     setMultiItems([makeItem()]);
     setResponsaveis([makeResponsavel()]);
     // Keep numbering stable with existing records.
-    const maxNum = jobs.length > 0
-      ? Math.max(...(jobs as any[]).map((j: any) => j.orcamentoNumero ?? j.id ?? 0))
+    const maxNum = jobsList.length > 0
+      ? Math.max(...jobsList.map((j: any) => j.orcamentoNumero ?? j.id ?? 0))
       : 0;
     setOrcamentoNumero(String(maxNum + 1));
     setIsModalOpen(true);
@@ -280,7 +290,7 @@ export default function Jobs() {
         })));
       } catch { setClientes([makeCliente()]); }
     } else {
-      const cr = clients.find((c: any) => c.id === job.clientId || c.name === job.clientName);
+      const cr = clientsList.find((c: any) => c.id === job.clientId || c.name === job.clientName);
       setClientes([{
         _id: `${Date.now()}`,
         nome: job.clientName || "",
@@ -320,12 +330,12 @@ export default function Jobs() {
           lugar: i.lugar || "", name: i.name || "", description: i.description || "", area: String(i.area || ""), unitPrice: String(i.unitPrice || ""), total: i.total || 0,
         })));
       } catch {
-        const svc = services.find(s => s.name === job.serviceType);
+        const svc = servicesList.find(s => s.name === job.serviceType);
         const up = svc?.pricePerUnit ?? 0;
         setMultiItems([{ _id: `${Date.now()}`, name: job.serviceType || "", area: String(job.squareMeters || ""), unitPrice: up.toFixed(2), total: up * (Number(job.squareMeters) || 0) }]);
       }
     } else {
-      const svc = services.find(s => s.name === job.serviceType);
+      const svc = servicesList.find(s => s.name === job.serviceType);
       const up = svc?.pricePerUnit ?? 0;
       setMultiItems([{ _id: `${Date.now()}`, name: job.serviceType || "", area: String(job.squareMeters || ""), unitPrice: up.toFixed(2), total: up * (Number(job.squareMeters) || 0) }]);
     }
@@ -429,12 +439,12 @@ export default function Jobs() {
 
     const items = rawItems.map((item: any) => ({
       ...item,
-      description: item.description || services.find((s: any) => s.name === item.name)?.description || undefined,
+      description: item.description || servicesList.find((s: any) => s.name === item.name)?.description || undefined,
     }));
 
     let totalMaterial = 0, totalLabor = 0, totalTransport = 0;
     items.forEach(item => {
-      const svc = services.find(s => s.name === item.name);
+      const svc = servicesList.find(s => s.name === item.name);
       if (!svc || item.area === 0) return;
       if (costConfig) {
         const c = calculateTotalCost({ squareMeters: item.area, distanceKm: 0, serviceMaterialCostPerM2: svc.materialConsumptionPerM2, serviceLaborCostPerM2: svc.laborCostPerM2, serviceTransportCostPerM2: svc.transportCostPerM2 }, costConfig);
@@ -472,7 +482,7 @@ export default function Jobs() {
         });
       } catch { /* ignore */ }
     } else {
-      const cr = clients.find((c: any) => c.id === job.clientId || c.name === job.clientName);
+      const cr = clientsList.find((c: any) => c.id === job.clientId || c.name === job.clientName);
       clientesPDF = [{
         nome: job.clientName,
         cargo: "Proprietário",
@@ -490,14 +500,14 @@ export default function Jobs() {
       responsaveisPDF = [{ nome: job.technicianAssigned, cargo: "Encarregado", telefone: "" }];
     }
 
-    const clientRecord = clients.find((c: any) => c.id === job.clientId || c.name === job.clientName);
+    const clientRecord = clientsList.find((c: any) => c.id === job.clientId || c.name === job.clientName);
 
     let paymentConditionsPDF: { name: string; fullText: string }[] | undefined;
     if (job.paymentConditionIds) {
       try {
         const ids: number[] = JSON.parse(job.paymentConditionIds);
         if (ids.length > 0) {
-          paymentConditionsPDF = (paymentConditionsList as any[])
+          paymentConditionsPDF = paymentConditions
             .filter((c: any) => ids.includes(c.id) && c.active !== false)
             .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0))
             .map((c: any) => ({ name: c.name, fullText: c.fullText }));
@@ -557,7 +567,7 @@ export default function Jobs() {
     }
 
     if (!phone) {
-      const cr = (clients as any[]).find((c: any) => c.id === job.clientId || c.name === job.clientName);
+      const cr = clientsList.find((c: any) => c.id === job.clientId || c.name === job.clientName);
       phone = cr?.phone || "";
     }
 
@@ -572,7 +582,7 @@ export default function Jobs() {
     const displayNum = job.orcamentoNumero ?? job.id;
     const numFormatted = String(displayNum).padStart(4, "0");
 
-    let statusConfigs: any[] = jobStatusConfigs as any[];
+    let statusConfigs: any[] = jobStatuses;
     if (!statusConfigs || statusConfigs.length === 0) {
       try {
         const res = await fetch("/api/job-statuses");
@@ -638,7 +648,7 @@ export default function Jobs() {
     try {
       await updateJob.mutateAsync({ id: job.id, status: newStatus });
 
-      const statusCfg = (jobStatusConfigs as any[]).find(
+      const statusCfg = jobStatuses.find(
         (c: any) => c.name?.toLowerCase() === newStatus.toLowerCase()
       );
 
@@ -650,7 +660,7 @@ export default function Jobs() {
 
         const materialsMap: Record<number, { name: string; unit: string; inventoryUnit: string; quantity: number }> = {};
         for (const svcItem of serviceItemsParsed) {
-          const svcCatalog = (services as any[]).find((s: any) =>
+          const svcCatalog = servicesList.find((s: any) =>
             s.name?.toLowerCase() === svcItem.name?.toLowerCase()
           );
           if (!svcCatalog?.serviceMaterials) continue;
@@ -661,7 +671,7 @@ export default function Jobs() {
             const qty = mat.unit === "per_kg"
               ? Math.ceil((area * (Number(mat.kilosPerM2) || 0)) / (Number(mat.weightPerUnit) || 1))
               : mat.unit === "per_m2" ? mat.quantity * area : mat.quantity;
-            const invItem = (inventoryItems as any[]).find((it: any) => it.id === mat.inventoryId);
+            const invItem = inventoryItemsList.find((it: any) => it.id === mat.inventoryId);
             const inventoryUnit = invItem?.unit || "unid";
             if (materialsMap[mat.inventoryId]) {
               materialsMap[mat.inventoryId].quantity += qty;
@@ -769,7 +779,7 @@ export default function Jobs() {
           )}
         </div>
         <span className="text-sm text-slate-500">
-          {filteredJobs.length} de {jobs.length} orçamento{jobs.length === 1 ? "" : "s"}
+          {filteredJobs.length} de {jobsList.length} orçamento{jobsList.length === 1 ? "" : "s"}
         </span>
       </div>
 
@@ -791,10 +801,10 @@ export default function Jobs() {
         <QuotesList
           jobs={filteredJobs}
           jobsWithScores={jobsWithScores}
-          services={services}
+          services={servicesList}
           costConfig={costConfig}
-          jobStatusConfigs={jobStatusConfigs as any[]}
-          workOrders={workOrders}
+          jobStatusConfigs={jobStatuses}
+          workOrders={workOrdersList}
           statusColors={statusColors}
           onStatusChange={handleInlineStatusChange}
           onSendWhatsApp={handleEnviarWhatsApp}
@@ -834,7 +844,7 @@ export default function Jobs() {
             <span className="col-span-2 text-xs text-slate-400 sm:col-span-1">Este número aparecerá no PDF do orçamento</span>
           </div>
 
-          {(paymentMethodsList as any[]).filter((p: any) => p.active).length > 0 && (
+          {paymentMethods.filter((p: any) => p.active).length > 0 && (
             <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center">
               <CreditCard className="w-4 h-4 text-slate-500 shrink-0" />
               <label className="text-sm font-semibold text-slate-700 whitespace-nowrap">Forma de Pagamento</label>
@@ -845,14 +855,14 @@ export default function Jobs() {
                 data-testid="select-payment-method"
               >
                 <option value="">Não definida</option>
-                {(paymentMethodsList as any[]).filter((p: any) => p.active).map((pm: any) => (
+                {paymentMethods.filter((p: any) => p.active).map((pm: any) => (
                   <option key={pm.id} value={pm.id}>
                     {pm.name}{pm.discountPercent !== 0 ? ` (${pm.discountPercent > 0 ? "+" : ""}${pm.discountPercent}%)` : ""}
                   </option>
                 ))}
               </select>
               {paymentMethodId && (() => {
-                const pm = (paymentMethodsList as any[]).find((p: any) => p.id === Number(paymentMethodId));
+                const pm = paymentMethods.find((p: any) => p.id === Number(paymentMethodId));
                 if (!pm || pm.discountPercent === 0) return null;
                 return (
                   <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pm.discountPercent < 0 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
@@ -863,7 +873,7 @@ export default function Jobs() {
             </div>
           )}
 
-          {(paymentConditionsList as any[]).filter((c: any) => c.active !== false).length > 0 && (
+          {paymentConditions.filter((c: any) => c.active !== false).length > 0 && (
             <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-slate-500 shrink-0" />
@@ -875,7 +885,7 @@ export default function Jobs() {
                 )}
               </div>
               <div className="grid grid-cols-1 gap-1">
-                {(paymentConditionsList as any[])
+                {paymentConditions
                   .filter((c: any) => c.active !== false)
                   .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0))
                   .map((c: any) => (
@@ -913,7 +923,7 @@ export default function Jobs() {
           )}
 
           <QuoteClientSection
-            clients={clients}
+            clients={clientsList}
             clientId={clientId}
             quoteClients={clientes}
             onClientIdChange={setClientId}
@@ -922,8 +932,8 @@ export default function Jobs() {
           />
           <QuoteServiceItems
             items={multiItems}
-            services={services}
-            inventoryItems={inventoryItems}
+            services={servicesList}
+            inventoryItems={inventoryItemsList}
             totalValue={totalOrcamento}
             onAddItem={addItem}
             onRemoveItem={removeItem}

@@ -3,6 +3,7 @@ import { Loader2, Users } from "lucide-react";
 import { CRM_STATUS_COLUMNS } from "@/features/crm-whatsapp/constants";
 import { CrmLeadCard } from "@/features/crm-whatsapp/components/CrmLeadCard";
 import type { CrmLeadOperationalLinks } from "@/features/crm-whatsapp/types";
+import { asArray } from "@/lib/safeData";
 import type { Lead } from "@shared/schema";
 
 type LeadWithOperationalLinks = Lead & { operationalLinks?: CrmLeadOperationalLinks };
@@ -14,6 +15,8 @@ type CrmPipelineBoardProps = {
 };
 
 export function CrmPipelineBoard({ leads, isLoading = false, onContactLead }: CrmPipelineBoardProps) {
+  const leadsList = asArray<LeadWithOperationalLinks>(leads);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-white py-16 text-sm text-slate-400 dark:border-slate-800 dark:bg-slate-950">
@@ -27,7 +30,7 @@ export function CrmPipelineBoard({ leads, isLoading = false, onContactLead }: Cr
     <section className="overflow-x-auto pb-3">
       <div className="grid grid-cols-1 gap-3 md:min-w-[980px] md:grid-cols-5 xl:min-w-0">
         {CRM_STATUS_COLUMNS.map(column => {
-          const columnLeads = leads.filter(lead => lead.status === column.id);
+          const columnLeads = leadsList.filter(lead => lead.status === column.id);
 
           return (
             <div key={column.id} className={`rounded-xl border p-3 ${column.color}`}>

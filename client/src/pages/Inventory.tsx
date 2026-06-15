@@ -15,6 +15,7 @@ import { QuickCountPanel } from "@/features/inventory/components/QuickCountPanel
 import { QuickCountPreview } from "@/features/inventory/components/QuickCountPreview";
 import type { BatchItem, InventoryItem, Movement, QuickCountRow as RapidaRow } from "@/features/inventory/types";
 import { useUser } from "@/hooks/use-auth";
+import { asArray } from "@/lib/safeData";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -195,7 +196,7 @@ function generateMovementPDF(selectedYM: string, movements: Movement[], items: I
 
     // Group items by those that had movement this month
     const movedIds = new Set(monthMovements.map(m => m.inventoryId));
-    const movedItems = (items as InventoryItem[]).filter(i => movedIds.has(i.id));
+    const movedItems = asArray<InventoryItem>(items).filter(i => movedIds.has(i.id));
 
     autoTable(doc, {
       startY: finalY + 3,
@@ -393,20 +394,22 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const [rapidaApplied, setRapidaApplied] = useState(false);
 
   const { data: movements = [] } = useQuery<Movement[]>({ queryKey: ["/api/inventory-movements"] });
+  const itemsList = asArray<InventoryItem>(items);
+  const movementsList = asArray<Movement>(movements);
 
   // Available months from movements data
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
     months.add(nowYM());
-    (movements as Movement[]).forEach(m => {
+    movementsList.forEach(m => {
       if (m.date) months.add(m.date.substring(0, 7));
     });
     return Array.from(months).sort((a, b) => b.localeCompare(a));
-  }, [movements]);
+  }, [movementsList]);
 
   // Movements for selected month
   const monthMovements = useMemo(() => {
-    return (movements as Movement[])
+    return movementsList
       .filter(m => m.date.startsWith(selectedYM))
       .filter(m => {
         const q = movSearch.toLowerCase();
@@ -418,7 +421,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
         return m.type === movTypeFilter;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [movements, selectedYM, movSearch, movTypeFilter]);
+  }, [movementsList, selectedYM, movSearch, movTypeFilter]);
 
   const recountHistory = useMemo(() => {
     const groups = new Map<string, {
@@ -432,7 +435,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
       createdAt?: string;
     }>();
 
-    (movements as Movement[])
+    movementsList
       .filter(movement => String(movement.notes || "").includes("AJUSTE_POR_INVENTARIO"))
       .forEach(movement => {
         const notes = movement.notes || "";
@@ -457,7 +460,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
       });
 
     return Array.from(groups.values()).sort((a, b) => `${b.date}-${b.createdAt || ""}`.localeCompare(`${a.date}-${a.createdAt || ""}`));
-  }, [movements]);
+  }, [movementsList]);
 
   // Group by date
   const groupedByDay = useMemo(() => {
@@ -490,7 +493,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
     const validItems = batchItems
       .filter(i => i.inventoryId && i.quantity && Number(i.quantity) > 0)
       .map(i => {
-        const inv = (items as InventoryItem[]).find(it => it.id === Number(i.inventoryId));
+        const inv = itemsList.find(it => it.id === Number(i.inventoryId));
         return { inventoryId: Number(i.inventoryId), productName: inv?.name || "", quantity: Number(i.quantity), type: i.type };
       });
     if (!validItems.length) { toast({ title: "Adicione pelo menos um item", variant: "destructive" }); return; }
@@ -531,7 +534,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const handleUpdateMovement = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editMovement || !editMovQty || Number(editMovQty) <= 0) return;
-    const invItem = (items as InventoryItem[]).find(it => it.id === editMovInventoryId);
+    const invItem = itemsList.find(it => it.id === editMovInventoryId);
     updateMovement.mutate({
       id: editMovement.id,
       payload: {
@@ -620,7 +623,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   };
 
   const processRapida = () => {
-    const rows = computeRapidaRows(rapidaText, items as InventoryItem[]);
+    const rows = computeRapidaRows(rapidaText, itemsList);
     if (rows.length === 0) {
       toast({ title: "Nenhuma linha válida encontrada", description: "Use o formato: 5x Nome ou Nome - Quantidade", variant: "destructive" });
       return;
@@ -728,20 +731,20 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   };
 
   // Inventory product form
-  const filteredItems = (items as InventoryItem[]).filter(i =>
+  const filteredItems = itemsList.filter(i =>
     i.name.toLowerCase().includes(search.toLowerCase()) ||
     (i.type || "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const lowStockCount = (items as InventoryItem[]).filter(i => i.quantity <= i.minStock).length;
+  const lowStockCount = itemsList.filter(i => i.quantity <= i.minStock).length;
   const duplicateNameGroups = useMemo(() => {
     const groups = new Map<string, InventoryItem[]>();
-    for (const item of items as InventoryItem[]) {
+    for (const item of itemsList) {
       const key = normName(item.name);
       groups.set(key, [...(groups.get(key) || []), item]);
     }
     return Array.from(groups.values()).filter(group => group.length > 1);
-  }, [items]);
+  }, [itemsList]);
 
   const openNew = () => {
     setEditingItem(null);
@@ -765,9 +768,9 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
     setIsModalOpen(false);
   };
 
-  const historyMovements = historyItem ? (movements as Movement[]).filter(m => m.inventoryId === historyItem.id).sort((a, b) => b.date.localeCompare(a.date)) : [];
+  const historyMovements = historyItem ? movementsList.filter(m => m.inventoryId === historyItem.id).sort((a, b) => b.date.localeCompare(a.date)) : [];
 
-  const sortedInventory = (items as InventoryItem[]).sort((a, b) => a.name.localeCompare(b.name));
+  const sortedInventory = [...itemsList].sort((a, b) => a.name.localeCompare(b.name));
 
   // ---- Derived values for Contagem Física Completa preview ----
   const rapidaCountedRows  = rapidaPreview.filter(r => !r.isUncounted);
@@ -779,9 +782,9 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const rapidaDupes        = rapidaCountedRows.filter(r => r.isDuplicate);
   const rapidaTotalAcoes   = rapidaEntradas.length + rapidaSaidasCont.length + rapidaToZeroRows.length;
   const pageCopy = INVENTORY_PAGE_COPY[mode];
-  const currentEntries = (movements as Movement[]).filter(m => m.type === "ENTRADA").reduce((sum, movement) => sum + movement.quantity, 0);
-  const currentExits = (movements as Movement[]).filter(m => m.type === "SAÍDA").reduce((sum, movement) => sum + movement.quantity, 0);
-  const emptyStockCount = (items as InventoryItem[]).filter(i => i.quantity <= 0).length;
+  const currentEntries = movementsList.filter(m => m.type === "ENTRADA").reduce((sum, movement) => sum + movement.quantity, 0);
+  const currentExits = movementsList.filter(m => m.type === "SAÍDA").reduce((sum, movement) => sum + movement.quantity, 0);
+  const emptyStockCount = itemsList.filter(i => i.quantity <= 0).length;
 
   return (
     <div className="space-y-6">
@@ -793,7 +796,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
           </div>
           {mode === "current" && (
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button variant="outline" onClick={() => generateCurrentStockPDF(items as InventoryItem[], movements as Movement[])} data-testid="button-current-stock-pdf">
+              <Button variant="outline" onClick={() => generateCurrentStockPDF(itemsList, movementsList)} data-testid="button-current-stock-pdf">
                 Baixar relatório do estoque atual
               </Button>
               <Button onClick={openNew} data-testid="button-add-inventory-item">
@@ -808,7 +811,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <Card className="p-4">
               <p className="text-xs font-semibold uppercase text-slate-500">Produtos</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{(items as InventoryItem[]).length}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{itemsList.length}</p>
             </Card>
             <Card className="p-4">
               <p className="text-xs font-semibold uppercase text-slate-500">Estoque baixo</p>
@@ -875,7 +878,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
             onNavigateMonth={navigateMonth}
             onSearchChange={setMovSearch}
             onTypeFilterChange={setMovTypeFilter}
-            onDownloadPdf={() => generateMovementPDF(selectedYM, movements as Movement[], items as InventoryItem[])}
+            onDownloadPdf={() => generateMovementPDF(selectedYM, movementsList, itemsList)}
             onNewMovement={() => {
               setShowBatchForm(value => !value);
               if (!showBatchForm) {
@@ -1075,7 +1078,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
                   data-testid="select-edit-movement-product"
                 >
                   <option value={0}>Selecionar produto...</option>
-                  {(items as InventoryItem[]).sort((a, b) => a.name.localeCompare(b.name)).map(it => (
+                  {sortedInventory.map(it => (
                     <option key={it.id} value={it.id}>{it.name} - {it.unit || "unid"} (estoque: {it.quantity})</option>
                   ))}
                 </select>

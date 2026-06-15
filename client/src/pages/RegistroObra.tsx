@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { asArray } from "@/lib/safeData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ServiceProgress {
@@ -123,6 +124,9 @@ export default function RegistroObra() {
         : Promise.resolve([]),
     enabled: !!selectedWO,
   });
+  const workOrdersList = asArray<any>(workOrders);
+  const jobsList = asArray<any>(jobs);
+  const consumoLogsList = asArray<any>(consumoLogs);
 
   const createConsumo = useMutation({
     mutationFn: (data: any) => apiCall("POST", "/api/obra-consumo-logs", data),
@@ -143,7 +147,7 @@ export default function RegistroObra() {
     setConsumoInputs({});
     setConsumoNotes("");
 
-    const relatedJob = (jobs as any[]).find((j: any) => j.id === wo.jobId) || null;
+    const relatedJob = jobsList.find((j: any) => j.id === wo.jobId) || null;
 
     if (wo.serviceProgress) {
       try {
@@ -229,7 +233,7 @@ export default function RegistroObra() {
     }
   };
 
-  const activeWOs = (workOrders as any[]).filter(
+  const activeWOs = workOrdersList.filter(
     (wo: any) => !["Concluída", "Cancelada"].includes(wo.status)
   );
 
@@ -582,11 +586,11 @@ export default function RegistroObra() {
           </div>
 
           {/* ── History ───────────────────────────────────────────────────── */}
-          {(consumoLogs as any[]).length > 0 && (
+          {consumoLogsList.length > 0 && (
             <div>
               <p className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
                 <History className="w-4 h-4 text-primary" />
-                Histórico de Lançamentos ({(consumoLogs as any[]).length})
+                Histórico de Lançamentos ({consumoLogsList.length})
               </p>
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <table className="w-full text-sm">
@@ -601,7 +605,7 @@ export default function RegistroObra() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {(consumoLogs as any[]).map((log: any) => (
+                    {consumoLogsList.map((log: any) => (
                       <tr key={log.id} className="hover:bg-slate-50">
                         <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">
                           {format(new Date(log.createdAt), "dd/MM HH:mm", { locale: ptBR })}

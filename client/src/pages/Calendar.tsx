@@ -5,6 +5,7 @@ import { Button } from "@/components/Button";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, eachDayOfInterval, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { asArray } from "@/lib/safeData";
 
 const apiRequest = async (method: string, path: string) => {
   const res = await fetch(path, { method });
@@ -17,6 +18,7 @@ export default function Calendar() {
     queryKey: ["/api/work-orders"],
     queryFn: () => apiRequest("GET", "/api/work-orders"),
   });
+  const workOrdersList = asArray<any>(workOrders);
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<"daily" | "weekly">("weekly");
@@ -34,7 +36,7 @@ export default function Calendar() {
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
   const getOrdersForDate = (date: Date) => {
-    return workOrders.filter((wo: any) => {
+    return workOrdersList.filter((wo: any) => {
       if (!wo.scheduledDate) return false;
       return isSameDay(new Date(wo.scheduledDate), date);
     });
@@ -50,7 +52,7 @@ export default function Calendar() {
         },
         {} as Record<string, any[]>
       ),
-    [weekDays, workOrders]
+    [weekDays, workOrdersList]
   );
 
   return (
@@ -233,7 +235,7 @@ export default function Calendar() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         {Object.entries(statusColors).map(([status, colors]) => {
-          const count = workOrders.filter((wo: any) => wo.status === status).length;
+          const count = workOrdersList.filter((wo: any) => wo.status === status).length;
           return (
             <Card key={status}>
               <CardContent className="pt-6">

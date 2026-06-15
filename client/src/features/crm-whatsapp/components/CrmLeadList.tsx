@@ -2,6 +2,7 @@ import { Loader2, MessageCircle, Phone, UserCheck, Users } from "lucide-react";
 
 import { CrmLeadCard } from "@/features/crm-whatsapp/components/CrmLeadCard";
 import type { CrmLeadOperationalLinks } from "@/features/crm-whatsapp/types";
+import { asArray } from "@/lib/safeData";
 import type { Client, Lead, WhatsappSendLog } from "@shared/schema";
 
 type LeadWithOperationalLinks = Lead & { operationalLinks?: CrmLeadOperationalLinks };
@@ -15,18 +16,21 @@ type CrmLeadListProps = {
 };
 
 export function CrmLeadList({ leads, clients, logs, isLoading = false, onContactLead }: CrmLeadListProps) {
-  const activeConversations = logs.filter(log => log.status !== "error").length;
-  const nextActions = leads.filter(lead => lead.nextContactDate || lead.operationalLinks?.nextAction || ["Contacted", "Proposal", "Lost"].includes(lead.status));
-  const contacts = leads.filter(lead => lead.status === "Contacted");
-  const quotes = leads.filter(lead => (lead.operationalLinks?.quotes.length || 0) > 0);
-  const activeClients = leads.filter(lead => (lead.operationalLinks?.workOrders.length || 0) > 0);
+  const leadsList = asArray<LeadWithOperationalLinks>(leads);
+  const clientsList = asArray<Client>(clients);
+  const logsList = asArray<WhatsappSendLog>(logs);
+  const activeConversations = logsList.filter(log => log.status !== "error").length;
+  const nextActions = leadsList.filter(lead => lead.nextContactDate || lead.operationalLinks?.nextAction || ["Contacted", "Proposal", "Lost"].includes(lead.status));
+  const contacts = leadsList.filter(lead => lead.status === "Contacted");
+  const quotes = leadsList.filter(lead => (lead.operationalLinks?.quotes.length || 0) > 0);
+  const activeClients = leadsList.filter(lead => (lead.operationalLinks?.workOrders.length || 0) > 0);
 
   return (
     <section className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <MetricCard icon={Users} label="Leads" value={leads.length} />
+        <MetricCard icon={Users} label="Leads" value={leadsList.length} />
         <MetricCard icon={Phone} label="Contatos" value={contacts.length} />
-        <MetricCard icon={UserCheck} label="Clientes" value={Math.max(clients.length, activeClients.length)} />
+        <MetricCard icon={UserCheck} label="Clientes" value={Math.max(clientsList.length, activeClients.length)} />
         <MetricCard icon={MessageCircle} label="Conversas" value={activeConversations} />
         <MetricCard icon={MessageCircle} label="Orçamentos" value={quotes.length} />
         <MetricCard icon={Loader2} label="Próximas ações" value={nextActions.length} />
@@ -38,14 +42,14 @@ export function CrmLeadList({ leads, clients, logs, isLoading = false, onContact
             <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Lista principal</h2>
             <p className="text-sm text-slate-500">Leads, contatos e próximas ações em uma visão rápida.</p>
           </div>
-          <span className="text-xs font-semibold text-slate-400">{leads.length} registro(s)</span>
+          <span className="text-xs font-semibold text-slate-400">{leadsList.length} registro(s)</span>
         </div>
 
         {isLoading ? (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3].map(item => <div key={item} className="h-36 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-900" />)}
           </div>
-        ) : leads.length === 0 ? (
+        ) : leadsList.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-200 py-12 text-center text-slate-400 dark:border-slate-800">
             <Users className="mx-auto mb-3 h-10 w-10 opacity-50" />
             <p className="font-medium">Nenhum lead encontrado</p>
@@ -53,7 +57,7 @@ export function CrmLeadList({ leads, clients, logs, isLoading = false, onContact
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {leads.map(lead => <CrmLeadCard key={lead.id} lead={lead} onContact={onContactLead} />)}
+            {leadsList.map(lead => <CrmLeadCard key={lead.id} lead={lead} onContact={onContactLead} />)}
           </div>
         )}
       </div>

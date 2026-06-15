@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { asArray } from "@/lib/safeData";
 import type { Service, InsertService } from "@shared/schema";
 
 export function useServices() {
@@ -8,7 +9,8 @@ export function useServices() {
     queryKey: ["/api/services"],
     queryFn: async () => {
       const res = await fetch(api.services.list.path, { credentials: "include" });
-      return res.json() as Promise<Service[]>;
+      if (!res.ok) throw new Error("Failed to fetch services");
+      return asArray<Service>(await res.json());
     },
   });
 }

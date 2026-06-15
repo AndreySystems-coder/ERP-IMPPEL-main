@@ -6,6 +6,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { asArray } from "@/lib/safeData";
 
 type NpsResponse = {
   id: number;
@@ -83,6 +84,8 @@ export default function PostSale() {
 
   const { data: npsData = [], isLoading: npsLoading } = useQuery<NpsResponse[]>({ queryKey: ["/api/nps-responses"] });
   const { data: reminders = [], isLoading: remLoading } = useQuery<MaintenanceReminder[]>({ queryKey: ["/api/maintenance-reminders"] });
+  const npsList = asArray<NpsResponse>(npsData);
+  const remindersList = asArray<MaintenanceReminder>(reminders);
 
   const [tab, setTab] = useState<"nps" | "lembretes">("nps");
 
@@ -131,14 +134,14 @@ export default function PostSale() {
   });
 
   // NPS stats
-  const responded = (npsData as NpsResponse[]).filter(n => n.status === "respondido" && n.score != null);
+  const responded = npsList.filter(n => n.status === "respondido" && n.score != null);
   const avgNps    = responded.length > 0 ? (responded.reduce((s, n) => s + (n.score || 0), 0) / responded.length).toFixed(1) : "—";
   const promotors = responded.filter(n => (n.score || 0) >= 9).length;
   const neutros   = responded.filter(n => (n.score || 0) >= 7 && (n.score || 0) < 9).length;
   const detrators = responded.filter(n => (n.score || 0) < 7).length;
 
   // Upcoming reminders
-  const upcomingRem = (reminders as MaintenanceReminder[]).filter(r => {
+  const upcomingRem = remindersList.filter(r => {
     const { next12, next24 } = nextReminderDays(r.completedDate, r.reminder12SentAt, r.reminder24SentAt);
     return (next12 > 0 && next12 <= 30) || (next24 > 0 && next24 <= 30);
   });
@@ -191,7 +194,7 @@ export default function PostSale() {
           <Card>
             {npsLoading ? (
               <div className="p-6 space-y-3">{[1,2,3].map(i => <div key={i} className="h-16 bg-slate-100 rounded-lg animate-pulse" />)}</div>
-            ) : (npsData as NpsResponse[]).length === 0 ? (
+            ) : npsList.length === 0 ? (
               <div className="text-center py-14 text-slate-400">
                 <Star className="w-12 h-12 mx-auto mb-3 opacity-30" />
                 <p className="font-medium">Nenhuma pesquisa de satisfação registrada</p>
@@ -199,7 +202,7 @@ export default function PostSale() {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {(npsData as NpsResponse[]).map(n => {
+                {npsList.map(n => {
                   const cat = npsCategory(n.score);
                   return (
                     <div key={n.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition-colors" data-testid={`row-nps-${n.id}`}>
@@ -274,7 +277,7 @@ export default function PostSale() {
           <Card>
             {remLoading ? (
               <div className="p-6 space-y-3">{[1,2,3].map(i => <div key={i} className="h-16 bg-slate-100 rounded-lg animate-pulse" />)}</div>
-            ) : (reminders as MaintenanceReminder[]).length === 0 ? (
+            ) : remindersList.length === 0 ? (
               <div className="text-center py-14 text-slate-400">
                 <Bell className="w-12 h-12 mx-auto mb-3 opacity-30" />
                 <p className="font-medium">Nenhum lembrete cadastrado</p>
@@ -282,7 +285,7 @@ export default function PostSale() {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {(reminders as MaintenanceReminder[]).map(r => {
+                {remindersList.map(r => {
                   const { next12, next24 } = nextReminderDays(r.completedDate, r.reminder12SentAt, r.reminder24SentAt);
                   const msg12 = `Olá ${r.clientName}! Já faz 12 meses desde a execução do serviço de ${r.serviceType || "impermeabilização"} pela IMPPEL. Recomendamos uma vistoria preventiva para garantir a durabilidade da sua impermeabilização. Podemos agendar?`;
                   const msg24 = `Olá ${r.clientName}! Já faz 24 meses desde a execução do serviço de ${r.serviceType || "impermeabilização"} pela IMPPEL. É hora de fazer uma revisão completa. Podemos agendar uma vistoria?`;

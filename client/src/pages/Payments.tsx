@@ -6,6 +6,7 @@ import { Download, DollarSign, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { asArray } from "@/lib/safeData";
 import { exportToCSV, exportToPDF } from "@/lib/exportUtils";
 import { PaymentFilters } from "@/features/financial/components/PaymentFilters";
 import { PaymentFormModal } from "@/features/financial/components/PaymentFormModal";
@@ -27,6 +28,8 @@ export default function Payments() {
   const { toast } = useToast();
   const { data: payments = [], isLoading: paymentsLoading } = useQuery<PaymentRecord[]>({ queryKey: ["/api/payments"] });
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<PaymentJob[]>({ queryKey: ["/api/jobs"] });
+  const paymentsList = asArray<PaymentRecord>(payments);
+  const jobsList = asArray<PaymentJob>(jobs);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -79,14 +82,14 @@ export default function Payments() {
   const filteredPayments = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    return payments.filter(payment => {
+    return paymentsList.filter(payment => {
       const matchesSearch = !term || getPaymentSearchText(payment).includes(term);
       const matchesStatus = statusFilter === "all" || payment.status === statusFilter;
       const matchesMethod = methodFilter === "all" || payment.paymentMethod === methodFilter;
 
       return matchesSearch && matchesStatus && matchesMethod;
     });
-  }, [methodFilter, payments, search, statusFilter]);
+  }, [methodFilter, paymentsList, search, statusFilter]);
 
   const openNew = () => {
     setEditingPayment(null);
@@ -115,7 +118,7 @@ export default function Payments() {
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const selectedJob = jobs.find(job => job.id === Number(form.jobId));
+    const selectedJob = jobsList.find(job => job.id === Number(form.jobId));
     if (!selectedJob) {
       toast({
         title: "Selecione um orçamento",

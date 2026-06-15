@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, TrendingUp, TrendingDown, Clock, CheckCircle, AlertTriangle, DollarSign, FileText } from "lucide-react";
 import { Card } from "@/components/Card";
+import { asArray } from "@/lib/safeData";
 
 type Job = {
   id: number;
@@ -57,13 +58,16 @@ export default function Reports() {
   const { data: jobs = []         } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
   const { data: workOrders = []   } = useQuery<WorkOrder[]>({ queryKey: ["/api/work-orders"] });
+  const jobsList = asArray<Job>(jobs);
+  const transactionsList = asArray<Transaction>(transactions);
+  const workOrdersList = asArray<WorkOrder>(workOrders);
 
   // ─── DRE Mensal ──────────────────────────────────────────────────────────────
-  const monthJobs = (jobs as Job[]).filter(j => {
+  const monthJobs = jobsList.filter(j => {
     const d = new Date(j.createdAt);
     return d.getMonth() === selMonth && d.getFullYear() === selYear;
   });
-  const monthTx = (transactions as Transaction[]).filter(t => {
+  const monthTx = transactionsList.filter(t => {
     const d = new Date(t.date);
     return d.getMonth() === selMonth && d.getFullYear() === selYear;
   });
@@ -77,7 +81,7 @@ export default function Reports() {
   const margemEstim  = receita > 0 ? (lucroEstim / receita) * 100 : 0;
 
   // ─── Obras por período ────────────────────────────────────────────────────────
-  const filteredWOs = (workOrders as WorkOrder[]).filter(wo => {
+  const filteredWOs = workOrdersList.filter(wo => {
     if (statusFilter !== "todos" && wo.status !== statusFilter) return false;
     if (period.start) {
       const d = new Date(wo.createdAt);
@@ -91,25 +95,25 @@ export default function Reports() {
   });
 
   const woByStatus: Record<string, number> = {};
-  (workOrders as WorkOrder[]).forEach(wo => { woByStatus[wo.status] = (woByStatus[wo.status] || 0) + 1; });
+  workOrdersList.forEach(wo => { woByStatus[wo.status] = (woByStatus[wo.status] || 0) + 1; });
 
   // ─── Conversão ────────────────────────────────────────────────────────────────
-  const total     = (jobs as Job[]).length;
-  const aprovados = (jobs as Job[]).filter(j => !["Lead","Perdido","Cancelado"].includes(j.status)).length;
-  const perdidos  = (jobs as Job[]).filter(j => ["Perdido","Cancelado"].includes(j.status)).length;
+  const total     = jobsList.length;
+  const aprovados = jobsList.filter(j => !["Lead","Perdido","Cancelado"].includes(j.status)).length;
+  const perdidos  = jobsList.filter(j => ["Perdido","Cancelado"].includes(j.status)).length;
   const taxa      = total > 0 ? ((aprovados / total) * 100).toFixed(1) : "0";
 
   // ─── Geral KPIs ──────────────────────────────────────────────────────────────
-  const totalReceita = (jobs as Job[]).reduce((s, j) => s + (j.realPriceSold || 0), 0);
-  const totalLucro   = (jobs as Job[]).reduce((s, j) => s + (j.profit || 0), 0);
-  const avgMargin    = (jobs as Job[]).length > 0
-    ? (jobs as Job[]).reduce((s, j) => s + (j.margin || 0), 0) / (jobs as Job[]).length
+  const totalReceita = jobsList.reduce((s, j) => s + (j.realPriceSold || 0), 0);
+  const totalLucro   = jobsList.reduce((s, j) => s + (j.profit || 0), 0);
+  const avgMargin    = jobsList.length > 0
+    ? jobsList.reduce((s, j) => s + (j.margin || 0), 0) / jobsList.length
     : 0;
-  const osAtivas = (workOrders as WorkOrder[]).filter(wo => !["Concluída","Cancelada"].includes(wo.status)).length;
+  const osAtivas = workOrdersList.filter(wo => !["Concluída","Cancelada"].includes(wo.status)).length;
 
   // By service type
   const byService: Record<string, { count: number; revenue: number; profit: number }> = {};
-  (jobs as Job[]).forEach(j => {
+  jobsList.forEach(j => {
     if (!byService[j.serviceType]) byService[j.serviceType] = { count: 0, revenue: 0, profit: 0 };
     byService[j.serviceType].count++;
     byService[j.serviceType].revenue += j.realPriceSold || 0;
@@ -200,7 +204,7 @@ export default function Reports() {
               <h3 className="font-bold text-slate-800">Últimos Orçamentos</h3>
             </div>
             <div className="divide-y divide-slate-100">
-              {(jobs as Job[]).slice(0, 10).map(j => (
+              {jobsList.slice(0, 10).map(j => (
                 <div key={j.id} className="flex items-center gap-4 px-5 py-3">
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-slate-800">{j.clientName}</p>
@@ -401,7 +405,7 @@ export default function Reports() {
               <h3 className="font-bold text-slate-800">Distribuição por Status</h3>
             </div>
             <div className="p-5 space-y-3">
-              {(Object.entries((jobs as Job[]).reduce((acc, j) => {
+              {(Object.entries(jobsList.reduce((acc, j) => {
                 acc[j.status] = (acc[j.status] || 0) + 1; return acc;
               }, {} as Record<string, number>)).sort((a,b) => b[1]-a[1])).map(([status, count]) => (
                 <div key={status} className="flex items-center gap-3">

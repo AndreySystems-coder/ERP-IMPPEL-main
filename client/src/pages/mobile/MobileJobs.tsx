@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { LogOut, MapPin, Calendar, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { asArray } from "@/lib/safeData";
 
 const apiRequest = async (method: string, path: string) => {
   const res = await fetch(path, { method, credentials: "include" });
@@ -21,6 +22,7 @@ export default function MobileJobs() {
     queryKey: ["/api/work-orders"],
     queryFn: () => apiRequest("GET", "/api/work-orders"),
   });
+  const workOrdersList = asArray<any>(workOrders);
 
   const statusColors: Record<string, { bg: string; text: string }> = {
     Planejada: { bg: "bg-blue-100", text: "text-blue-700" },
@@ -36,7 +38,7 @@ export default function MobileJobs() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold">Minhas Ordens</h1>
-            <p className="text-xs text-primary-100">Total: {workOrders.length}</p>
+            <p className="text-xs text-primary-100">Total: {workOrdersList.length}</p>
           </div>
           <Button
             variant="ghost"
@@ -52,14 +54,14 @@ export default function MobileJobs() {
 
       {/* Jobs List */}
       <div className="p-4 space-y-3">
-        {workOrders.length === 0 ? (
+        {workOrdersList.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-slate-500">Nenhuma ordem de serviço atribuída</p>
             </CardContent>
           </Card>
         ) : (
-          workOrders.map((wo: any) => {
+          workOrdersList.map((wo: any) => {
             const colors = statusColors[wo.status] || statusColors["Planejada"];
             return (
               <Card

@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { asArray } from "@/lib/safeData";
 
 type Warranty = {
   id: number;
@@ -58,6 +59,7 @@ export default function Warranties() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: warranties = [], isLoading } = useQuery<Warranty[]>({ queryKey: ["/api/warranties"] });
+  const warrantiesList = asArray<Warranty>(warranties);
 
   const [tab, setTab]             = useState<"garantias" | "ocorrencias">("garantias");
   const [statusFilter, setFilter] = useState("todos");
@@ -77,6 +79,7 @@ export default function Warranties() {
     enabled: expanded != null,
     queryFn: () => fetch(`/api/warranty-incidents?warrantyId=${expanded}`).then(r => r.json()),
   });
+  const incidentsList = asArray<WarrantyIncident>(incidents);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["/api/warranties"] });
   const invalidateInc = () => qc.invalidateQueries({ queryKey: ["/api/warranty-incidents", expanded] });
@@ -139,16 +142,17 @@ export default function Warranties() {
     createInc.mutate({ ...incForm, warrantyId: expanded, cost: incForm.cost ? Number(incForm.cost) : 0 });
   };
 
-  const filtered = (warranties as Warranty[]).filter(w => statusFilter === "todos" || w.status === statusFilter);
+  const filtered = warrantiesList.filter(w => statusFilter === "todos" || w.status === statusFilter);
 
   // All incidents for the "Ocorrências" tab
   const { data: allIncidents = [] } = useQuery<WarrantyIncident[]>({
     queryKey: ["/api/warranty-incidents", "all"],
     queryFn: () =>
-      Promise.all((warranties as Warranty[]).map(w => fetch(`/api/warranty-incidents?warrantyId=${w.id}`).then(r => r.json())))
+      Promise.all(warrantiesList.map(w => fetch(`/api/warranty-incidents?warrantyId=${w.id}`).then(r => r.json())))
         .then(results => results.flat()),
-    enabled: tab === "ocorrencias" && (warranties as Warranty[]).length > 0,
+    enabled: tab === "ocorrencias" && warrantiesList.length > 0,
   });
+  const allIncidentsList = asArray<WarrantyIncident>(allIncidents);
 
   return (
     <div className="space-y-6">
@@ -176,7 +180,7 @@ export default function Warranties() {
           { s: "cancelada", label: "Canceladas", bg: "bg-red-50",   txt: "text-red-700"   },
         ].map(k => (
           <Card key={k.s} className={`${k.bg} border-0 p-4 text-center`}>
-            <p className="text-2xl font-bold">{(warranties as Warranty[]).filter(w => w.status === k.s).length}</p>
+            <p className="text-2xl font-bold">{warrantiesList.filter(w => w.status === k.s).length}</p>
             <p className={`text-sm font-medium ${k.txt}`}>{k.label}</p>
           </Card>
         ))}
@@ -258,11 +262,11 @@ export default function Warranties() {
                       {isEx && (
                         <div className="px-6 pb-4 bg-slate-50 border-t border-slate-100">
                           <p className="text-xs font-bold text-slate-400 uppercase mt-3 mb-2">Ocorrências desta garantia</p>
-                          {(incidents as WarrantyIncident[]).length === 0 ? (
+                          {incidentsList.length === 0 ? (
                             <p className="text-sm text-slate-400">Nenhuma ocorrência registrada.</p>
                           ) : (
                             <div className="space-y-2">
-                              {(incidents as WarrantyIncident[]).map(inc => (
+                              {incidentsList.map(inc => (
                                 <div key={inc.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-3">
                                   <div className="flex-1">
                                     <p className="text-sm font-semibold text-slate-700">{inc.description}</p>
@@ -287,15 +291,15 @@ export default function Warranties() {
 
       {tab === "ocorrencias" && (
         <Card>
-          {(allIncidents as WarrantyIncident[]).length === 0 ? (
+          {allIncidentsList.length === 0 ? (
             <div className="text-center py-14 text-slate-400">
               <AlertTriangle className="w-12 h-12 mx-auto mb-3 opacity-30" />
               <p className="font-medium">Nenhuma ocorrência registrada</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {(allIncidents as WarrantyIncident[]).map(inc => {
-                const warranty = (warranties as Warranty[]).find(w => w.id === inc.warrantyId);
+              {allIncidentsList.map(inc => {
+                const warranty = warrantiesList.find(w => w.id === inc.warrantyId);
                 return (
                   <div key={inc.id} className="flex items-center gap-4 px-6 py-4">
                     <div className="flex-1">

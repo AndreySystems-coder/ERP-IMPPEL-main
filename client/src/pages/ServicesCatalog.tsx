@@ -8,6 +8,7 @@ import { Modal } from "@/components/Modal";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, PencilLine, Trash2, BookOpen, Package, X, FlaskConical, AlertTriangle } from "lucide-react";
 import { useUser } from "@/hooks/use-auth";
+import { asArray } from "@/lib/safeData";
 import type { InsertService } from "@shared/schema";
 
 interface ServiceMaterial {
@@ -38,10 +39,12 @@ export default function ServicesCatalog() {
   const createService = useCreateService();
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
+  const servicesList = asArray<any>(services);
 
   const { data: inventoryItems = [] } = useQuery<any[]>({
     queryKey: ["/api/inventory"],
   });
+  const inventoryItemsList = asArray<any>(inventoryItems);
 
   const [search, setSearch] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -56,8 +59,8 @@ export default function ServicesCatalog() {
   const [serviceMaterials, setServiceMaterials] = useState<ServiceMaterial[]>([]);
 
   const filtered = useMemo(
-    () => (services as any[]).filter((s: any) => s.name.toLowerCase().includes(search.toLowerCase())),
-    [search, services]
+    () => servicesList.filter((s: any) => s.name.toLowerCase().includes(search.toLowerCase())),
+    [search, servicesList]
   );
 
   const resetForm = () => {
@@ -97,7 +100,7 @@ export default function ServicesCatalog() {
     setServiceMaterials(prev => prev.map((m, i) => {
       if (i !== idx) return m;
       if (field === "inventoryId") {
-        const item = (inventoryItems as any[]).find((it: any) => it.id === Number(value));
+        const item = inventoryItemsList.find((it: any) => it.id === Number(value));
         return { ...m, inventoryId: Number(value), name: item?.name || m.name };
       }
       return { ...m, [field]: value };

@@ -7,6 +7,7 @@ import { Input } from "@/components/Input";
 import { ArrowLeft, Camera, X, CheckCircle2, AlertCircle, MapPin, Calendar, Users, LogIn, LogOut, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { asArray } from "@/lib/safeData";
 
 const apiRequest = async (method: string, path: string, body?: any) => {
   const res = await fetch(path, {
@@ -32,13 +33,14 @@ export default function MobileJobDetail() {
     queryKey: ["/api/work-orders"],
     queryFn: () => apiRequest("GET", "/api/work-orders"),
   });
+  const workOrdersList = asArray<any>(workOrders);
 
   const { data: tracking } = useQuery({
     queryKey: [`/api/job-tracking/${jobId}`],
     queryFn: () => apiRequest("GET", `/api/job-tracking/${jobId}`),
   });
 
-  const wo = workOrders.find((w: any) => w.id === jobId);
+  const wo = workOrdersList.find((w: any) => w.id === jobId);
   const [status, setStatus] = useState(wo?.status || "Planejada");
   const [photos, setPhotos] = useState<Array<{ category: string; data: string; timestamp: string }>>(
     wo?.photos ? JSON.parse(wo.photos) : []

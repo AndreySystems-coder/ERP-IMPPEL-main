@@ -14,6 +14,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { MaterialAutocomplete as MaterialAutocompleteField } from "@/features/materials/components/MaterialAutocomplete";
 import { PhotoCapture as MaterialPhotoCapture } from "@/features/materials/components/PhotoCapture";
 import { SignaturePad as MaterialSignaturePad } from "@/features/materials/components/SignaturePad";
+import { asArray } from "@/lib/safeData";
 import type { InventoryItem, UserItem, WorkOrder } from "@/features/materials/types";
 export function WithdrawalForm({
   inventory,
@@ -40,8 +41,11 @@ export function WithdrawalForm({
   const [saidaSignature, setSaidaSignature] = useState<string | null>(null);
   const [saidaNotes, setSaidaNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
+  const inventoryList = asArray<InventoryItem>(inventory);
+  const usersList = asArray<UserItem>(users);
+  const workOrdersList = asArray<WorkOrder>(workOrders);
 
-  const inventoryAvailable = inventory.filter(i => i.quantity > 0);
+  const inventoryAvailable = inventoryList.filter(i => i.quantity > 0);
 
   const createWithdrawalMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/material-withdrawals", data),
@@ -77,9 +81,8 @@ export function WithdrawalForm({
     if (withdrawalItems.length === 0) return toast({ title: "Adicione um material", description: "Busque o material, informe a quantidade e toque em Adicionar.", variant: "destructive" });
     if (!saidaPhoto) return toast({ title: "Falta a foto da retirada", description: "Registre uma foto dos materiais antes de confirmar.", variant: "destructive" });
     if (!saidaSignature) return toast({ title: "Falta a assinatura", description: "Confirme a responsabilidade assinando no quadro.", variant: "destructive" });
-    const allUsers = users as any[];
-    const user = isAdmin ? allUsers.find(u => u.id === Number(effectiveUserId)) : currentUser;
-    const os = workOrders.find(o => o.id === Number(selectedOSId));
+    const user = isAdmin ? usersList.find(u => u.id === Number(effectiveUserId)) : currentUser;
+    const os = workOrdersList.find(o => o.id === Number(selectedOSId));
     createWithdrawalMutation.mutate({
       userId: Number(effectiveUserId), username: (user as any)?.username || "",
       workOrderId: selectedOSId && selectedOSId !== "none" ? Number(selectedOSId) : null,
@@ -100,7 +103,7 @@ export function WithdrawalForm({
               <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                 <SelectTrigger data-testid="select-trigger-employee"><SelectValue placeholder="Selecionar funcionário..." /></SelectTrigger>
                 <SelectContent>
-                  {users.map(u => <SelectItem key={u.id} value={String(u.id)} data-testid={`option-employee-${u.id}`}>{u.username} ({u.role === "admin" ? "Admin" : "Funcionário"})</SelectItem>)}
+                  {usersList.map(u => <SelectItem key={u.id} value={String(u.id)} data-testid={`option-employee-${u.id}`}>{u.username} ({u.role === "admin" ? "Admin" : "Funcionário"})</SelectItem>)}
                 </SelectContent>
               </Select>
             ) : (
@@ -119,7 +122,7 @@ export function WithdrawalForm({
               <SelectTrigger data-testid="select-trigger-os"><SelectValue placeholder="Vincular à OS (opcional)..." /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Sem vínculo</SelectItem>
-                {workOrders.map(o => <SelectItem key={o.id} value={String(o.id)}>OS #{o.id} — {o.clientName}</SelectItem>)}
+                {workOrdersList.map(o => <SelectItem key={o.id} value={String(o.id)}>OS #{o.id} — {o.clientName}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

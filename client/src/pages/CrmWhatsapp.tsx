@@ -5,6 +5,7 @@ import { ClipboardList, Library, Users, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { asArray } from "@/lib/safeData";
 import { CrmContactHistory } from "@/features/crm-whatsapp/components/CrmContactHistory";
 import { CrmFilters } from "@/features/crm-whatsapp/components/CrmFilters";
 import { CrmLeadList } from "@/features/crm-whatsapp/components/CrmLeadList";
@@ -50,6 +51,16 @@ export default function CrmWhatsapp() {
     enabled: tab === "logs" || tab === "kanban",
     refetchInterval: tab === "logs" ? 10000 : false,
   });
+  const flowsList = asArray<WhatsappFlow>(flows);
+  const templatesList = asArray<WhatsappTemplate>(templates);
+  const leadsList = asArray<Lead>(leads);
+  const jobsList = asArray<Job>(jobs);
+  const workOrdersList = asArray<WorkOrder>(workOrders);
+  const warrantiesList = asArray<Warranty>(warranties);
+  const npsResponsesList = asArray<NpsResponse>(npsResponses);
+  const maintenanceRemindersList = asArray<MaintenanceReminder>(maintenanceReminders);
+  const clientsList = asArray<Client>(clients);
+  const logsList = asArray<WhatsappSendLog>(logs);
 
   const deleteFlowMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/whatsapp-flows/${id}`),
@@ -93,21 +104,21 @@ export default function CrmWhatsapp() {
     setSendModalOpen(true);
   };
 
-  const sortedFlows = [...flows].sort((a, b) => {
+  const sortedFlows = [...flowsList].sort((a, b) => {
     if (a.trigger === "atendimento_inicial") return -1;
     if (b.trigger === "atendimento_inicial") return 1;
     return (a.sortOrder || 0) - (b.sortOrder || 0);
   });
 
-  const filteredTemplates = categoryFilter === "all" ? templates : templates.filter(t => t.category === categoryFilter);
+  const filteredTemplates = categoryFilter === "all" ? templatesList : templatesList.filter(t => t.category === categoryFilter);
 
   const crmSources = useMemo(() => {
-    return Array.from(new Set(leads.map(lead => lead.source).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b));
-  }, [leads]);
+    return Array.from(new Set(leadsList.map(lead => lead.source).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b));
+  }, [leadsList]);
 
   const crmLeads = useMemo<CrmLeadWithLinks[]>(() => {
-    return leads.map(lead => {
-      const quoteLinks = jobs
+    return leadsList.map(lead => {
+      const quoteLinks = jobsList
         .filter(job => Number(job.leadId) === lead.id)
         .sort((a, b) => Number(b.id) - Number(a.id))
         .map(job => ({
@@ -118,7 +129,7 @@ export default function CrmWhatsapp() {
           serviceType: job.serviceType,
         }));
       const quoteIds = new Set(quoteLinks.map(quote => quote.id));
-      const workOrderLinks = workOrders
+      const workOrderLinks = workOrdersList
         .filter(workOrder => workOrder.jobId && quoteIds.has(Number(workOrder.jobId)))
         .sort((a, b) => Number(b.id) - Number(a.id))
         .map(workOrder => ({
@@ -127,12 +138,12 @@ export default function CrmWhatsapp() {
           serviceType: workOrder.serviceType,
         }));
       const workOrderIds = new Set(workOrderLinks.map(workOrder => workOrder.id));
-      const warrantyLinks = warranties
+      const warrantyLinks = warrantiesList
         .filter(warranty => warranty.workOrderId && workOrderIds.has(Number(warranty.workOrderId)))
         .sort((a, b) => Number(b.id) - Number(a.id))
         .map(warranty => ({ id: warranty.id, status: warranty.status, endDate: warranty.endDate }));
-      const npsPending = npsResponses.filter(nps => nps.workOrderId && workOrderIds.has(Number(nps.workOrderId)) && nps.status === "pendente").length;
-      const maintenancePending = maintenanceReminders.filter(reminder =>
+      const npsPending = npsResponsesList.filter(nps => nps.workOrderId && workOrderIds.has(Number(nps.workOrderId)) && nps.status === "pendente").length;
+      const maintenancePending = maintenanceRemindersList.filter(reminder =>
         reminder.workOrderId &&
         workOrderIds.has(Number(reminder.workOrderId)) &&
         (!reminder.reminder12SentAt || !reminder.reminder24SentAt)
@@ -164,7 +175,7 @@ export default function CrmWhatsapp() {
         },
       };
     });
-  }, [jobs, leads, maintenanceReminders, npsResponses, warranties, workOrders]);
+  }, [jobsList, leadsList, maintenanceRemindersList, npsResponsesList, warrantiesList, workOrdersList]);
 
   const filteredCrmLeads = useMemo(() => {
     const term = crmSearch.trim().toLowerCase();
@@ -260,8 +271,8 @@ export default function CrmWhatsapp() {
           />
           <CrmLeadList
             leads={filteredCrmLeads}
-            clients={clients}
-            logs={logs}
+            clients={clientsList}
+            logs={logsList}
             isLoading={leadsLoading || clientsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading}
             onContactLead={openSendLead}
           />
@@ -282,7 +293,7 @@ export default function CrmWhatsapp() {
         </TabsContent>
 
         <TabsContent value="logs" className="mt-4">
-          <CrmContactHistory logs={logs} isLoading={logsLoading} onRefresh={refreshLogs} />
+          <CrmContactHistory logs={logsList} isLoading={logsLoading} onRefresh={refreshLogs} />
         </TabsContent>
       </Tabs>
 

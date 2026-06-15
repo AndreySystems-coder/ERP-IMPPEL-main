@@ -11,8 +11,17 @@ import {
 } from "recharts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { asArray } from "@/lib/safeData";
 
-const apiGet = (path: string) => fetch(path).then(r => r.json());
+const apiGet = async (path: string) => {
+  const response = await fetch(path, { credentials: "include" });
+  if (!response.ok) {
+    const detail = await response.text();
+    console.warn(`Dashboard API indisponível (${response.status}) em ${path}: ${detail || response.statusText}`);
+    return null;
+  }
+  return response.json();
+};
 
 function formatBRL(n: number | undefined | null) {
   if (!n) return "R$ 0";
@@ -29,12 +38,17 @@ export default function Dashboard() {
   const { data: inventory = [] } = useQuery({ queryKey: ["/api/inventory"], queryFn: () => apiGet("/api/inventory") });
   const { data: leads = [] } = useQuery({ queryKey: ["/api/leads"], queryFn: () => apiGet("/api/leads") });
 
-  const pendingJobs = (jobs as any[]).filter((j: any) => ["Lead", "Proposta", "Negociação"].includes(j.status)).length;
-  const activeOrders = (workOrders as any[]).filter((w: any) => ["Em Andamento", "Agendada"].includes(w.status)).length;
-  const lowStock = (inventory as any[]).filter((i: any) => i.quantity <= i.minStock).length;
-  const newLeads = (leads as any[]).filter((l: any) => ["New Lead", "Contacted"].includes(l.status)).length;
-  const recentJobs = [...(jobs as any[])].sort((a, b) => b.id - a.id).slice(0, 5);
-  const recentOrders = [...(workOrders as any[])].sort((a, b) => b.id - a.id).slice(0, 4);
+  const jobsList = asArray<any>(jobs);
+  const workOrdersList = asArray<any>(workOrders);
+  const inventoryList = asArray<any>(inventory);
+  const leadsList = asArray<any>(leads);
+
+  const pendingJobs = jobsList.filter((j: any) => ["Lead", "Proposta", "Negociação"].includes(j.status)).length;
+  const activeOrders = workOrdersList.filter((w: any) => ["Em Andamento", "Agendada"].includes(w.status)).length;
+  const lowStock = inventoryList.filter((i: any) => i.quantity <= i.minStock).length;
+  const newLeads = leadsList.filter((l: any) => ["New Lead", "Contacted"].includes(l.status)).length;
+  const recentJobs = [...jobsList].sort((a, b) => b.id - a.id).slice(0, 5);
+  const recentOrders = [...workOrdersList].sort((a, b) => b.id - a.id).slice(0, 4);
   const weekday = format(new Date(), "EEEE", { locale: ptBR });
   const formattedDate = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 
@@ -55,7 +69,7 @@ export default function Dashboard() {
       color: "bg-amber-500",
       lightBg: "bg-amber-50",
       textColor: "text-amber-600",
-      sub: `${(jobs as any[]).length} orçamentos no total`,
+      sub: `${jobsList.length} orçamentos no total`,
     },
     {
       label: "Obras em Andamento",
@@ -64,7 +78,7 @@ export default function Dashboard() {
       color: "bg-emerald-500",
       lightBg: "bg-emerald-50",
       textColor: "text-emerald-600",
-      sub: `${(workOrders as any[]).length} OSs no total`,
+      sub: `${workOrdersList.length} OSs no total`,
     },
     {
       label: "Alertas de Estoque",
@@ -272,7 +286,7 @@ export default function Dashboard() {
               </p>
             ) : (
               <div className="divide-y divide-slate-50">
-                {(inventory as any[]).filter((i: any) => i.quantity <= i.minStock).slice(0, 5).map((item: any) => (
+                {inventoryList.filter((i: any) => i.quantity <= i.minStock).slice(0, 5).map((item: any) => (
                   <div key={item.id} className="flex items-center justify-between px-4 py-2.5">
                     <p className="text-xs font-semibold text-slate-700 truncate min-w-0 mr-2">{item.name}</p>
                     <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
