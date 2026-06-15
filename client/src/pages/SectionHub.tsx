@@ -239,6 +239,7 @@ export function BackupsHub() {
         description: "Escolha uma rotina segura: backup em PDF ou restauração controlada.",
         items: [
           { title: "Backup", description: "Gerar PDFs organizados dos dados para conferência e segurança.", href: "/backups/backup", icon: HardDrive, permission: "viewBackupGeneration", accent: accents.blue },
+          { title: "Exportação", description: "Baixar relatórios em PDF para conferência humana.", href: "/backups/exportacao", icon: FileText, permission: "viewExports", accent: accents.emerald },
           { title: "Restauração", description: "Restaurar dados com PDF ou texto, sempre com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
         ],
       }}
