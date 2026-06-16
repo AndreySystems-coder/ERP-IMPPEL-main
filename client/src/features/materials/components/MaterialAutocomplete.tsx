@@ -51,7 +51,7 @@ export function MaterialAutocomplete({
 
   return (
     <div className="relative">
-      <div className="flex items-center gap-2 rounded-xl border-2 border-border bg-white px-3 py-3 transition-all focus-within:border-primary">
+      <div className="flex min-h-11 items-center gap-2 rounded-xl border-2 border-border bg-white px-3 py-2.5 transition-all focus-within:border-primary">
         <Search className="h-4 w-4 shrink-0 text-slate-400" />
         <input
           type="text"

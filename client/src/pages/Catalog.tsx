@@ -10,9 +10,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { usePrivacyMask } from "@/hooks/use-privacy-mask";
+import { asArray } from "@/lib/safeData";
 import {
   Search, Plus, Edit2, Trash2, Package, X, Camera, Tag,
-  Building2, Barcode, ChevronDown, Eye, EyeOff, DollarSign,
+  Building2, Barcode, Eye, EyeOff,
   Grid3X3, List, ShoppingCart,
 } from "lucide-react";
 
@@ -53,10 +56,6 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_BADGE = "bg-slate-100 text-slate-700 border-slate-200";
-
-function fmtPrice(v: number) {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
 
 // Section
 function ProductForm({
@@ -200,11 +199,15 @@ function ProductForm({
 
 // Section
 function ProductCard({
-  product, isAdmin, onEdit, onDelete, onToggle, viewMode,
+  product, isAdmin, onEdit, onDelete, onToggle, viewMode, privacyMaskEnabled, maskText, maskMoney, maskNumber,
 }: {
   product: Product; isAdmin: boolean;
   onEdit: () => void; onDelete: () => void; onToggle: () => void;
   viewMode: "grid" | "list";
+  privacyMaskEnabled: boolean;
+  maskText: (value: unknown, fallback?: string) => string;
+  maskMoney: (value: unknown) => string;
+  maskNumber: (value: unknown, suffix?: string) => string;
 }) {
   const catColor = CATEGORY_BADGE;
 
@@ -223,20 +226,20 @@ function ProductCard({
         {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2 flex-wrap">
-            <p className="font-semibold text-gray-900 text-sm truncate">{product.name}</p>
+            <p className="font-semibold text-gray-900 text-sm truncate">{maskText(product.name, "Material ••••")}</p>
             {!product.active && <Badge variant="outline" className="text-xs text-gray-400">Inativo</Badge>}
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <Badge className={`text-xs border ${catColor}`}>{product.category}</Badge>
-            {product.brand && <span className="text-xs text-gray-400">{product.brand}</span>}
-            {product.code && <span className="text-xs text-gray-400 font-mono">{product.code}</span>}
+            {product.brand && <span className="text-xs text-gray-400">{maskText(product.brand, "Fabricante ••••")}</span>}
+            {product.code && <span className="text-xs text-gray-400 font-mono">{maskText(product.code, "SKU ••••")}</span>}
           </div>
-          {product.description && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{product.description}</p>}
+          {product.description && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{privacyMaskEnabled ? "••••••••••" : product.description}</p>}
         </div>
 
         {/* Price */}
         <div className="text-right shrink-0">
-          <p className="text-base font-bold text-blue-900">{fmtPrice(product.salePrice)}</p>
+          <p className="text-base font-bold text-blue-900">{maskMoney(product.salePrice)}</p>
           <p className="text-xs text-gray-400">/{product.unit || "un"}</p>
         </div>
 
@@ -295,25 +298,25 @@ function ProductCard({
       {/* Info */}
       <div className="p-4 flex-1 flex flex-col gap-2">
         <div>
-          <p className="font-bold text-gray-900 text-sm leading-tight">{product.name}</p>
-          {product.brand && <p className="text-xs text-gray-400 mt-0.5">{product.brand}</p>}
+          <p className="font-bold text-gray-900 text-sm leading-tight">{maskText(product.name, "Material ••••")}</p>
+          {product.brand && <p className="text-xs text-gray-400 mt-0.5">{maskText(product.brand, "Fabricante ••••")}</p>}
         </div>
         {product.code && (
           <p className="text-xs text-gray-400 font-mono flex items-center gap-1">
-            <Barcode className="w-3 h-3" /> {product.code}
+            <Barcode className="w-3 h-3" /> {maskText(product.code, "SKU ••••")}
           </p>
         )}
         {product.description && (
-          <p className="text-xs text-gray-500 line-clamp-3 flex-1">{product.description}</p>
+          <p className="text-xs text-gray-500 line-clamp-3 flex-1">{privacyMaskEnabled ? "••••••••••" : product.description}</p>
         )}
         <div className="pt-2 border-t border-gray-50 flex items-center justify-between mt-auto">
           <div>
-            <p className="text-lg font-bold text-blue-900">{fmtPrice(product.salePrice)}</p>
+            <p className="text-lg font-bold text-blue-900">{maskMoney(product.salePrice)}</p>
             <p className="text-xs text-gray-400">por {product.unit || "un"}</p>
           </div>
           {product.maxDiscount > 0 && (
             <Badge variant="outline" className="text-xs text-green-700 border-green-200">
-              Desc. até {product.maxDiscount}%
+              Desc. até {maskNumber(product.maxDiscount, "%")}
             </Badge>
           )}
         </div>
@@ -330,6 +333,8 @@ export default function Catalog() {
   const isAdmin = (currentUser as any)?.role === "admin";
 
   const { data: products = [], isLoading } = useQuery<Product[]>({ queryKey: ["/api/products"] });
+  const productsList = asArray<Product>(products);
+  const { privacyMaskEnabled, togglePrivacyMask, maskText, maskMoney, maskNumber } = usePrivacyMask();
 
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Todas");
@@ -371,8 +376,8 @@ export default function Catalog() {
 
   // â”€â”€â”€ Filtering â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const activeProducts = useMemo(() =>
-    products.filter(p => showInactive ? true : p.active),
-    [products, showInactive]
+    productsList.filter(p => showInactive ? true : p.active),
+    [productsList, showInactive]
   );
 
   const categories = useMemo(() => {
@@ -411,10 +416,11 @@ export default function Catalog() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900" data-testid="text-page-title">Catálogo de Produtos</h1>
-            <p className="text-sm text-gray-500">{products.filter(p => p.active).length} produto(s) ativo(s) · {categories.length - 1} categoria(s)</p>
+            <p className="text-sm text-gray-500">{productsList.filter(p => p.active).length} produto(s) ativo(s) · {categories.length - 1} categoria(s)</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <PrivacyToggle enabled={privacyMaskEnabled} onToggle={togglePrivacyMask} />
           {isAdmin && (
             <>
               <button
@@ -504,6 +510,10 @@ export default function Catalog() {
                   {items.map(p => (
                     <ProductCard
                       key={p.id} product={p} isAdmin={isAdmin} viewMode="grid"
+                      privacyMaskEnabled={privacyMaskEnabled}
+                      maskText={maskText}
+                      maskMoney={maskMoney}
+                      maskNumber={maskNumber}
                       onEdit={() => setEditingProduct(p)}
                       onDelete={() => { if (confirm(`Remover "${p.name}"?`)) deleteMutation.mutate(p.id); }}
                       onToggle={() => handleToggle(p)}
@@ -515,6 +525,10 @@ export default function Catalog() {
                   {items.map(p => (
                     <ProductCard
                       key={p.id} product={p} isAdmin={isAdmin} viewMode="list"
+                      privacyMaskEnabled={privacyMaskEnabled}
+                      maskText={maskText}
+                      maskMoney={maskMoney}
+                      maskNumber={maskNumber}
                       onEdit={() => setEditingProduct(p)}
                       onDelete={() => { if (confirm(`Remover "${p.name}"?`)) deleteMutation.mutate(p.id); }}
                       onToggle={() => handleToggle(p)}
@@ -536,17 +550,17 @@ export default function Catalog() {
           </div>
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
-            <p className="text-xl font-bold text-blue-900">{fmtPrice(Math.min(...filtered.map(p => p.salePrice)))}</p>
+            <p className="text-xl font-bold text-blue-900">{maskMoney(Math.min(...filtered.map(p => p.salePrice)))}</p>
             <p className="text-xs text-gray-400">menor preço</p>
           </div>
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
-            <p className="text-xl font-bold text-blue-900">{fmtPrice(Math.max(...filtered.map(p => p.salePrice)))}</p>
+            <p className="text-xl font-bold text-blue-900">{maskMoney(Math.max(...filtered.map(p => p.salePrice)))}</p>
             <p className="text-xs text-gray-400">maior preço</p>
           </div>
           <div className="w-px bg-gray-200 self-stretch" />
           <div>
-            <p className="text-xl font-bold text-green-700">{fmtPrice(filtered.reduce((s, p) => s + p.salePrice, 0) / filtered.length)}</p>
+            <p className="text-xl font-bold text-green-700">{maskMoney(filtered.reduce((s, p) => s + p.salePrice, 0) / filtered.length)}</p>
             <p className="text-xs text-gray-400">preço médio</p>
           </div>
         </div>

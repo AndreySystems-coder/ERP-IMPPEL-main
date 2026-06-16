@@ -9,9 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
-import { Plus, Search, DollarSign, Briefcase, FileText, X, Users, Hash, CreditCard } from "lucide-react";
+import { Plus, Search, Briefcase, FileText, X, Users, Hash, CreditCard } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
-import { useLocation } from "wouter";
 import { gerarOrcamentoPDF, mergeQuoteTemplateConfig } from "@/lib/orcamentoPDF";
 import type { MaterialDisplayMode, QuoteTemplateConfig } from "@/lib/orcamentoPDF";
 import { asArray } from "@/lib/safeData";
@@ -25,6 +24,8 @@ import { evaluateMargin, validateDiscount, calculateTotalCost, getCombinedRecomm
 import { calculateScore } from "@shared/scoringEngine";
 import { usePriorityRules } from "@/hooks/use-priority-rules";
 import { useSettings } from "@/hooks/use-settings";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { usePrivacyMask } from "@/hooks/use-privacy-mask";
 
 interface ServiceItemForm {
   _id: string;
@@ -82,6 +83,7 @@ export default function Jobs() {
   const { data: paymentMethodsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-methods"] });
   const { data: paymentConditionsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-conditions"] });
   const { data: settings = [] } = useSettings();
+  const { privacyMaskEnabled, togglePrivacyMask, maskText, maskMoney, maskNumber } = usePrivacyMask();
   const jobsList = asArray<any>(jobs);
   const servicesList = asArray<any>(services);
   const clientsList = asArray<any>(clients);
@@ -98,7 +100,6 @@ export default function Jobs() {
   const createJob = useCreateJob();
   const updateJob = useUpdateJob();
   const deleteJob = useDeleteJob();
-  const [, setLocation] = useLocation();
 
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -753,9 +754,7 @@ export default function Jobs() {
           <p className="text-slate-500 mt-1">Gerencie orçamentos com cálculo automático de materiais.</p>
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-          <Button variant="outline" className="justify-center" onClick={() => setLocation("/calculator")}>
-            <DollarSign className="w-4 h-4 mr-2" /> Calculadora
-          </Button>
+          <PrivacyToggle enabled={privacyMaskEnabled} onToggle={togglePrivacyMask} />
           <Button className="justify-center" onClick={openNew} data-testid="button-new-job">
             <Plus className="w-5 h-5 mr-2" /> Criar Orçamento
           </Button>
@@ -813,6 +812,10 @@ export default function Jobs() {
           onDelete={(jobId) => {
             if (confirm("Tem certeza?")) deleteJob.mutate(jobId);
           }}
+          privacyMaskEnabled={privacyMaskEnabled}
+          maskText={maskText}
+          maskMoney={maskMoney}
+          maskNumber={maskNumber}
         />
       )}
 
@@ -935,6 +938,10 @@ export default function Jobs() {
             services={servicesList}
             inventoryItems={inventoryItemsList}
             totalValue={totalOrcamento}
+            privacyMaskEnabled={privacyMaskEnabled}
+            maskText={maskText}
+            maskMoney={maskMoney}
+            maskNumber={maskNumber}
             onAddItem={addItem}
             onRemoveItem={removeItem}
             onUpdateItem={updateItem}
@@ -962,6 +969,8 @@ export default function Jobs() {
             onMaterialDisplayModeChange={setMaterialDisplayMode}
             showMaterialsToClient={showMaterialsToClient}
             onShowMaterialsToClientChange={setShowMaterialsToClient}
+            privacyMaskEnabled={privacyMaskEnabled}
+            maskMoney={maskMoney}
           />
           <div id="quote-final" className="scroll-mt-28 space-y-4 rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
           <div className="space-y-2">

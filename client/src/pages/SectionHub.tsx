@@ -3,7 +3,6 @@ import {
   BarChart3,
   Briefcase,
   Building2,
-  Calculator,
   Calendar,
   Clipboard,
   ClipboardList,
@@ -11,7 +10,6 @@ import {
   DollarSign,
   FileText,
   Gauge,
-  HardDrive,
   Hash,
   Heart,
   Layers,
@@ -136,7 +134,6 @@ export function QuotesHub() {
           { title: "Orçamentos", description: "Lista, criação, edição, PDF e envio por WhatsApp.", href: "/jobs", icon: Briefcase, permission: "viewQuotes", accent: accents.blue },
           { title: "Catálogo de Serviços", description: "Serviços, custos por m² e materiais usados na proposta.", href: "/services", icon: Layers, permission: "viewQuoteRules", accent: accents.emerald },
           { title: "Catálogo de Materiais", description: "Produtos/materiais com preço, comissão e desconto máximo.", href: "/catalog", icon: Package, permission: "viewQuoteRules", accent: accents.orange },
-          { title: "Calculadora de Preços", description: "Simulações rápidas de custo, margem e zona.", href: "/calculator", icon: Calculator, permission: "viewQuoteRules", accent: accents.orange },
           { title: "Templates", description: "Layout, cores, seções e preview dos PDFs.", href: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates", accent: accents.violet },
         ],
       }}
@@ -236,9 +233,8 @@ export function BackupsHub() {
     <HubPage
       config={{
         title: "Backups",
-        description: "Escolha uma rotina segura: backup em PDF ou restauração controlada.",
+        description: "Exporte relatórios e restaure dados com preview e confirmação.",
         items: [
-          { title: "Backup", description: "Gerar PDFs organizados dos dados para conferência e segurança.", href: "/backups/backup", icon: HardDrive, permission: "viewBackupGeneration", accent: accents.blue },
           { title: "Exportação", description: "Baixar relatórios em PDF para conferência humana.", href: "/backups/exportacao", icon: FileText, permission: "viewExports", accent: accents.emerald },
           { title: "Restauração", description: "Restaurar dados com PDF ou texto, sempre com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
         ],

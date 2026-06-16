@@ -132,7 +132,7 @@ export function WithdrawalForm({
       <Card>
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><Package className="w-4 h-4" /> Materiais Retirados <span className="text-red-500 text-sm">*</span></CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_96px_120px] sm:items-end">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_104px_132px] sm:items-end">
             <div className="flex-1 space-y-1">
               <Label className="text-xs text-gray-500">1. Buscar material</Label>
               <MaterialAutocompleteField
@@ -143,9 +143,9 @@ export function WithdrawalForm({
             </div>
             <div className="w-24 space-y-1">
               <Label className="text-xs text-gray-500">2. Qtd.</Label>
-              <Input type="number" min="1" value={addingQty} onChange={e => setAddingQty(e.target.value)} data-testid="input-quantity" className="text-center" />
+              <Input type="number" min="1" value={addingQty} onChange={e => setAddingQty(e.target.value)} data-testid="input-quantity" className="h-11 text-center" />
             </div>
-            <Button type="button" onClick={addItem} disabled={!addingItemId} className="h-11 bg-blue-900 text-white hover:bg-blue-800" data-testid="button-add-item">
+            <Button type="button" onClick={addItem} disabled={!addingItemId} className="h-11 w-full bg-blue-900 text-white hover:bg-blue-800" data-testid="button-add-item">
               <Plus className="w-4 h-4 sm:mr-1" />
               <span>3. Adicionar</span>
             </Button>

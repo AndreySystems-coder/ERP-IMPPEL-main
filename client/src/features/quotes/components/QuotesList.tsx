@@ -17,6 +17,10 @@ interface QuotesListProps {
   onGeneratePdf: (job: any) => void;
   onEdit: (job: any) => void;
   onDelete: (jobId: number) => void;
+  privacyMaskEnabled?: boolean;
+  maskText?: (value: unknown, fallback?: string) => string;
+  maskMoney?: (value: unknown) => string;
+  maskNumber?: (value: unknown, suffix?: string) => string;
 }
 
 function formatQuoteNumber(job: any) {
@@ -220,6 +224,10 @@ export function QuotesList({
   onGeneratePdf,
   onEdit,
   onDelete,
+  privacyMaskEnabled = false,
+  maskText = (value, fallback = "—") => String(value ?? "") || fallback,
+  maskMoney = (value) => formatMoney(Number(value || 0)),
+  maskNumber = (value, suffix = "") => `${value ?? 0}${suffix ? ` ${suffix}` : ""}`,
 }: QuotesListProps) {
   const statusOptions =
     jobStatusConfigs.length > 0
@@ -234,7 +242,7 @@ export function QuotesList({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="truncate font-bold text-slate-900">{job.clientName || "Cliente não informado"}</h3>
+                  <h3 className="truncate font-bold text-slate-900">{maskText(job.clientName, "Cliente ••••")}</h3>
                   <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                     #{formatQuoteNumber(job)}
                   </span>
@@ -242,7 +250,7 @@ export function QuotesList({
                 </div>
                 <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
                   <Tag className="h-3.5 w-3.5" />
-                  <span className="truncate">{job.serviceType}</span>
+                  <span className="truncate">{maskText(job.serviceType, "Serviço ••••")}</span>
                 </p>
               </div>
               <RecommendationBadge job={job} jobsWithScores={jobsWithScores} services={services} costConfig={costConfig} />
@@ -251,13 +259,13 @@ export function QuotesList({
             <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
               <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                 <p className="text-xs font-medium text-slate-500">Área</p>
-                <p className="font-semibold text-slate-800">{job.squareMeters || 0} m²</p>
+                <p className="font-semibold text-slate-800">{maskNumber(job.squareMeters || 0, "m²")}</p>
               </div>
               <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                 <p className="text-xs font-medium text-slate-500">Valor vendido</p>
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-slate-800">{formatMoney(job.realPriceSold)}</p>
-                  <MarginBadge job={job} services={services} costConfig={costConfig} />
+                  <p className="font-semibold text-slate-800">{maskMoney(job.realPriceSold)}</p>
+                  {!privacyMaskEnabled && <MarginBadge job={job} services={services} costConfig={costConfig} />}
                 </div>
               </div>
             </div>
@@ -297,26 +305,26 @@ export function QuotesList({
                 <tr key={job.id} className="transition-colors hover:bg-slate-50/70">
                   <td className="p-4 pl-6">
                     <div className="flex items-center gap-2">
-                      <p className="text-base font-bold text-slate-900">{job.clientName || "Cliente não informado"}</p>
+                      <p className="text-base font-bold text-slate-900">{maskText(job.clientName, "Cliente ••••")}</p>
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                         #{formatQuoteNumber(job)}
                       </span>
                       <WorkOrderLinkBadge job={job} workOrders={workOrders} />
                     </div>
                     <div className="mt-1 flex items-center text-sm text-slate-500">
-                      <Tag className="mr-1.5 h-3.5 w-3.5" /> {job.serviceType}
+                      <Tag className="mr-1.5 h-3.5 w-3.5" /> {maskText(job.serviceType, "Serviço ••••")}
                     </div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center font-medium text-slate-700">
                       <Map className="mr-2 h-4 w-4 text-slate-400" />
-                      {job.squareMeters || 0} m²
+                      {maskNumber(job.squareMeters || 0, "m²")}
                     </div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900">{formatMoney(job.realPriceSold)}</span>
-                      <MarginBadge job={job} services={services} costConfig={costConfig} />
+                      <span className="font-bold text-slate-900">{maskMoney(job.realPriceSold)}</span>
+                      {!privacyMaskEnabled && <MarginBadge job={job} services={services} costConfig={costConfig} />}
                     </div>
                   </td>
                   <td className="p-4">

@@ -580,7 +580,7 @@ const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; pan
   },
 };
 
-export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterMode }) {
+export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenterMode }) {
   const { data: user } = useUser();
   const isAdmin = user?.role === "admin";
   const [history, setHistory] = useState<BackupHistoryEntry[]>([]);
@@ -830,7 +830,7 @@ export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterM
 }
 
 export function BackupGenerationPage() {
-  return <BackupCenter mode="backup" />;
+  return <BackupCenter mode="exports" />;
 }
 
 export function BackupExportPage() {

@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Search, PencilLine, Trash2, BookOpen, Package, X, FlaskConical, AlertTriangle } from "lucide-react";
 import { useUser } from "@/hooks/use-auth";
 import { asArray } from "@/lib/safeData";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
+import { usePrivacyMask } from "@/hooks/use-privacy-mask";
 import type { InsertService } from "@shared/schema";
 
 interface ServiceMaterial {
@@ -40,6 +42,7 @@ export default function ServicesCatalog() {
   const updateService = useUpdateService();
   const deleteService = useDeleteService();
   const servicesList = asArray<any>(services);
+  const { privacyMaskEnabled, togglePrivacyMask, maskText, maskMoney, maskNumber } = usePrivacyMask();
 
   const { data: inventoryItems = [] } = useQuery<any[]>({
     queryKey: ["/api/inventory"],
@@ -182,6 +185,7 @@ export default function ServicesCatalog() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <PrivacyToggle enabled={privacyMaskEnabled} onToggle={togglePrivacyMask} />
           <Button onClick={openNew} data-testid="button-new-service">
             <Plus className="w-4 h-4 mr-2" /> Novo Serviço
           </Button>
@@ -230,24 +234,26 @@ export default function ServicesCatalog() {
                     return (
                       <tr key={service.id} className="hover:bg-slate-50 transition-colors" data-testid={`row-service-${service.id}`}>
                         <td className="py-3 px-3 font-semibold text-slate-900 max-w-[180px]">
-                          <span className="line-clamp-2">{service.name}</span>
+                          <span className="line-clamp-2">{maskText(service.name, "Serviço ••••")}</span>
                         </td>
                         <td className="py-3 px-3 text-slate-500 max-w-[220px]">
-                          <span className="line-clamp-2 text-xs">{service.description || "—"}</span>
+                          <span className="line-clamp-2 text-xs">{privacyMaskEnabled ? "••••••••••" : service.description || "—"}</span>
                         </td>
                         <td className="py-3 px-3 text-right font-bold text-primary whitespace-nowrap">
-                          R$ {Number(service.pricePerUnit || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          {maskMoney(service.pricePerUnit)}
                         </td>
                         <td className="py-3 px-3 text-right text-slate-600 whitespace-nowrap">
-                          R$ {Number(service.laborCostPerM2 || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          {maskMoney(service.laborCostPerM2)}
                         </td>
                         <td className="py-3 px-3 text-center">
                           {mats.length > 0 ? (
                             <div className="flex flex-col items-center gap-0.5">
                               <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                                <FlaskConical className="w-3 h-3" /> {mats.length} material(is)
+                                <FlaskConical className="w-3 h-3" /> {maskNumber(mats.length, "material(is)")}
                               </span>
-                              <span className="text-xs text-slate-400">{mats.map(m => m.name).slice(0, 2).join(", ")}{mats.length > 2 ? "..." : ""}</span>
+                              <span className="text-xs text-slate-400">
+                                {privacyMaskEnabled ? "Material ••••" : `${mats.map(m => m.name).slice(0, 2).join(", ")}${mats.length > 2 ? "..." : ""}`}
+                              </span>
                             </div>
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
@@ -341,7 +347,7 @@ export default function ServicesCatalog() {
               ) : (
                 <>
                   {serviceMaterials.map((mat, idx) => {
-                    const invItem = (inventoryItems as any[]).find((it: any) => it.id === mat.inventoryId);
+                    const invItem = inventoryItemsList.find((it: any) => it.id === mat.inventoryId);
                     const qty = Number(mat.quantity) || 0;
                     return (
                       <div
@@ -375,7 +381,7 @@ export default function ServicesCatalog() {
                             data-testid={`select-material-item-${idx}`}
                           >
                             <option value="">Selecionar item do estoque...</option>
-                            {(inventoryItems as any[]).sort((a: any, b: any) => a.name.localeCompare(b.name)).map((item: any) => (
+                            {[...inventoryItemsList].sort((a: any, b: any) => a.name.localeCompare(b.name)).map((item: any) => (
                               <option key={item.id} value={item.id}>
                                 {item.name} — {item.unit || "unid"} (estoque: {item.quantity})
                               </option>
@@ -519,7 +525,7 @@ export default function ServicesCatalog() {
                       </p>
                       <div className="space-y-1">
                         {validMaterialsForPreview.map((m, i) => {
-                          const invItem = (inventoryItems as any[]).find((it: any) => it.id === m.inventoryId);
+                          const invItem = inventoryItemsList.find((it: any) => it.id === m.inventoryId);
                           const qty100 = calcMaterialQty(m, 100);
                           const label = m.unit === "per_kg"
                             ? `(${m.kilosPerM2} kg/m² ÷ ${m.weightPerUnit} kg/unid)`

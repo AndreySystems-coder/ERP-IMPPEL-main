@@ -24,6 +24,8 @@ interface QuoteFinancialAnalysisProps {
   onMaterialDisplayModeChange: (mode: MaterialDisplayMode) => void;
   showMaterialsToClient: boolean;
   onShowMaterialsToClientChange: (value: boolean) => void;
+  privacyMaskEnabled?: boolean;
+  maskMoney?: (value: unknown) => string;
 }
 
 export function QuoteFinancialAnalysis({
@@ -46,6 +48,8 @@ export function QuoteFinancialAnalysis({
   onMaterialDisplayModeChange,
   showMaterialsToClient,
   onShowMaterialsToClientChange,
+  privacyMaskEnabled = false,
+  maskMoney = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
 }: QuoteFinancialAnalysisProps) {
   return (
     <section id="quote-valores" className="scroll-mt-28 space-y-3 rounded-lg border border-slate-200 bg-white p-3 sm:p-4">
@@ -59,25 +63,25 @@ export function QuoteFinancialAnalysis({
               <div className="grid grid-cols-1 gap-2 text-center text-xs sm:grid-cols-3">
                 <div className="rounded-lg bg-slate-50 p-2">
                   <p className="mb-0.5 text-slate-500">Materiais</p>
-                  <p className="font-bold text-slate-800">R$ {multiCostAnalysis.materialCost.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="font-bold text-slate-800">{maskMoney(multiCostAnalysis.materialCost)}</p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-2">
                   <p className="mb-0.5 text-slate-500">Mão de obra</p>
-                  <p className="font-bold text-slate-800">R$ {multiCostAnalysis.laborCost.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="font-bold text-slate-800">{maskMoney(multiCostAnalysis.laborCost)}</p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-2">
                   <p className="mb-0.5 text-slate-500">Transporte</p>
-                  <p className="font-bold text-slate-800">R$ {multiCostAnalysis.transportCost.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="font-bold text-slate-800">{maskMoney(multiCostAnalysis.transportCost)}</p>
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between border-t pt-3">
                 <span className="text-sm font-semibold text-slate-700">Custo direto total</span>
-                <span className="font-bold text-slate-900">R$ {directCostNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="font-bold text-slate-900">{maskMoney(directCostNum)}</span>
               </div>
               {multiCostAnalysis.suggestedPrice > 0 && (
                 <div className="mt-1 flex items-center justify-between">
                   <span className="text-sm text-slate-500">Preço sugerido</span>
-                  <span className="font-bold text-emerald-700">R$ {multiCostAnalysis.suggestedPrice.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="font-bold text-emerald-700">{maskMoney(multiCostAnalysis.suggestedPrice)}</span>
                 </div>
               )}
               <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
@@ -87,7 +91,7 @@ export function QuoteFinancialAnalysis({
                 </div>
                 {multiCostAnalysis.materialRegionalIncrease > 0 ? (
                   <p className="mt-1">
-                    Materiais antes da regra: {multiCostAnalysis.baseMaterialCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} · impacto: {multiCostAnalysis.materialRegionalIncrease.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    Materiais antes da regra: {maskMoney(multiCostAnalysis.baseMaterialCost)} · impacto: {maskMoney(multiCostAnalysis.materialRegionalIncrease)}
                   </p>
                 ) : (
                   <p className="mt-1">Zona A padrão, sem acréscimo regional.</p>
@@ -104,7 +108,7 @@ export function QuoteFinancialAnalysis({
                 <div className="shrink-0 text-left sm:text-right">
                   <p className="text-xs text-slate-500">Preço com desconto</p>
                   <p className={`text-base font-bold ${discountValidation?.isBlocked ? "text-red-600" : "text-slate-900"}`}>
-                    {priceAfterDiscount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    {maskMoney(priceAfterDiscount)}
                   </p>
                 </div>
               )}
@@ -156,11 +160,11 @@ export function QuoteFinancialAnalysis({
       <div className="rounded-lg border-2 border-primary/30 bg-primary/5 px-4 py-3" data-testid="display-real-price-wrapper">
         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Preço vendido</p>
         <p className="text-2xl font-bold text-primary" data-testid="display-real-price">
-          {priceAfterDiscount.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+          {maskMoney(priceAfterDiscount)}
         </p>
         <p className="mt-0.5 text-xs text-slate-500">
           {discountNum > 0
-            ? `${totalOrcamento.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} com ${discountNum}% de desconto aplicado`
+            ? `${privacyMaskEnabled ? "R$ ••••" : totalOrcamento.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} com ${discountNum}% de desconto aplicado`
             : "Soma dos serviços. Aplique desconto acima se necessário."}
         </p>
       </div>
