@@ -1,6 +1,13 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
+import { loadEnvFile } from "node:process";
+
+try {
+  loadEnvFile();
+} catch {
+  // Environment variables can still be provided by the host platform.
+}
 
 const { Pool } = pg;
 

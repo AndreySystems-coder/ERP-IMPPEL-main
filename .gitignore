@@ -36,3 +36,12 @@ ERP-IMPPEL-main/
 
 # Local/private uploaded assets
 attached_assets/
+
+# Real/private operational data packs
+imports/
+backups/
+dados reais/
+IMPPEL-DATA-PACK/
+ERP-DADOS/
+*.real.json
+*.private.json

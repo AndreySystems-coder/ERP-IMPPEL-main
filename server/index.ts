@@ -4,6 +4,13 @@ import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { loadEnvFile } from "node:process";
+
+try {
+  loadEnvFile();
+} catch {
+  // Optional local .env support. Production/Replit can continue using environment variables.
+}
 
 const PgSession = connectPgSimple(session);
 
