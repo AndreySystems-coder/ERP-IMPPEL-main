@@ -1,64 +1,13 @@
 import { useMemo, useState } from "react";
 import { Archive, CheckCircle2, Download, FileArchive, ShieldAlert, Upload } from "lucide-react";
-import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { Card, CardContent } from "@/components/ui/card";
-
-type CompleteBackupPackage = {
-  type: "erp-completo";
-  version: string;
-  exportedAt: string;
-  manifest: {
-    format: string;
-    version: string;
-    createdAt: string;
-    environment: string;
-    includedModules: string[];
-    notIncluded: string[];
-    counts: Record<string, number>;
-    attachmentCounts: Record<string, number>;
-    checksum: { algorithm: string; value: string; scope: string };
-    warnings: string[];
-  };
-  data: Record<string, Record<string, unknown[]>>;
-};
-
-const MODULE_LABELS: Record<string, string> = {
-  usuarios: "Usuários e cargos",
-  clientes: "Clientes",
-  leads: "Leads",
-  orcamentos: "Orçamentos",
-  ordensServico: "Ordens de serviço",
-  registrosObra: "Registros de obra e produção",
-  controleMateriais: "Controle de materiais",
-  estoque: "Estoque e movimentações",
-  catalogoMateriais: "Catálogo de materiais/produtos",
-  catalogoServicos: "Catálogo de serviços",
-  financeiro: "Financeiro",
-  garantias: "Garantias, incidentes e contratos",
-  posVenda: "Pós-venda e NPS",
-  configuracoes: "Configurações e templates",
-  formasPagamento: "Formas de pagamento",
-  condicoesPagamento: "Condições de pagamento",
-};
-
-const MODULE_FILES: Record<string, string> = {
-  usuarios: "usuarios-cargos.json",
-  clientes: "clientes.json",
-  leads: "leads.json",
-  orcamentos: "orcamentos.json",
-  ordensServico: "ordens-servico.json",
-  registrosObra: "registros-obra.json",
-  controleMateriais: "controle-materiais.json",
-  estoque: "estoque-movimentacoes.json",
-  catalogoMateriais: "catalogo-materiais.json",
-  catalogoServicos: "catalogo-servicos.json",
-  financeiro: "financeiro.json",
-  garantias: "garantias-contratos.json",
-  posVenda: "pos-venda.json",
-  configuracoes: "configuracoes-templates.json",
-  formasPagamento: "formas-pagamento.json",
-  condicoesPagamento: "condicoes-pagamento.json",
-};
+import {
+  buildCompleteBackupArchive,
+  MODULE_LABELS,
+  parseCompleteBackupFile,
+  TABLE_LABELS,
+  type CompleteBackupPackage,
+} from "@/lib/completeBackupArchive";
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -67,22 +16,6 @@ function downloadBlob(blob: Blob, filename: string) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-async function parsePackage(file: File): Promise<CompleteBackupPackage> {
-  if (file.name.toLowerCase().endsWith(".zip")) {
-    const files = unzipSync(new Uint8Array(await file.arrayBuffer()));
-    const packageFile = files["ERP-IMPPEL-backup-completo.json"];
-    if (!packageFile) throw new Error("O ZIP não contém o arquivo técnico completo do ERP.");
-    return JSON.parse(strFromU8(packageFile));
-  }
-  return JSON.parse(await file.text());
-}
-
-function validatePackage(value: any): asserts value is CompleteBackupPackage {
-  if (value?.type !== "erp-completo" || value?.manifest?.format !== "imppel-erp-complete-backup" || !value?.data) {
-    throw new Error("Arquivo inválido: manifesto completo do ERP não encontrado.");
-  }
 }
 
 export function CompleteBackupGeneration({ isAdmin }: { isAdmin: boolean }) {
@@ -96,24 +29,10 @@ export function CompleteBackupGeneration({ isAdmin }: { isAdmin: boolean }) {
       const response = await fetch("/api/backup/completo", { credentials: "include" });
       if (!response.ok) throw new Error((await response.json().catch(() => null))?.message || "Não foi possível gerar o backup completo.");
       const backup: CompleteBackupPackage = await response.json();
-      validatePackage(backup);
-      const files: Record<string, Uint8Array> = {
-        "manifest.json": strToU8(JSON.stringify(backup.manifest, null, 2)),
-        "ERP-IMPPEL-backup-completo.json": strToU8(JSON.stringify(backup, null, 2)),
-        "LEIA-ME.txt": strToU8([
-          "BACKUP COMPLETO ERP IMPPEL",
-          "Arquivo privado. Nao envie ao GitHub.",
-          "Para restaurar, envie este ZIP em Backups > Restauracao.",
-          "PDFs baixados anteriormente nao fazem parte deste pacote, salvo quando estavam armazenados no banco.",
-        ].join("\r\n")),
-      };
-      for (const moduleName of backup.manifest.includedModules) {
-        files[`modulos/${MODULE_FILES[moduleName] || `${moduleName}.json`}`] = strToU8(JSON.stringify(backup.data[moduleName] || {}, null, 2));
-      }
-      const zipped = zipSync(files, { level: 6 });
+      const archive = await buildCompleteBackupArchive(backup);
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      downloadBlob(new Blob([zipped], { type: "application/zip" }), `ERP-IMPPEL-backup-completo-${stamp}.zip`);
-      setMessage(`Backup completo gerado: ${backup.manifest.includedModules.length} módulos, checksum ${backup.manifest.checksum.value.slice(0, 12)}…`);
+      downloadBlob(new Blob([archive.bytes], { type: "application/zip" }), `ERP-IMPPEL-backup-completo-${stamp}.zip`);
+      setMessage(`Backup completo gerado: ${backup.manifest.includedModules.length} módulos, ${archive.attachmentCount} anexo(s), checksum ${backup.manifest.checksum.value.slice(0, 12)}…`);
     } catch (error: any) {
       setMessage(error.message || "Falha ao gerar backup completo.");
     } finally {
@@ -161,8 +80,7 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
     if (!file) return;
     setMessage("");
     try {
-      const parsed = await parsePackage(file);
-      validatePackage(parsed);
+      const parsed = await parseCompleteBackupFile(file);
       setBackup(parsed);
       setSelected([...parsed.manifest.includedModules]);
       setMode("merge");
@@ -224,6 +142,26 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
               <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Checksum</p><p className="mt-1 truncate font-mono text-xs font-semibold text-slate-800">{backup.manifest.checksum.value}</p></div>
             </div>
 
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <h3 className="text-sm font-bold text-slate-900">Preview do conteúdo</h3>
+              <p className="mt-1 text-xs text-slate-500">Quantidades lidas do manifesto. Nenhum dado foi aplicado.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(backup.manifest.tableCounts || {})
+                  .filter(([, count]) => Number(count) > 0)
+                  .map(([tableName, count]) => (
+                    <div key={tableName} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
+                      <span className="text-slate-600">{TABLE_LABELS[tableName] || tableName}</span>
+                      <strong className="tabular-nums text-slate-900">{count}</strong>
+                    </div>
+                  ))}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {Object.entries(backup.manifest.attachmentCounts || {}).map(([name, count]) => (
+                  <span key={name} className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-800">{name}: {count}</span>
+                ))}
+              </div>
+            </div>
+
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {backup.manifest.includedModules.map(moduleName => (
                 <label key={moduleName} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
@@ -258,6 +196,14 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
               <p className="text-sm text-amber-900">Para aplicar {total} registro(s) dos módulos selecionados, digite <strong>RESTAURAR ERP</strong>.</p>
               <input value={confirmation} onChange={event => setConfirmation(event.target.value)} className="mt-3 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="RESTAURAR ERP" />
             </div>
+
+            {(backup.manifest.warnings?.length > 0 || backup.manifest.notIncluded?.length > 0) && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                {[...(backup.manifest.warnings || []), ...(backup.manifest.notIncluded || []).map(item => `Não incluído: ${item}`)].map((item, index) => (
+                  <p key={`${item}-${index}`} className="mt-1 first:mt-0">• {item}</p>
+                ))}
+              </div>
+            )}
 
             <button type="button" onClick={restore} disabled={!canRestore || busy} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto">
               <CheckCircle2 className="h-4 w-4" />

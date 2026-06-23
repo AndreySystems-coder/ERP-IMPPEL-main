@@ -36,6 +36,12 @@ ERP-IMPPEL-main/
 
 # Local/private uploaded assets
 attached_assets/
+/uploads/
+/attachments/
+/photos/
+/signatures/
+/generated-pdfs/
+/.data/
 
 # Real/private operational data packs
 imports/
@@ -45,3 +51,6 @@ IMPPEL-DATA-PACK/
 ERP-DADOS/
 *.real.json
 *.private.json
+ERP-IMPPEL-backup-*.zip
+ERP-IMPPEL-backup-*.json
+Relatorio_*.pdf

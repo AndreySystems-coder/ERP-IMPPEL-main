@@ -1104,7 +1104,7 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-function createMemoryStorage(): IStorage {
+export function createMemoryStorage(): IStorage {
   const data: Record<string, any[]> = {
     users: [],
     roles: [],
