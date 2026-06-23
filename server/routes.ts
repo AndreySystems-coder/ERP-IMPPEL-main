@@ -1,10 +1,11 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
-import { storage } from "./storage";
+import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
 import { api } from "@shared/routes";
 import { insertCostConfigSchema } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { createHash, randomBytes } from "node:crypto";
 
 const BCRYPT_ROUNDS = 10;
 
@@ -2278,6 +2279,127 @@ export async function registerRoutes(
   });
 
   // ─── BACKUP / RESTORE ─────────────────────────────────────────────────────────
+
+  app.get("/api/backup/completo", requireAdmin, async (_req, res) => {
+    try {
+      const snapshot = await storage.getCompleteBackupData();
+      snapshot.users = (snapshot.users || []).map((user: any) => {
+        const hasRestorableHash = /^\$2[aby]\$/.test(String(user.password || ""));
+        return {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          roleId: user.roleId,
+          jobTitle: user.jobTitle,
+          passwordHash: hasRestorableHash ? user.password : null,
+          requiresPasswordReset: !hasRestorableHash,
+        };
+      });
+
+      const modules = Object.fromEntries(
+        Object.entries(COMPLETE_BACKUP_MODULE_TABLES).map(([moduleName, tableNames]) => [
+          moduleName,
+          Object.fromEntries(tableNames.map(tableName => [tableName, snapshot[tableName] || []])),
+        ]),
+      );
+      const counts = Object.fromEntries(
+        Object.entries(modules).map(([moduleName, tables]: [string, any]) => [
+          moduleName,
+          Object.values(tables).reduce((sum: number, rows: any) => sum + (Array.isArray(rows) ? rows.length : 0), 0),
+        ]),
+      );
+      const attachmentCounts = {
+        fotosOrdensServico: (snapshot.workOrders || []).filter((row: any) => row.photos).length,
+        fotosRegistrosObra: (snapshot.obraRegistros || []).filter((row: any) => row.fotos && row.fotos !== "[]").length,
+        comprovantesMateriais: (snapshot.materialWithdrawals || []).filter((row: any) => row.withdrawalPhoto || row.withdrawalSignature || row.returnPhoto || row.returnSignature).length,
+        contratosAssinados: (snapshot.contracts || []).filter((row: any) => row.signedDocumentData).length,
+        anexosStatus: (snapshot.jobStatuses || []).filter((row: any) => row.extraFileData).length,
+      };
+      const checksum = createHash("sha256").update(JSON.stringify(modules)).digest("hex");
+      const manifest = {
+        format: "imppel-erp-complete-backup",
+        version: "2.0",
+        createdAt: new Date().toISOString(),
+        environment: process.env.DATABASE_URL ? "persistent-postgresql" : "memory-preview",
+        includedModules: Object.keys(modules),
+        notIncluded: [
+          "Arquivos PDF que foram apenas baixados pelo navegador e nao estao salvos no banco",
+          "Arquivos locais externos ao banco de dados",
+        ],
+        counts,
+        attachmentCounts,
+        checksum: { algorithm: "sha256", value: checksum, scope: "data" },
+        security: {
+          plaintextPasswordsIncluded: false,
+          passwordHashesIncluded: true,
+          secretsIncluded: false,
+          note: "Hashes bcrypt permitem restaurar logins sem expor senhas. Usuarios legados sem hash exigem redefinicao.",
+        },
+        warnings: [
+          "Guarde este pacote como dado privado; ele pode conter dados pessoais, fotos, assinaturas e documentos.",
+          "A restauracao por substituicao remove somente os modulos selecionados e exige confirmacao forte.",
+        ],
+        restoreInstructions: [
+          "Configure DATABASE_URL e execute npm run db:push em uma instalacao limpa.",
+          "Entre como Admin e abra Backups > Restauracao.",
+          "Envie este ZIP ou o JSON completo, confira o manifesto e selecione os modulos.",
+          "Use Mesclar por padrao. Em ambiente vazio, Substituir modulos selecionados preserva os IDs originais.",
+        ],
+      };
+      res.json({ type: "erp-completo", version: "2.0", exportedAt: manifest.createdAt, manifest, data: modules });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/completo", requireAdmin, async (req, res) => {
+    try {
+      const packageData = req.body?.backup;
+      const mode = req.body?.mode === "replace" ? "replace" : "merge";
+      const validModules = Object.keys(COMPLETE_BACKUP_MODULE_TABLES) as CompleteBackupModule[];
+      const requestedModules = Array.isArray(req.body?.modules) ? req.body.modules : [];
+      const modules = requestedModules.filter((name: string): name is CompleteBackupModule => validModules.includes(name as CompleteBackupModule));
+
+      if (packageData?.type !== "erp-completo" || packageData?.manifest?.format !== "imppel-erp-complete-backup" || !packageData?.data) {
+        return res.status(400).json({ message: "Pacote completo invalido ou sem manifesto." });
+      }
+      if (modules.length === 0) return res.status(400).json({ message: "Selecione ao menos um modulo." });
+      if (req.body?.confirmation !== "RESTAURAR ERP") {
+        return res.status(400).json({ message: "Confirmacao de restauracao ausente." });
+      }
+      if (mode === "replace" && req.body?.replaceConfirmation !== "SUBSTITUIR MODULOS") {
+        return res.status(400).json({ message: "Confirmacao forte para substituicao ausente." });
+      }
+
+      const expectedChecksum = String(packageData.manifest?.checksum?.value || "");
+      const actualChecksum = createHash("sha256").update(JSON.stringify(packageData.data)).digest("hex");
+      if (!expectedChecksum || expectedChecksum !== actualChecksum) {
+        return res.status(400).json({ message: "Falha de integridade: checksum do pacote nao confere." });
+      }
+
+      const flatData: Record<string, any[]> = {};
+      for (const moduleName of modules) {
+        const moduleData = packageData.data[moduleName];
+        for (const tableName of COMPLETE_BACKUP_MODULE_TABLES[moduleName]) {
+          flatData[tableName] = Array.isArray(moduleData?.[tableName]) ? moduleData[tableName] : [];
+        }
+      }
+
+      if (flatData.users) {
+        flatData.users = await Promise.all(flatData.users.map(async (user: any) => ({
+          id: user.id,
+          username: user.username,
+          role: user.role === "admin" ? "admin" : "funcionario",
+          roleId: user.roleId ?? null,
+          jobTitle: user.jobTitle ?? null,
+          password: /^\$2[aby]\$/.test(String(user.passwordHash || ""))
+            ? user.passwordHash
+            : await bcrypt.hash(randomBytes(32).toString("hex"), BCRYPT_ROUNDS),
+        })));
+      }
+
+      const result = await storage.restoreCompleteBackup(flatData, modules, mode);
+      res.json({ message: "Pacote restaurado com integridade.", mode, modules, ...result });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
 
   app.get("/api/backup/usuarios", requireAdmin, async (req, res) => {
     try {

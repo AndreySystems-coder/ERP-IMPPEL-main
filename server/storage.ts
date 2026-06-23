@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, pool } from "./db";
 import {
   users, clients, services, leads, jobs, workOrders, inventory, inventoryMovements, payments, products, jobTracking, priorityRules, transactions, settings, costConfig, obraRegistros, jobStatuses, paymentMethods, paymentConditions, obraConsumoLogs,
   contracts, warranties, warrantyIncidents, productionLogs, npsResponses, maintenanceReminders,
@@ -28,9 +28,80 @@ import {
   type SalaryDiscountRule, type SalaryDiscount,
   type InsertSalaryDiscountRule, type InsertSalaryDiscount,
 } from "@shared/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, getTableColumns } from "drizzle-orm";
+
+export const COMPLETE_BACKUP_MODULE_TABLES = {
+  usuarios: ["roles", "users"],
+  clientes: ["clients"],
+  leads: ["leads"],
+  orcamentos: ["jobs"],
+  ordensServico: ["workOrders", "jobTracking"],
+  registrosObra: ["obraRegistros", "productionLogs"],
+  controleMateriais: ["materialWithdrawals", "materialWithdrawalItems", "obraConsumoLogs", "salaryDiscounts"],
+  estoque: ["inventory", "inventoryMovements"],
+  catalogoMateriais: ["products"],
+  catalogoServicos: ["services"],
+  financeiro: ["payments", "transactions"],
+  garantias: ["warranties", "warrantyIncidents", "contracts"],
+  posVenda: ["npsResponses", "maintenanceReminders"],
+  configuracoes: ["settings", "costConfig", "priorityRules", "jobStatuses", "whatsappFlows", "whatsappSendLogs", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"],
+  formasPagamento: ["paymentMethods"],
+  condicoesPagamento: ["paymentConditions"],
+} as const;
+
+export type CompleteBackupModule = keyof typeof COMPLETE_BACKUP_MODULE_TABLES;
+export type CompleteBackupData = Record<string, any[]>;
+export type CompleteRestoreMode = "merge" | "replace";
+
+const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
+  roles: { table: roles, dbName: "roles" },
+  users: { table: users, dbName: "users" },
+  clients: { table: clients, dbName: "clients" },
+  services: { table: services, dbName: "services" },
+  leads: { table: leads, dbName: "leads" },
+  jobs: { table: jobs, dbName: "jobs" },
+  workOrders: { table: workOrders, dbName: "work_orders" },
+  inventory: { table: inventory, dbName: "inventory" },
+  inventoryMovements: { table: inventoryMovements, dbName: "inventory_movements" },
+  payments: { table: payments, dbName: "payments" },
+  products: { table: products, dbName: "products" },
+  jobTracking: { table: jobTracking, dbName: "job_tracking" },
+  priorityRules: { table: priorityRules, dbName: "priority_rules" },
+  transactions: { table: transactions, dbName: "transactions" },
+  settings: { table: settings, dbName: "settings" },
+  costConfig: { table: costConfig, dbName: "cost_config" },
+  obraRegistros: { table: obraRegistros, dbName: "obra_registros" },
+  jobStatuses: { table: jobStatuses, dbName: "job_statuses" },
+  paymentMethods: { table: paymentMethods, dbName: "payment_methods" },
+  paymentConditions: { table: paymentConditions, dbName: "payment_conditions" },
+  obraConsumoLogs: { table: obraConsumoLogs, dbName: "obra_consumo_logs" },
+  contracts: { table: contracts, dbName: "contracts" },
+  warranties: { table: warranties, dbName: "warranties" },
+  warrantyIncidents: { table: warrantyIncidents, dbName: "warranty_incidents" },
+  productionLogs: { table: productionLogs, dbName: "production_logs" },
+  npsResponses: { table: npsResponses, dbName: "nps_responses" },
+  maintenanceReminders: { table: maintenanceReminders, dbName: "maintenance_reminders" },
+  whatsappFlows: { table: whatsappFlows, dbName: "whatsapp_flows" },
+  whatsappSendLogs: { table: whatsappSendLogs, dbName: "whatsapp_send_logs" },
+  whatsappTemplates: { table: whatsappTemplates, dbName: "whatsapp_templates" },
+  quoteTemplates: { table: quoteTemplates, dbName: "quote_templates" },
+  materialWithdrawals: { table: materialWithdrawals, dbName: "material_withdrawals" },
+  materialWithdrawalItems: { table: materialWithdrawalItems, dbName: "material_withdrawal_items" },
+  salaryDiscountRules: { table: salaryDiscountRules, dbName: "salary_discount_rules" },
+  salaryDiscounts: { table: salaryDiscounts, dbName: "salary_discounts" },
+};
+
+function selectedCompleteTables(modules: CompleteBackupModule[]) {
+  return Array.from(new Set(modules.flatMap(moduleName => [...COMPLETE_BACKUP_MODULE_TABLES[moduleName]])));
+}
+
+function quoteIdentifier(value: string) {
+  return `"${value.replace(/"/g, '""')}"`;
+}
 
 export interface IStorage {
+  getCompleteBackupData(): Promise<CompleteBackupData>;
+  restoreCompleteBackup(data: CompleteBackupData, modules: CompleteBackupModule[], mode: CompleteRestoreMode): Promise<{ tables: Record<string, number>; total: number }>;
   // Auth / Users
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -961,6 +1032,76 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db.update(salaryDiscounts).set(data).where(eq(salaryDiscounts.id, id)).returning();
     return updated;
   }
+
+  async getCompleteBackupData(): Promise<CompleteBackupData> {
+    const snapshot: CompleteBackupData = {};
+    for (const [key, config] of Object.entries(COMPLETE_TABLES)) {
+      snapshot[key] = await (db as any).select().from(config.table);
+    }
+    return snapshot;
+  }
+
+  async restoreCompleteBackup(
+    data: CompleteBackupData,
+    modules: CompleteBackupModule[],
+    mode: CompleteRestoreMode,
+  ): Promise<{ tables: Record<string, number>; total: number }> {
+    const tableKeys = selectedCompleteTables(modules);
+    const client = await pool.connect();
+    const restored: Record<string, number> = {};
+
+    try {
+      await client.query("BEGIN");
+
+      if (mode === "replace") {
+        for (const key of [...tableKeys].reverse()) {
+          const config = COMPLETE_TABLES[key];
+          await client.query(`DELETE FROM ${quoteIdentifier(config.dbName)}`);
+        }
+      }
+
+      for (const key of tableKeys) {
+        const config = COMPLETE_TABLES[key];
+        const rows = Array.isArray(data[key]) ? data[key] : [];
+        const schemaColumns = getTableColumns(config.table) as Record<string, { name: string }>;
+
+        for (const row of rows) {
+          const entries = Object.entries(schemaColumns).filter(([property]) => row[property] !== undefined);
+          if (entries.length === 0) continue;
+          const columnNames = entries.map(([, column]) => quoteIdentifier(column.name));
+          const values = entries.map(([property]) => row[property] ?? null);
+          const placeholders = values.map((_, index) => `$${index + 1}`);
+          const hasId = entries.some(([property]) => property === "id");
+          const updates = entries
+            .filter(([property]) => property !== "id")
+            .map(([, column]) => `${quoteIdentifier(column.name)} = EXCLUDED.${quoteIdentifier(column.name)}`);
+          const conflict = hasId
+            ? updates.length > 0
+              ? ` ON CONFLICT ("id") DO UPDATE SET ${updates.join(", ")}`
+              : " ON CONFLICT (\"id\") DO NOTHING"
+            : "";
+          await client.query(
+            `INSERT INTO ${quoteIdentifier(config.dbName)} (${columnNames.join(", ")}) VALUES (${placeholders.join(", ")})${conflict}`,
+            values,
+          );
+        }
+
+        restored[key] = rows.length;
+        await client.query(
+          `SELECT setval(pg_get_serial_sequence($1, 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM ${quoteIdentifier(config.dbName)}`,
+          [config.dbName],
+        );
+      }
+
+      await client.query("COMMIT");
+      return { tables: restored, total: Object.values(restored).reduce((sum, count) => sum + count, 0) };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 }
 
 function createMemoryStorage(): IStorage {
@@ -1090,6 +1231,24 @@ function createMemoryStorage(): IStorage {
   const getTable = (name: string) => tableMap[name] || tableMap[name.replace(/s$/, "")] || "";
 
   const storageTarget: Record<string, any> = {
+    getCompleteBackupData: async () => Object.fromEntries(
+      Object.keys(COMPLETE_TABLES).map(key => [key, structuredClone(data[key] || [])]),
+    ),
+    restoreCompleteBackup: async (backupData: CompleteBackupData, modules: CompleteBackupModule[], mode: CompleteRestoreMode) => {
+      const restored: Record<string, number> = {};
+      for (const key of selectedCompleteTables(modules)) {
+        const rows = Array.isArray(backupData[key]) ? structuredClone(backupData[key]) : [];
+        if (mode === "replace") data[key] = [];
+        for (const row of rows) {
+          const index = data[key].findIndex(existing => existing.id === row.id);
+          if (index >= 0) data[key][index] = { ...data[key][index], ...row };
+          else data[key].push(row);
+        }
+        ids[key] = Math.max(0, ...data[key].map(row => Number(row.id) || 0)) + 1;
+        restored[key] = rows.length;
+      }
+      return { tables: restored, total: Object.values(restored).reduce((sum, count) => sum + count, 0) };
+    },
     getUserByUsername: async (username: string) => data.users.find(user => user.username === username),
     updateUserPassword: async (id: number, password: string) => updateById("users", id, { password }),
     updateUserRole: async (id: number, role: string) => updateById("users", id, { role }),

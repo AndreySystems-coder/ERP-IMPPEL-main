@@ -11,6 +11,7 @@ import BackupManager, {
   getBackupHistory, getRestoreLog, generatePDF, fmtDateTime,
   type BackupType, type BackupHistoryEntry, type RestoreLogEntry,
 } from "@/components/BackupManager";
+import { CompleteBackupGeneration, CompleteBackupRestore } from "@/components/CompleteBackupManager";
 import { useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -669,6 +670,7 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
             <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
             <p className="text-sm text-slate-600">{page.panelDescription}</p>
           </div>
+          <CompleteBackupGeneration isAdmin={isAdmin} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
               const Icon = cfg.icon;
@@ -756,6 +758,7 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
             <p className="mt-2 text-xs font-semibold text-amber-700">PDF é indicado para conferência. Para restauração segura, gere preview por texto ou envie PDF gerado pelo Backup do ERP.</p>
             <p className="mt-1 text-xs text-slate-600">Aviso de segurança: confira o preview e confirme o modo de restauração antes de aplicar.</p>
           </div>
+          <CompleteBackupRestore isAdmin={isAdmin} onRestored={() => setRefresh(r => r + 1)} />
           <AssistedRestorePanel modules={ALL_BACKUP_TYPES} onRestored={() => setRefresh(r => r + 1)} />
 
           <Card className="overflow-hidden">
