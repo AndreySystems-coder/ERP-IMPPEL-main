@@ -175,6 +175,24 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const materialSales = pgTable("material_sales", {
+  id: serial("id").primaryKey(),
+  createdByUserId: integer("created_by_user_id").notNull(),
+  createdByUsername: text("created_by_username").notNull(),
+  buyerName: text("buyer_name").notNull(),
+  buyerPhone: text("buyer_phone"),
+  notes: text("notes"),
+  items: text("items").notNull(), // JSON snapshot of products, quantities, prices and discounts
+  subtotal: real("subtotal").notNull(),
+  discountAmount: real("discount_amount").notNull().default(0),
+  total: real("total").notNull(),
+  status: text("status").notNull().default("pendente"), // pendente | aprovada | rejeitada
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const jobTracking = pgTable("job_tracking", {
   id: serial("id").primaryKey(),
   workOrderId: integer("work_order_id").notNull(),
@@ -263,6 +281,7 @@ export const obraRegistros = pgTable("obra_registros", {
   fotos: text("fotos").default("[]"),
   // Vínculo com obra/job (opcional)
   jobId: integer("job_id"),
+  workOrderId: integer("work_order_id"),
   status: text("status").notNull().default("enviado"), // enviado | revisado
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -483,6 +502,7 @@ export const materialWithdrawals = pgTable("material_withdrawals", {
   workOrderId: integer("work_order_id"),
   jobId: integer("job_id"),
   clientName: text("client_name"),
+  withdrawalDate: text("withdrawal_date"),
   status: text("status").notNull().default("pendente"), // pendente | retornado | parcial
   withdrawalPhoto: text("withdrawal_photo"),   // base64
   withdrawalSignature: text("withdrawal_signature"), // base64
@@ -555,6 +575,7 @@ export const insertInventorySchema = createInsertSchema(inventory).omit({ id: tr
 export const insertInventoryMovementSchema = createInsertSchema(inventoryMovements).omit({ id: true, createdAt: true });
 export const insertPaymentSchema = createInsertSchema(payments).omit({ id: true, createdAt: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true });
+export const insertMaterialSaleSchema = createInsertSchema(materialSales).omit({ id: true, createdAt: true, approvedAt: true });
 export const insertJobTrackingSchema = createInsertSchema(jobTracking).omit({ id: true, createdAt: true });
 export const insertPriorityRulesSchema = createInsertSchema(priorityRules).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTransactionSchema = createInsertSchema(transactions).omit({ id: true, date: true });
@@ -571,6 +592,7 @@ export type InsertInventory = z.infer<typeof insertInventorySchema>;
 export type InsertInventoryMovement = z.infer<typeof insertInventoryMovementSchema>;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type InsertMaterialSale = z.infer<typeof insertMaterialSaleSchema>;
 export type InsertJobTracking = z.infer<typeof insertJobTrackingSchema>;
 export type InsertPriorityRules = z.infer<typeof insertPriorityRulesSchema>;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
@@ -586,6 +608,7 @@ export type Inventory = typeof inventory.$inferSelect;
 export type InventoryMovement = typeof inventoryMovements.$inferSelect;
 export type Payment = typeof payments.$inferSelect;
 export type Product = typeof products.$inferSelect;
+export type MaterialSale = typeof materialSales.$inferSelect;
 export type JobTracking = typeof jobTracking.$inferSelect;
 export type PriorityRules = typeof priorityRules.$inferSelect;
 export type Transaction = typeof transactions.$inferSelect;

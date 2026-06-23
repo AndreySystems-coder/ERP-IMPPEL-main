@@ -47,7 +47,8 @@ const COMPATIBLE_PERMISSIONS: Record<string, string[]> = {
   viewInventory: ["viewInventoryCurrent", "viewInventoryCount", "viewInventoryMovements"],
   viewInventoryCurrent: ["viewInventory"],
   viewInventoryMovements: ["viewInventory"],
-  viewTeam: ["viewProductivity", "registrarMaterials", "viewWarranties", "viewPostSale"],
+  viewTeam: ["viewProductivity", "registrarMaterials", "viewMaterialSales", "viewWarranties", "viewPostSale"],
+  viewMaterialSales: ["createMaterialSales", "approveMaterialSales"],
   viewFinancials: ["viewPayments", "viewCashFlow", "viewFinancialSettings"],
   viewCashFlow: ["viewFinancials"],
   viewSettings: ["viewCostSettings", "viewStatusSettings", "viewUsers", "viewPriorityRules"],
@@ -444,7 +445,8 @@ export async function registerRoutes(
     { prefix: "/api/jobs", permissions: ["viewQuotes"] },
     { prefix: "/api/work-orders", permissions: ["viewWorkOrders", "viewAllWorkOrders"], readPermissions: ["viewWorkOrders", "viewAllWorkOrders", "registrarMaterials"] },
     { prefix: "/api/payments", permissions: ["viewPayments"] },
-    { prefix: "/api/products", permissions: ["viewInventory", "viewInventoryCurrent"] },
+    { prefix: "/api/products", permissions: ["viewInventory", "viewInventoryCurrent"], readPermissions: ["viewInventory", "viewInventoryCurrent", "viewMaterialSales", "createMaterialSales", "approveMaterialSales"] },
+    { prefix: "/api/material-sales", permissions: ["viewMaterialSales", "createMaterialSales", "approveMaterialSales"] },
     { prefix: "/api/services", permissions: ["viewQuoteRules"] },
     { prefix: "/api/inventory", permissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryMovements", "editInventory"], readPermissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryMovements", "editInventory", "registrarMaterials"] },
     { prefix: "/api/transactions", permissions: ["viewFinancials", "viewCashFlow"] },
@@ -635,6 +637,195 @@ export async function registerRoutes(
     if (job?.leadId) await reconcileLeadOperationalStatus(Number(job.leadId));
   };
 
+  const normalizeFlowText = (value: unknown) => String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+  const parseJobPrimaryContact = (job: any) => {
+    try {
+      const contacts = JSON.parse(job?.clientes || "[]");
+      const contact = Array.isArray(contacts) ? contacts[0] : null;
+      return {
+        phone: contact?.telefone || "",
+        address: [contact?.endereco, contact?.cidade].filter(Boolean).join(", "),
+      };
+    } catch {
+      return { phone: "", address: "" };
+    }
+  };
+
+  const ensureJobCustomerRelations = async (input: any) => {
+    const result = { ...input };
+    const contact = parseJobPrimaryContact(input);
+    const normalizedName = normalizeFlowText(input.clientName);
+
+    if (!result.clientId && normalizedName) {
+      const existingClient = (await storage.getClients()).find(client =>
+        normalizeFlowText(client.name) === normalizedName
+      );
+      const client = existingClient || await storage.createClient({
+        name: input.clientName,
+        phone: contact.phone || null,
+        address: contact.address || null,
+        notes: "Criado automaticamente pelo fluxo de orçamento",
+      });
+      result.clientId = client.id;
+    }
+
+    if (!result.leadId && normalizedName) {
+      const normalizedPhone = String(contact.phone || "").replace(/\D/g, "");
+      const existingLead = (await storage.getLeads()).find(lead =>
+        normalizeFlowText(lead.name) === normalizedName &&
+        (!normalizedPhone || String(lead.phone || "").replace(/\D/g, "") === normalizedPhone)
+      );
+      const lead = existingLead || await storage.createLead({
+        name: input.clientName,
+        phone: contact.phone || null,
+        source: "Orçamento ERP",
+        status: "Proposal",
+        notes: "Criado automaticamente pelo fluxo de orçamento",
+      });
+      result.leadId = lead.id;
+    }
+
+    return result;
+  };
+
+  const buildWorkOrderMaterials = async (job: any) => {
+    let serviceItems: any[] = [];
+    try { serviceItems = JSON.parse(job.serviceItems || "[]"); } catch {}
+    if (!Array.isArray(serviceItems)) serviceItems = [];
+
+    const [services, inventoryItems] = await Promise.all([storage.getServices(), storage.getInventoryItems()]);
+    const materials = new Map<number, any>();
+    for (const item of serviceItems) {
+      const service = services.find(candidate => normalizeFlowText(candidate.name) === normalizeFlowText(item.name));
+      let configuredMaterials: any[] = [];
+      try { configuredMaterials = JSON.parse(service?.serviceMaterials || "[]"); } catch {}
+      for (const material of configuredMaterials) {
+        const inventoryId = Number(material.inventoryId);
+        if (!inventoryId) continue;
+        const area = Number(item.area) || 0;
+        const quantity = material.unit === "per_kg"
+          ? Math.ceil((area * (Number(material.kilosPerM2) || 0)) / (Number(material.weightPerUnit) || 1))
+          : material.unit === "per_m2"
+            ? Number(material.quantity || 0) * area
+            : Number(material.quantity || 0);
+        const current = materials.get(inventoryId);
+        const inventoryItem = inventoryItems.find(candidate => candidate.id === inventoryId);
+        materials.set(inventoryId, {
+          inventoryId,
+          name: material.name || inventoryItem?.name || `Material #${inventoryId}`,
+          quantity: (current?.quantity || 0) + quantity,
+          unit: material.unit || "fixed",
+          inventoryUnit: inventoryItem?.unit || "unid",
+        });
+      }
+    }
+
+    return {
+      serviceItems,
+      materialsNeeded: Array.from(materials.values()).map(material => ({
+        ...material,
+        quantity: Math.ceil(material.quantity),
+      })),
+    };
+  };
+
+  const mapJobStatusToWorkOrder = (status: string) => {
+    const normalized = normalizeFlowText(status);
+    if (normalized.includes("conclu") || normalized.includes("fatur")) return "Concluída";
+    if (normalized.includes("progres") || normalized.includes("andamento")) return "Em Andamento";
+    if (normalized.includes("agend")) return "Agendada";
+    return "Planejada";
+  };
+
+  const ensureObraRecordForWorkOrder = async (order: any, job?: any) => {
+    const records = await storage.getObraRegistros();
+    const existing = records.find(record =>
+      Number(record.workOrderId) === Number(order.id) ||
+      (!record.workOrderId && job?.id && Number(record.jobId) === Number(job.id))
+    );
+    if (existing?.workOrderId) return existing;
+    const scheduledDate = order.scheduledDate ? new Date(order.scheduledDate) : new Date();
+    const data = {
+      tipo: existing?.tipo || "antes",
+      nomeObra: existing?.nomeObra || `OS #${order.id} - ${order.clientName}`,
+      enderecoObra: order.address || existing?.enderecoObra || "Endereço pendente de confirmação",
+      nomeResponsavel: existing?.nomeResponsavel || order.clientName,
+      nomeEquipe: order.teamAssigned || existing?.nomeEquipe || "A definir",
+      dataInicio: existing?.dataInicio || new Date().toISOString().slice(0, 10),
+      dataPrevisaoTermino: existing?.dataPrevisaoTermino || scheduledDate.toISOString().slice(0, 10),
+      descricaoProblema: existing?.descricaoProblema || job?.inspectionNotes || order.notes || "Conforme Ordem de Serviço",
+      tipoServico: existing?.tipoServico || order.serviceType,
+      fotos: existing?.fotos || "[]",
+      jobId: job?.id || order.jobId || null,
+      workOrderId: order.id,
+      status: existing?.status || "enviado",
+    };
+    return existing
+      ? storage.updateObraRegistro(existing.id, data)
+      : storage.createObraRegistro(data);
+  };
+
+  const ensureWorkOrderFlowForJob = async (job: any) => {
+    const normalizedStatus = normalizeFlowText(job?.status);
+    const statusConfig = (await storage.getJobStatuses()).find(status =>
+      normalizeFlowText(status.name) === normalizedStatus
+    );
+    const operationalStatuses = ["aprovado", "aprovada", "agendada", "agendado", "em progresso", "em andamento", "concluida", "concluido", "faturada", "faturado"];
+    if (!statusConfig?.generateOs && !operationalStatuses.includes(normalizedStatus)) return null;
+
+    const existingOrder = (await storage.getWorkOrders()).find(order => Number(order.jobId) === Number(job.id));
+    const contact = parseJobPrimaryContact(job);
+    const { serviceItems, materialsNeeded } = await buildWorkOrderMaterials(job);
+    const scheduledDate = job.executionDeadline ? new Date(job.executionDeadline) : new Date();
+    const orderInput = {
+      jobId: job.id,
+      clientId: job.clientId || null,
+      clientName: job.clientName,
+      address: contact.address || "Endereço pendente de confirmação",
+      serviceType: job.serviceType,
+      materialsNeeded: materialsNeeded.length ? JSON.stringify(materialsNeeded) : null,
+      selectedServices: serviceItems.length ? JSON.stringify(serviceItems.map(item => item.name)) : null,
+      scheduledDate,
+      status: mapJobStatusToWorkOrder(job.status),
+      notes: `OS vinculada ao orçamento #${String(job.orcamentoNumero ?? job.id).padStart(4, "0")}`,
+    };
+    const order = existingOrder
+      ? await storage.updateWorkOrder(existingOrder.id, orderInput)
+      : await storage.createWorkOrder(orderInput);
+    if (!order) return null;
+
+    const obraRecords = await storage.getObraRegistros();
+    const existingObra = obraRecords.find(record =>
+      Number(record.workOrderId) === Number(order.id) ||
+      (!record.workOrderId && Number(record.jobId) === Number(job.id))
+    );
+    const forecast = scheduledDate.toISOString().slice(0, 10);
+    const obraInput = {
+      tipo: existingObra?.tipo || "antes",
+      nomeObra: `OS #${order.id} - ${job.clientName}`,
+      enderecoObra: contact.address || "Endereço pendente de confirmação",
+      nomeResponsavel: job.clientName,
+      nomeEquipe: existingObra?.nomeEquipe || "A definir",
+      dataInicio: existingObra?.dataInicio || new Date().toISOString().slice(0, 10),
+      dataPrevisaoTermino: forecast,
+      descricaoProblema: job.inspectionNotes || "Conforme orçamento aprovado",
+      tipoServico: job.serviceType,
+      fotos: existingObra?.fotos || "[]",
+      jobId: job.id,
+      workOrderId: order.id,
+      status: existingObra?.status || "enviado",
+    };
+    if (existingObra) await storage.updateObraRegistro(existingObra.id, obraInput);
+    else await storage.createObraRegistro(obraInput);
+    await updateLeadForWorkOrderFlow(order);
+    return order;
+  };
+
   // Leads
   app.get(api.leads.list.path, async (req, res) => {
     const leads = await reconcileAllLeadOperationalStatuses();
@@ -683,8 +874,10 @@ export async function registerRoutes(
   app.post(api.jobs.create.path, async (req, res) => {
     try {
       const input = api.jobs.create.input.parse(req.body);
-      const job = await storage.createJob(input);
+      const relatedInput = await ensureJobCustomerRelations(input);
+      const job = await storage.createJob(relatedInput);
       await updateLeadForJobFlow(job);
+      await ensureWorkOrderFlowForJob(job);
       res.status(201).json(job);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -697,12 +890,18 @@ export async function registerRoutes(
     try {
       const input = api.jobs.update.input.parse(req.body);
       const previousJob = await storage.getJob(Number(req.params.id));
-      const job = await storage.updateJob(Number(req.params.id), input);
+      const relations = await ensureJobCustomerRelations({ ...previousJob, ...input });
+      const job = await storage.updateJob(Number(req.params.id), {
+        ...input,
+        clientId: relations.clientId,
+        leadId: relations.leadId,
+      });
       if (!job) return res.status(404).json({ message: "Not found" });
       await updateLeadForJobFlow(job);
       if (previousJob?.leadId && previousJob.leadId !== job.leadId) {
         await reconcileLeadOperationalStatus(Number(previousJob.leadId));
       }
+      await ensureWorkOrderFlowForJob(job);
       res.json(job);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -728,8 +927,18 @@ export async function registerRoutes(
     res.json(order);
   });
   app.post(api.workOrders.create.path, async (req, res) => {
-    const order = await storage.createWorkOrder(req.body);
+    const existingOrder = req.body.jobId
+      ? (await storage.getWorkOrders()).find(candidate => Number(candidate.jobId) === Number(req.body.jobId))
+      : null;
+    const order = existingOrder || await storage.createWorkOrder(req.body);
     await updateLeadForWorkOrderFlow(order);
+    if (order?.jobId) {
+      const job = await storage.getJob(Number(order.jobId));
+      if (job) await ensureWorkOrderFlowForJob(job);
+      await ensureObraRecordForWorkOrder(order, job);
+    } else {
+      await ensureObraRecordForWorkOrder(order);
+    }
     res.status(201).json(order);
   });
   app.put(api.workOrders.update.path, async (req, res) => {
@@ -738,6 +947,10 @@ export async function registerRoutes(
     if (order) await updateLeadForWorkOrderFlow(order);
     if (previousOrder?.jobId && previousOrder.jobId !== order?.jobId) {
       await updateLeadForWorkOrderFlow(previousOrder);
+    }
+    if (order) {
+      const job = order.jobId ? await storage.getJob(Number(order.jobId)) : undefined;
+      await ensureObraRecordForWorkOrder(order, job);
     }
     res.json(order);
   });
@@ -2022,13 +2235,13 @@ export async function registerRoutes(
       const inventoryById = new Map(inventoryItems.map(item => [item.id, item]));
       const users = await storage.getUsers();
       const usersById = new Map(users.map(user => [user.id, user]));
-      const now = new Date();
-      const dateStr = now.toISOString().split("T")[0];
       const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
       const created: any[] = [];
 
       for (const entry of entries) {
         const user = usersById.get(Number(entry.userId));
+        const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date || "")) ? String(entry.date) : new Date().toISOString().slice(0, 10);
+        const entryDate = new Date(`${dateStr}T12:00:00`);
         const rawItems = Array.isArray(entry.items) ? entry.items : [];
         if (!user || !rawItems.length) continue;
         const safeItems = rawItems.map((item: any) => {
@@ -2047,6 +2260,7 @@ export async function registerRoutes(
             workOrderId: entry.workOrderId ? Number(entry.workOrderId) : null,
             jobId: null,
             clientName: entry.clientName || null,
+            withdrawalDate: dateStr,
             status: "pendente",
             withdrawalPhoto: null,
             withdrawalSignature: null,
@@ -2065,8 +2279,8 @@ export async function registerRoutes(
             type: "SAÍDA",
             quantity: item.quantity,
             date: dateStr,
-            month: months[now.getMonth()],
-            notes: `Origem: REGISTRO_RAPIDO_ADMIN | Retirada #${withdrawal.id} | Responsavel: ${user.username}`,
+            month: months[entryDate.getMonth()],
+            notes: `Origem: REGISTRO_RAPIDO_ADMIN | Retirada #${withdrawal.id} | Responsavel: ${user.username} | Data informada: ${dateStr}`,
           });
         }
         created.push(withdrawal);
@@ -2097,7 +2311,7 @@ export async function registerRoutes(
       const month = months[now.getMonth()];
 
       const withdrawal = await storage.createMaterialWithdrawal(
-        { userId: effectiveUserId, username: effectiveUsername, workOrderId: workOrderId || null, jobId: jobId || null, clientName: clientName || null,
+        { userId: effectiveUserId, username: effectiveUsername, workOrderId: workOrderId || null, jobId: jobId || null, clientName: clientName || null, withdrawalDate: dateStr,
           status: "pendente", withdrawalPhoto, withdrawalSignature, notes: notes || null,
           returnPhoto: null, returnSignature: null, returnNotes: null },
         items.map((i: any) => ({ withdrawalId: 0, inventoryId: i.inventoryId, productName: i.productName, unit: i.unit || "unid", quantity: i.quantity }))
@@ -2292,6 +2506,118 @@ export async function registerRoutes(
         erpVersion: process.env.npm_package_version || "1.0.0",
       }));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Material sales / cart
+  app.get("/api/material-sales", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+      const canApprove = user.role === "admin" || await userHasAnyPermission(user.id, ["approveMaterialSales"]);
+      const [sales, products, inventoryItems] = await Promise.all([
+        storage.getMaterialSales(), storage.getProducts(), storage.getInventoryItems(),
+      ]);
+      const setting = (await storage.getSettings()).find(item => item.key === "materialSalesMaxDiscount");
+      res.json({
+        sales: canApprove ? sales : sales.filter(sale => sale.createdByUserId === user.id),
+        generalMaxDiscount: Number(setting?.value ?? 10),
+        canApprove,
+        catalog: products.filter(product => product.active && product.inventoryId).map(product => ({
+          ...product,
+          stock: Number(inventoryItems.find(item => item.id === product.inventoryId)?.quantity || 0),
+        })),
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Internal Error" });
+    }
+  });
+
+  app.post("/api/material-sales", async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+      const buyerName = String(req.body.buyerName || "").trim();
+      const requestedItems = Array.isArray(req.body.items) ? req.body.items : [];
+      if (!buyerName || requestedItems.length === 0) return res.status(400).json({ message: "Informe o comprador e ao menos um material." });
+
+      const [products, inventoryItems, settings] = await Promise.all([
+        storage.getProducts(), storage.getInventoryItems(), storage.getSettings(),
+      ]);
+      const generalMaxDiscount = Number(settings.find(item => item.key === "materialSalesMaxDiscount")?.value ?? 10);
+      let subtotal = 0;
+      let total = 0;
+      const items = requestedItems.map((requested: any) => {
+        const product = products.find(candidate => candidate.id === Number(requested.productId) && candidate.active);
+        if (!product || !product.inventoryId) throw new Error("Produto inválido ou sem vínculo com estoque.");
+        const inventoryItem = inventoryItems.find(candidate => candidate.id === product.inventoryId);
+        const quantity = Math.max(1, Math.floor(Number(requested.quantity) || 0));
+        const discountPercent = Math.max(0, Number(requested.discountPercent) || 0);
+        const productLimit = Math.max(0, Number(product.maxDiscount) || 0);
+        const maxDiscount = Math.min(generalMaxDiscount, productLimit);
+        if (discountPercent > maxDiscount) throw new Error(`Desconto acima do limite para ${product.name}.`);
+        if (!inventoryItem || quantity > Number(inventoryItem.quantity)) throw new Error(`Estoque insuficiente para ${product.name}.`);
+        const unitPrice = Number(product.salePrice) || 0;
+        const originalTotal = unitPrice * quantity;
+        const itemTotal = originalTotal * (1 - discountPercent / 100);
+        subtotal += originalTotal;
+        total += itemTotal;
+        return {
+          productId: product.id,
+          inventoryId: product.inventoryId,
+          name: product.name,
+          unit: product.unit || inventoryItem.unit || "un",
+          quantity,
+          unitPrice,
+          discountPercent,
+          maxDiscount,
+          total: Number(itemTotal.toFixed(2)),
+        };
+      });
+
+      const sale = await storage.createMaterialSale({
+        createdByUserId: user.id,
+        createdByUsername: user.username,
+        buyerName,
+        buyerPhone: String(req.body.buyerPhone || "").trim() || null,
+        notes: String(req.body.notes || "").trim() || null,
+        items: JSON.stringify(items),
+        subtotal: Number(subtotal.toFixed(2)),
+        discountAmount: Number((subtotal - total).toFixed(2)),
+        total: Number(total.toFixed(2)),
+        status: "pendente",
+        approvedByUserId: null,
+        approvedByUsername: null,
+      });
+      res.status(201).json(sale);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message || "Não foi possível criar a venda." });
+    }
+  });
+
+  app.post("/api/material-sales/:id/approve", requireAnyPermission(["approveMaterialSales"]), async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) return res.status(401).json({ message: "Não autenticado" });
+      const sale = await storage.approveMaterialSale(Number(req.params.id), { id: user.id, username: user.username });
+      if (!sale) return res.status(404).json({ message: "Venda não encontrada" });
+      res.json(sale);
+    } catch (err: any) {
+      res.status(409).json({ message: err.message || "Não foi possível aprovar a venda." });
+    }
+  });
+
+  app.post("/api/material-sales/:id/reject", requireAnyPermission(["approveMaterialSales"]), async (req, res) => {
+    const sale = await storage.getMaterialSale(Number(req.params.id));
+    if (!sale) return res.status(404).json({ message: "Venda não encontrada" });
+    if (sale.status !== "pendente") return res.status(409).json({ message: "A venda já foi processada." });
+    const updated = await storage.updateMaterialSale(sale.id, { status: "rejeitada" });
+    res.json(updated);
+  });
+
+  app.post("/api/material-sales/settings", requireAnyPermission(["approveMaterialSales"]), async (req, res) => {
+    const value = Math.max(0, Math.min(100, Number(req.body.generalMaxDiscount) || 0));
+    const setting = await storage.updateSetting("materialSalesMaxDiscount", value);
+    res.json(setting);
   });
 
   app.post("/api/backup/restore/completo", requireAdmin, async (req, res) => {

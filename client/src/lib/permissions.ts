@@ -27,6 +27,9 @@ export type PermissionKey =
   | "viewProductivity"
   | "registrarMaterials"
   | "viewAllMaterials"
+  | "viewMaterialSales"
+  | "createMaterialSales"
+  | "approveMaterialSales"
   | "viewWarranties"
   | "viewPostSale"
   | "viewFinancials"
@@ -51,7 +54,8 @@ const COMPATIBILITY: Partial<Record<PermissionKey, PermissionKey[]>> = {
   viewInventory: ["viewInventoryCurrent", "viewInventoryCount", "viewInventoryMovements"],
   viewInventoryCurrent: ["viewInventory"],
   viewInventoryMovements: ["viewInventory"],
-  viewTeam: ["viewProductivity", "registrarMaterials", "viewWarranties", "viewPostSale"],
+  viewTeam: ["viewProductivity", "registrarMaterials", "viewMaterialSales", "viewWarranties", "viewPostSale"],
+  viewMaterialSales: ["createMaterialSales", "approveMaterialSales"],
   viewFinancials: ["viewPayments", "viewCashFlow", "viewFinancialSettings"],
   viewCashFlow: ["viewFinancials"],
   viewSettings: ["viewCostSettings", "viewStatusSettings", "viewUsers", "viewPriorityRules"],
@@ -62,7 +66,6 @@ const DEFAULT_EMPLOYEE_PERMISSIONS: PermissionKey[] = ["viewWorks", "viewObraReg
 
 export function canAccess(user: PermissionUser | null | undefined, permission?: PermissionKey) {
   if (!permission) return true;
-  if (permission === "viewDashboard") return !!user;
   if (user?.role === "admin") return true;
 
   const permissions = user?.permissions || {};
@@ -80,7 +83,7 @@ export function canAccessAny(user: PermissionUser | null | undefined, permission
 }
 
 const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = [
-  { path: "/", permissions: ["viewDashboard"] },
+  { path: "/dashboard", permissions: ["viewDashboard"] },
   { path: "/crm", permissions: ["viewCrm", "viewLeads", "viewCrmWhatsapp", "viewClients"] },
   { path: "/leads", permissions: ["viewLeads"] },
   { path: "/crm-whatsapp", permissions: ["viewCrmWhatsapp"] },
@@ -106,7 +109,7 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/financials", permissions: ["viewFinancials", "viewCashFlow"] },
   { path: "/pagamentos-config", permissions: ["viewFinancialSettings"] },
   { path: "/relatorios", permissions: ["viewFinancials"] },
-  { path: "/equipe", permissions: ["viewTeam", "viewProductivity", "registrarMaterials", "viewWarranties", "viewPostSale"] },
+  { path: "/equipe", permissions: ["viewTeam", "viewProductivity", "registrarMaterials", "viewMaterialSales", "viewWarranties", "viewPostSale"] },
   { path: "/equipe-produtividade", permissions: ["viewProductivity"] },
   { path: "/controle-materiais", permissions: ["registrarMaterials"] },
   { path: "/garantias", permissions: ["viewWarranties"] },
@@ -126,6 +129,26 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/backups/restauracao", permissions: ["viewBackups", "viewRestore"] },
   { path: "/backups", permissions: ["viewBackups", "viewBackupGeneration", "viewRestore", "viewExports"] },
 ];
+
+const LANDING_OPTIONS: Array<{ path: string; permissions: PermissionKey[] }> = [
+  { path: "/controle-materiais", permissions: ["registrarMaterials"] },
+  { path: "/vendas-materiais", permissions: ["viewMaterialSales", "createMaterialSales", "approveMaterialSales"] },
+  { path: "/equipe", permissions: ["viewTeam", "viewProductivity", "viewMaterialSales", "viewWarranties", "viewPostSale"] },
+  { path: "/orcamentos", permissions: ["viewQuotes", "viewQuoteTemplates", "viewQuoteRules"] },
+  { path: "/obras", permissions: ["viewWorks", "viewWorkOrders", "viewObraRegistro", "viewCalendar"] },
+  { path: "/estoque", permissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryCount", "viewInventoryMovements"] },
+  { path: "/crm", permissions: ["viewCrm", "viewLeads", "viewCrmWhatsapp", "viewClients"] },
+  { path: "/financeiro", permissions: ["viewFinancials", "viewPayments", "viewCashFlow", "viewFinancialSettings"] },
+  { path: "/backups-hub", permissions: ["viewBackups", "viewBackupGeneration", "viewRestore", "viewExports"] },
+  { path: "/configuracoes", permissions: ["viewSettings", "viewCostSettings", "viewStatusSettings", "viewUsers", "viewPriorityRules"] },
+  { path: "/dashboard", permissions: ["viewDashboard"] },
+];
+
+export function getDefaultLandingPath(user: PermissionUser | null | undefined) {
+  if (!user) return "/login";
+  if (user.role === "admin") return "/dashboard";
+  return LANDING_OPTIONS.find(option => canAccessAny(user, option.permissions))?.path || "/sem-acesso";
+}
 
 export function permissionsForPath(path: string) {
   const exact = PATH_PERMISSIONS.find((entry) => entry.path === path);

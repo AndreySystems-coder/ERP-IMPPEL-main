@@ -44,6 +44,7 @@ export const MODULE_LABELS: Record<string, string> = {
   controleMateriais: "Controle de materiais",
   estoque: "Estoque e movimentações",
   catalogoMateriais: "Catálogo de materiais/produtos",
+  vendasMateriais: "Venda de materiais",
   catalogoServicos: "Catálogo de serviços",
   financeiro: "Financeiro",
   garantias: "Garantias, incidentes e contratos",
@@ -70,6 +71,7 @@ export const TABLE_LABELS: Record<string, string> = {
   inventory: "Estoque atual",
   inventoryMovements: "Movimentações de estoque",
   products: "Catálogo de materiais/produtos",
+  materialSales: "Pedidos e vendas de materiais",
   services: "Catálogo de serviços",
   payments: "Pagamentos",
   transactions: "Movimentações financeiras",
@@ -132,6 +134,7 @@ export function buildTechnicalFiles(backup: CompleteBackupPackage): TechnicalFil
     ["estoque.json", "estoque", { inventory: array(inventoryData.inventory) }],
     ["movimentacoes-estoque.json", "movimentacoes-estoque", { inventoryMovements: array(inventoryData.inventoryMovements) }],
     ["catalogo-materiais.json", "catalogo-materiais", backup.data.catalogoMateriais || {}],
+    ["vendas-materiais.json", "vendas-materiais", backup.data.vendasMateriais || {}],
     ["catalogo-servicos.json", "catalogo-servicos", backup.data.catalogoServicos || {}],
     ["financeiro.json", "financeiro", backup.data.financeiro || {}],
     ["garantias.json", "garantias", { warranties: array(warrantyData.warranties), warrantyIncidents: array(warrantyData.warrantyIncidents), contracts: array(warrantyData.contracts) }],
@@ -201,10 +204,10 @@ export function extractStoredAttachments(backup: CompleteBackupPackage): Extract
     ));
   }
   for (const record of array(backup.data.registrosObra?.obraRegistros)) {
-    parsePhotos(record.photos).forEach((photo: any, index) => add(
+    parsePhotos(record.fotos).forEach((photo: any, index) => add(
       "photos",
-      `obraRegistros#${record.id}.photos[${index}]`,
-      photo?.data,
+      `obraRegistros#${record.id}.fotos[${index}]`,
+      photo?.data || photo?.base64,
       `registro-obra-${record.id}-${photo?.category || "foto"}-${index + 1}`,
     ));
   }

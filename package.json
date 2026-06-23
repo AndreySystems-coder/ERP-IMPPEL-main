@@ -9,6 +9,7 @@
     "start": "node dist/index.cjs",
     "check": "tsc",
     "test:backup": "tsx script/test-complete-backup.ts",
+    "test:operational": "tsx script/test-operational-flows.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

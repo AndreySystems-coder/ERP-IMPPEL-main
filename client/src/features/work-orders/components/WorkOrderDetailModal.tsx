@@ -7,6 +7,8 @@ import { Button } from "@/components/Button";
 import type { ServiceProgress, WorkOrderMaterial, WorkOrderMaterialReconciliationResponse } from "@/features/work-orders/types";
 import { getDisplayUnit, parseMaterialsNeeded } from "@/features/work-orders/utils";
 import { WorkOrderProgressSection } from "@/features/work-orders/components/WorkOrderProgressSection";
+import { MovementTimelineCard } from "@/features/materials/components/MovementTimelineCard";
+import type { Withdrawal } from "@/features/materials/types";
 
 type ChecklistItem = { key: string; label: string };
 
@@ -26,6 +28,8 @@ type WorkOrderDetailModalProps = {
   consumoLogs: any[];
   pendingMaterials: any[];
   materialReconciliation?: WorkOrderMaterialReconciliationResponse | null;
+  obraRecords: any[];
+  materialWithdrawals: Withdrawal[];
   isLoadingMaterialReconciliation?: boolean;
   ignorePendingMaterials: boolean;
   obraObservations: string;
@@ -79,6 +83,8 @@ export function WorkOrderDetailModal({
   consumoLogs,
   pendingMaterials,
   materialReconciliation,
+  obraRecords,
+  materialWithdrawals,
   isLoadingMaterialReconciliation,
   ignorePendingMaterials,
   obraObservations,
@@ -187,7 +193,35 @@ export function WorkOrderDetailModal({
           )}
 
           {activeTab === "obra" && (
-            <WorkOrderProgressSection
+            <div className="space-y-6 p-4 sm:p-6">
+              {obraRecords.length > 0 && (
+                <section className="border-b border-slate-200 pb-5">
+                  <h3 className="mb-3 text-sm font-bold text-slate-900">Registros vinculados à OS</h3>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {obraRecords.map(record => (
+                      <div key={record.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <strong className="text-slate-800">{record.nomeObra}</strong>
+                          <span className="rounded bg-white px-2 py-0.5 text-xs font-semibold uppercase text-slate-600">{record.tipo}</span>
+                        </div>
+                        <p className="mt-1 text-slate-600">{record.enderecoObra}</p>
+                        <p className="mt-2 text-xs text-slate-500">Equipe: {record.nomeEquipe} · Previsão: {record.dataPrevisaoTermino}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {materialWithdrawals.length > 0 && (
+                <section className="border-b border-slate-200 pb-5">
+                  <h3 className="mb-3 text-sm font-bold text-slate-900">Retiradas, devoluções e comprovantes</h3>
+                  <div className="space-y-3">
+                    {materialWithdrawals.map(withdrawal => <MovementTimelineCard key={withdrawal.id} withdrawal={withdrawal} />)}
+                  </div>
+                </section>
+              )}
+
+              <WorkOrderProgressSection
               detailWO={workOrder}
               serviceProgress={serviceProgress}
               allExceeded={allExceeded}
@@ -224,7 +258,8 @@ export function WorkOrderDetailModal({
               onSave={onSave}
               onFinalize={onFinalize}
               onGenerateReport={onGenerateReport}
-            />
+              />
+            </div>
           )}
         </div>
       </div>

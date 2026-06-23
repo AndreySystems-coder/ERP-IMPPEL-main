@@ -4,6 +4,7 @@ import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { ArrowRight, CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useLocation } from "wouter";
+import { getDefaultLandingPath } from "@/lib/permissions";
 
 
 export default function Login() {
@@ -15,8 +16,8 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await login.mutateAsync({ username, password });
-      setLocation("/");
+      const user = await login.mutateAsync({ username, password });
+      setLocation(getDefaultLandingPath(user));
     } catch (err) {
       // Error handled by mutation
     }

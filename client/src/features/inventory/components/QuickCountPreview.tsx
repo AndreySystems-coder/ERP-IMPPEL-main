@@ -2,7 +2,7 @@ import { AlertTriangle, CheckCircle, Package, TrendingDown, TrendingUp, X } from
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import type { QuickCountRow } from "@/features/inventory/types";
+import type { InventoryItem, QuickCountRow } from "@/features/inventory/types";
 
 type QuickCountPreviewProps = {
   countedRows: QuickCountRow[];
@@ -15,7 +15,10 @@ type QuickCountPreviewProps = {
   totalActions: number;
   confirmZero: boolean;
   isApplying: boolean;
+  inventory: InventoryItem[];
   onConfirmZeroChange: (checked: boolean) => void;
+  onReviewRow: (row: QuickCountRow, patch: { inventoryId?: number | null; date?: string; qty?: number }) => void;
+  onRemoveRow: (row: QuickCountRow) => void;
   onApply: () => void;
 };
 
@@ -46,7 +49,10 @@ export function QuickCountPreview({
   totalActions,
   confirmZero,
   isApplying,
+  inventory,
   onConfirmZeroChange,
+  onReviewRow,
+  onRemoveRow,
   onApply,
 }: QuickCountPreviewProps) {
   if (countedRows.length === 0 && toZeroRows.length === 0) return null;
@@ -97,6 +103,26 @@ export function QuickCountPreview({
           </div>
         )}
       </div>
+
+      <Card className="p-4">
+        <div className="mb-3">
+          <p className="text-sm font-bold text-slate-800">Revisão manual</p>
+          <p className="text-xs text-slate-500">Corrija data, material ou quantidade antes de aplicar. Itens não reconhecidos bloqueiam a confirmação.</p>
+        </div>
+        <div className="space-y-2">
+          {countedRows.filter(row => !row.isDuplicate).map((row, index) => (
+            <div key={`${row.inputName}-${index}`} className={`grid gap-2 rounded-lg border p-3 lg:grid-cols-[140px_minmax(0,1fr)_100px_42px] ${!row.matchedItem || row.confidence < 70 ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}>
+              <input type="date" value={row.date || ""} onChange={event => onReviewRow(row, { date: event.target.value })} className="h-10 rounded-md border border-slate-200 bg-white px-2 text-sm" aria-label={`Data de ${row.inputName}`} />
+              <select value={row.matchedItem?.id || ""} onChange={event => onReviewRow(row, { inventoryId: Number(event.target.value) || null })} className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm" aria-label={`Material de ${row.inputName}`}>
+                <option value="">Revisar: {row.inputName}</option>
+                {inventory.map(item => <option key={item.id} value={item.id}>{item.name} ({item.quantity} {item.unit || "unid"})</option>)}
+              </select>
+              <input type="number" min="0" step="1" value={row.qty} onChange={event => onReviewRow(row, { qty: Math.max(0, Number(event.target.value)) })} className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm" aria-label={`Quantidade de ${row.inputName}`} />
+              <Button variant="outline" onClick={() => onRemoveRow(row)} className="h-10 px-2" title="Remover linha"><X className="h-4 w-4 text-red-600" /></Button>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
@@ -271,7 +297,7 @@ export function QuickCountPreview({
           <Button
             onClick={onApply}
             isLoading={isApplying}
-            disabled={toZeroRows.length > 0 && !confirmZero}
+            disabled={noMatch.length > 0 || (toZeroRows.length > 0 && !confirmZero)}
             className="min-h-11 whitespace-nowrap bg-primary hover:bg-primary/90"
             data-testid="button-apply-rapida"
           >

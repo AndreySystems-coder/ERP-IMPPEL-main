@@ -1,6 +1,6 @@
 import { db, pool } from "./db";
 import {
-  users, clients, services, leads, jobs, workOrders, inventory, inventoryMovements, payments, products, jobTracking, priorityRules, transactions, settings, costConfig, obraRegistros, jobStatuses, paymentMethods, paymentConditions, obraConsumoLogs,
+  users, clients, services, leads, jobs, workOrders, inventory, inventoryMovements, payments, products, materialSales, jobTracking, priorityRules, transactions, settings, costConfig, obraRegistros, jobStatuses, paymentMethods, paymentConditions, obraConsumoLogs,
   contracts, warranties, warrantyIncidents, productionLogs, npsResponses, maintenanceReminders,
   whatsappFlows, whatsappSendLogs, whatsappTemplates, quoteTemplates,
   materialWithdrawals, materialWithdrawalItems,
@@ -27,6 +27,7 @@ import {
   type InsertMaterialWithdrawal, type InsertMaterialWithdrawalItem,
   type SalaryDiscountRule, type SalaryDiscount,
   type InsertSalaryDiscountRule, type InsertSalaryDiscount,
+  type MaterialSale, type InsertMaterialSale,
 } from "@shared/schema";
 import { eq, desc, sql, getTableColumns } from "drizzle-orm";
 
@@ -40,6 +41,7 @@ export const COMPLETE_BACKUP_MODULE_TABLES = {
   controleMateriais: ["materialWithdrawals", "materialWithdrawalItems", "obraConsumoLogs", "salaryDiscounts"],
   estoque: ["inventory", "inventoryMovements"],
   catalogoMateriais: ["products"],
+  vendasMateriais: ["materialSales"],
   catalogoServicos: ["services"],
   financeiro: ["payments", "transactions"],
   garantias: ["warranties", "warrantyIncidents", "contracts"],
@@ -65,6 +67,7 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   inventoryMovements: { table: inventoryMovements, dbName: "inventory_movements" },
   payments: { table: payments, dbName: "payments" },
   products: { table: products, dbName: "products" },
+  materialSales: { table: materialSales, dbName: "material_sales" },
   jobTracking: { table: jobTracking, dbName: "job_tracking" },
   priorityRules: { table: priorityRules, dbName: "priority_rules" },
   transactions: { table: transactions, dbName: "transactions" },
@@ -183,6 +186,13 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: number, updates: Partial<InsertProduct>): Promise<Product | undefined>;
   deleteProduct(id: number): Promise<void>;
+
+  // Material sales
+  getMaterialSales(): Promise<MaterialSale[]>;
+  getMaterialSale(id: number): Promise<MaterialSale | undefined>;
+  createMaterialSale(sale: InsertMaterialSale): Promise<MaterialSale>;
+  updateMaterialSale(id: number, updates: Partial<InsertMaterialSale>): Promise<MaterialSale | undefined>;
+  approveMaterialSale(id: number, approver: { id: number; username: string }): Promise<MaterialSale | undefined>;
 
   // Job Tracking
   getJobTracking(workOrderId: number): Promise<JobTracking | undefined>;
@@ -600,6 +610,61 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteProduct(id: number): Promise<void> {
     await db.delete(products).where(eq(products.id, id));
+  }
+
+  async getMaterialSales(): Promise<MaterialSale[]> {
+    return await db.select().from(materialSales).orderBy(desc(materialSales.createdAt));
+  }
+  async getMaterialSale(id: number): Promise<MaterialSale | undefined> {
+    const [sale] = await db.select().from(materialSales).where(eq(materialSales.id, id));
+    return sale;
+  }
+  async createMaterialSale(sale: InsertMaterialSale): Promise<MaterialSale> {
+    const [created] = await db.insert(materialSales).values(sale).returning();
+    return created;
+  }
+  async updateMaterialSale(id: number, updates: Partial<InsertMaterialSale>): Promise<MaterialSale | undefined> {
+    const [updated] = await db.update(materialSales).set(updates).where(eq(materialSales.id, id)).returning();
+    return updated;
+  }
+  async approveMaterialSale(id: number, approver: { id: number; username: string }): Promise<MaterialSale | undefined> {
+    return db.transaction(async tx => {
+      const [sale] = await tx.select().from(materialSales).where(eq(materialSales.id, id));
+      if (!sale || sale.status !== "pendente") return sale;
+      const items = JSON.parse(sale.items || "[]") as Array<{ inventoryId: number; name: string; quantity: number }>;
+      const inventoryRows = await tx.select().from(inventory);
+      for (const item of items) {
+        const inventoryItem = inventoryRows.find(row => row.id === Number(item.inventoryId));
+        if (!inventoryItem || Number(inventoryItem.quantity) < Number(item.quantity)) {
+          throw new Error(`Estoque insuficiente para ${item.name}`);
+        }
+      }
+
+      const now = new Date();
+      const month = now.toLocaleDateString("pt-BR", { month: "long" });
+      for (const item of items) {
+        await tx.insert(inventoryMovements).values({
+          inventoryId: Number(item.inventoryId),
+          productName: item.name,
+          type: "SAÍDA",
+          quantity: Number(item.quantity),
+          date: now.toISOString().slice(0, 10),
+          month,
+          notes: `Venda de materiais #${sale.id}`,
+        });
+        await tx.update(inventory)
+          .set({ quantity: sql`COALESCE(${inventory.quantity}, 0) - ${Number(item.quantity)}` })
+          .where(eq(inventory.id, Number(item.inventoryId)));
+      }
+
+      const [approved] = await tx.update(materialSales).set({
+        status: "aprovada",
+        approvedByUserId: approver.id,
+        approvedByUsername: approver.username,
+        approvedAt: now,
+      }).where(eq(materialSales.id, id)).returning();
+      return approved;
+    });
   }
 
   // Job Tracking
@@ -1117,6 +1182,7 @@ export function createMemoryStorage(): IStorage {
     inventoryMovements: [],
     payments: [],
     products: [],
+    materialSales: [],
     jobTracking: [],
     priorityRules: [],
     transactions: [],
@@ -1183,6 +1249,8 @@ export function createMemoryStorage(): IStorage {
     Payments: "payments",
     Product: "products",
     Products: "products",
+    MaterialSale: "materialSales",
+    MaterialSales: "materialSales",
     JobTracking: "jobTracking",
     PriorityRules: "priorityRules",
     Transaction: "transactions",
@@ -1258,6 +1326,24 @@ export function createMemoryStorage(): IStorage {
       const existing = data.settings.find(setting => setting.key === key);
       if (existing) return Object.assign(existing, { value });
       return insert("settings", { key, value });
+    },
+    approveMaterialSale: async (id: number, approver: { id: number; username: string }) => {
+      const sale = data.materialSales.find(row => row.id === id);
+      if (!sale || sale.status !== "pendente") return sale;
+      const items = JSON.parse(sale.items || "[]");
+      for (const item of items) {
+        const inventoryItem = data.inventory.find(row => row.id === Number(item.inventoryId));
+        if (!inventoryItem || Number(inventoryItem.quantity) < Number(item.quantity)) throw new Error(`Estoque insuficiente para ${item.name}`);
+      }
+      for (const item of items) {
+        const inventoryItem = data.inventory.find(row => row.id === Number(item.inventoryId));
+        inventoryItem.quantity -= Number(item.quantity);
+        insert("inventoryMovements", {
+          inventoryId: Number(item.inventoryId), productName: item.name, type: "SAÍDA", quantity: Number(item.quantity),
+          date: new Date().toISOString().slice(0, 10), notes: `Venda de materiais #${sale.id}`,
+        });
+      }
+      return Object.assign(sale, { status: "aprovada", approvedByUserId: approver.id, approvedByUsername: approver.username, approvedAt: now() });
     },
     getCostConfig: async () => data.costConfig[0],
     updateCostConfig: async (updates: any) => {

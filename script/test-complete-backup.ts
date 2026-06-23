@@ -27,11 +27,12 @@ const syntheticData: Record<string, any[]> = {
   jobs: [{ id: 1, leadId: 1, clientId: 1, clientName: "Cliente Sintetico", serviceType: "Teste", status: "Aprovado" }],
   workOrders: [{ id: 1, jobId: 1, clientId: 1, clientName: "Cliente Sintetico", serviceType: "Teste", status: "Em Progresso", photos: JSON.stringify([{ category: "before", data: png }]) }],
   jobTracking: [{ id: 1, workOrderId: 1, status: "Em Progresso" }],
-  obraRegistros: [{ id: 1, workOrderId: 1, tipo: "antes", photos: JSON.stringify([{ category: "antes", data: png }]) }],
+  obraRegistros: [{ id: 1, workOrderId: 1, tipo: "antes", fotos: JSON.stringify([{ nome: "antes.png", data: png }]) }],
   productionLogs: [{ id: 1, workOrderId: 1, userId: 2, technicianName: "AplicadorTeste", date: "2026-06-23" }],
   inventory: [{ id: 1, name: "Material Sintetico", quantity: 8, minStock: 2, unit: "unid" }],
   inventoryMovements: [{ id: 1, inventoryId: 1, productName: "Material Sintetico", type: "SAÍDA", quantity: 2, date: "2026-06-23" }],
   products: [{ id: 1, name: "Produto Sintetico", price: 10 }],
+  materialSales: [{ id: 1, createdByUserId: 2, createdByUsername: "AplicadorTeste", buyerName: "Comprador Teste", items: JSON.stringify([{ productId: 1, inventoryId: 1, name: "Produto Sintetico", quantity: 1, unitPrice: 10, discountPercent: 0, total: 10 }]), subtotal: 10, discountAmount: 0, total: 10, status: "pendente" }],
   services: [{ id: 1, name: "Servico Sintetico", pricePerUnit: 100 }],
   materialWithdrawals: [{ id: 1, userId: 2, username: "AplicadorTeste", workOrderId: 1, status: "pendente", withdrawalPhoto: png, withdrawalSignature: png }],
   materialWithdrawalItems: [{ id: 1, withdrawalId: 1, inventoryId: 1, productName: "Material Sintetico", quantity: 2 }],
@@ -85,7 +86,7 @@ const requiredFiles = [
   "manifest.json", "usuarios.json", "cargos.json", "clientes.json", "leads.json", "orcamentos.json",
   "ordens-servico.json", "registros-obra.json", "controle-materiais.json", "saidas-aberto.json",
   "devolucoes.json", "responsabilidades.json", "estoque.json", "movimentacoes-estoque.json",
-  "catalogo-materiais.json", "catalogo-servicos.json", "financeiro.json", "garantias.json",
+  "catalogo-materiais.json", "vendas-materiais.json", "catalogo-servicos.json", "financeiro.json", "garantias.json",
   "pos-venda.json", "configuracoes.json", "formas-pagamento.json", "condicoes-pagamento.json",
   "attachments/index.json", "relatorios/relatorio-conferencia.pdf", "ERP-IMPPEL-backup-completo.json",
 ];
@@ -108,6 +109,7 @@ assert.equal(restored.jobs[0].leadId, 1);
 assert.equal(restored.workOrders[0].jobId, 1);
 assert.equal(restored.materialWithdrawalItems[0].withdrawalId, 1);
 assert.equal(restored.inventoryMovements[0].inventoryId, 1);
+assert.equal(restored.materialSales[0].createdByUserId, 2);
 
 const partialTarget = createMemoryStorage();
 await partialTarget.restoreCompleteBackup({ settings: [{ id: 99, key: "preservar", value: "sim" }] }, ["configuracoes"], "replace");

@@ -686,113 +686,13 @@ export default function Jobs() {
     if (job.status === newStatus) return;
     try {
       await updateJob.mutateAsync({ id: job.id, status: newStatus });
-
-      const statusCfg = jobStatuses.find(
-        (c: any) => c.name?.toLowerCase() === newStatus.toLowerCase()
-      );
-
-      const existingWorkOrder = workOrdersList.find((workOrder: any) => Number(workOrder.jobId) === Number(job.id));
-      if (statusCfg?.generateOs && !existingWorkOrder) {
-        let serviceItemsParsed: any[] = [];
-        if (job.serviceItems) {
-          try { serviceItemsParsed = JSON.parse(job.serviceItems); } catch {}
-        }
-
-        const materialsMap: Record<number, { name: string; unit: string; inventoryUnit: string; quantity: number }> = {};
-        for (const svcItem of serviceItemsParsed) {
-          const svcCatalog = servicesList.find((s: any) =>
-            s.name?.toLowerCase() === svcItem.name?.toLowerCase()
-          );
-          if (!svcCatalog?.serviceMaterials) continue;
-          let mats: any[] = [];
-          try { mats = JSON.parse(svcCatalog.serviceMaterials); } catch {}
-          for (const mat of mats) {
-            const area = Number(svcItem.area) || 0;
-            const qty = mat.unit === "per_kg"
-              ? Math.ceil((area * (Number(mat.kilosPerM2) || 0)) / (Number(mat.weightPerUnit) || 1))
-              : mat.unit === "per_m2" ? mat.quantity * area : mat.quantity;
-            const invItem = inventoryItemsList.find((it: any) => it.id === mat.inventoryId);
-            const inventoryUnit = invItem?.unit || "unid";
-            if (materialsMap[mat.inventoryId]) {
-              materialsMap[mat.inventoryId].quantity += qty;
-            } else {
-              materialsMap[mat.inventoryId] = {
-                name: mat.name,
-                unit: mat.unit,
-                inventoryUnit,
-                quantity: qty,
-              };
-            }
-          }
-        }
-
-        const materialsNeeded = Object.entries(materialsMap).map(([id, m]) => ({
-          inventoryId: Number(id),
-          name: m.name,
-          quantity: Math.ceil(m.quantity),
-          unit: m.unit,
-          inventoryUnit: m.inventoryUnit,
-        }));
-
-        const address = (() => {
-          if (job.clientes) {
-            try {
-              const cls = JSON.parse(job.clientes);
-              if (cls[0]?.endereco) return cls[0].endereco + (cls[0].cidade ? `, ${cls[0].cidade}` : "");
-            } catch {}
-          }
-          return "";
-        })();
-
-        const woPayload = {
-          jobId: job.id,
-          clientId: job.clientId || null,
-          clientName: job.clientName,
-          address,
-          serviceType: job.serviceType,
-          materialsNeeded: materialsNeeded.length > 0 ? JSON.stringify(materialsNeeded) : null,
-          selectedServices: serviceItemsParsed.length > 0 ? JSON.stringify(serviceItemsParsed.map(item => item.name)) : null,
-          status: "Planejada",
-          notes: `OS gerada automaticamente ao aprovar orçamento #${String(job.orcamentoNumero ?? job.id).padStart(4, "0")}`,
-        };
-
-        const workOrderResponse = await fetch("/api/work-orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(woPayload),
-        });
-        if (!workOrderResponse.ok) throw new Error("Não foi possível criar a Ordem de Serviço.");
-        const createdWorkOrder = await workOrderResponse.json();
-
-        const forecast = job.executionDeadline ? new Date(job.executionDeadline).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
-        const obraResponse = await fetch("/api/obra-registros", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tipo: "antes",
-            nomeObra: `OS #${createdWorkOrder.id} - ${job.clientName}`,
-            enderecoObra: address || "Endereço pendente de confirmação",
-            nomeResponsavel: job.clientName,
-            nomeEquipe: "A definir",
-            dataInicio: new Date().toISOString().slice(0, 10),
-            dataPrevisaoTermino: forecast,
-            descricaoProblema: job.inspectionNotes || "Conforme orçamento aprovado",
-            tipoServico: job.serviceType,
-            fotos: "[]",
-            jobId: job.id,
-            status: "enviado",
-          }),
-        });
-        if (!obraResponse.ok) throw new Error("A OS foi criada, mas não foi possível criar o Registro de Obra.");
-        queryClient.invalidateQueries({ queryKey: ["/api/work-orders"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/obra-registros"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-
-        toast({
-          title: "OK Ordem de Serviço criada!",
-          description: `Status → "${newStatus}" · OS gerada automaticamente com ${materialsNeeded.length} material(is) necessário(s).`,
-        });
-      }
+      queryClient.invalidateQueries({ queryKey: ["/api/work-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/obra-registros"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      toast({
+        title: "Status atualizado",
+        description: `Orçamento movido para "${newStatus}". O fluxo operacional foi sincronizado pelo servidor.`,
+      });
     } catch (err: any) {
       alert(`Erro ao atualizar status: ${err.message}`);
     }

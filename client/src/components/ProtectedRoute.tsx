@@ -1,7 +1,7 @@
 import { useUser } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
-import { canAccessAny, permissionsForPath } from "@/lib/permissions";
+import { canAccessAny, getDefaultLandingPath, permissionsForPath } from "@/lib/permissions";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useUser();
@@ -14,7 +14,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       if (!user) {
         setLocation("/login");
       } else if (!allowed) {
-        setLocation("/");
+        setLocation(getDefaultLandingPath(user as any));
       }
     }
   }, [user, isLoading, allowed, setLocation]);
@@ -42,7 +42,7 @@ export function AdminRoute({ children }: { children: React.ReactNode }) {
       if (!user) {
         setLocation("/login");
       } else if (!allowed) {
-        setLocation("/registro-obra");
+        setLocation(getDefaultLandingPath(user as any));
       }
     }
   }, [user, isLoading, allowed, setLocation]);

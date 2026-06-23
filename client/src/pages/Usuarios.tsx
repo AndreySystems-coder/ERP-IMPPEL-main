@@ -94,6 +94,9 @@ const PERMISSION_GROUPS = [
       { key: "viewProductivity", label: "Produtividade" },
       { key: "registrarMaterials", label: "Controle de Materiais" },
       { key: "viewAllMaterials", label: "Ver retiradas de todos os funcionários" },
+      { key: "viewMaterialSales", label: "Ver Venda de Materiais" },
+      { key: "createMaterialSales", label: "Criar pedidos de venda" },
+      { key: "approveMaterialSales", label: "Aprovar vendas e baixar estoque" },
       { key: "viewWarranties", label: "Garantias" },
       { key: "viewPostSale", label: "Pós-venda" },
     ],
@@ -569,8 +572,8 @@ export default function Usuarios() {
 
                           {/* Permission summary */}
                           <div className="mt-2 flex flex-wrap gap-1">
-                            {PERMISSION_GROUPS.flatMap(g => g.items).map(item => (
-                              <span key={item.key} className={`text-xs px-1.5 py-0.5 rounded ${perms[item.key] ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400 line-through"}`}>
+                            {PERMISSION_GROUPS.flatMap(group => group.items.map(item => ({ ...item, group: group.group }))).map(item => (
+                              <span key={`${item.group}-${item.key}`} className={`text-xs px-1.5 py-0.5 rounded ${perms[item.key] ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-400 line-through"}`}>
                                 {item.label}
                               </span>
                             ))}

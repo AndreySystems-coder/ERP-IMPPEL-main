@@ -94,7 +94,7 @@ export async function buildCompleteBackupPackage(
   );
   const attachmentCounts = {
     fotosOrdensServico: (snapshot.workOrders || []).filter((row: any) => hasContent(row.photos)).length,
-    fotosRegistrosObra: (snapshot.obraRegistros || []).filter((row: any) => hasContent(row.photos)).length,
+    fotosRegistrosObra: (snapshot.obraRegistros || []).filter((row: any) => hasContent(row.fotos)).length,
     fotosRetirada: (snapshot.materialWithdrawals || []).filter((row: any) => hasContent(row.withdrawalPhoto)).length,
     fotosDevolucao: (snapshot.materialWithdrawals || []).filter((row: any) => hasContent(row.returnPhoto)).length,
     assinaturasRetirada: (snapshot.materialWithdrawals || []).filter((row: any) => hasContent(row.withdrawalSignature)).length,

@@ -9,6 +9,7 @@ import { MovementTimelineCard } from "@/features/materials/components/MovementTi
 import type { Withdrawal } from "@/features/materials/types";
 
 type StatusFilter = "todos" | "pendente" | "parcial" | "retornado";
+type GroupMode = "none" | "day" | "month" | "year" | "workOrder" | "employee";
 
 export function MovementHistoryPanel({
   withdrawals,
@@ -25,7 +26,8 @@ export function MovementHistoryPanel({
 }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("todos");
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [groupMode, setGroupMode] = useState<GroupMode>(groupByDay ? "day" : "none");
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -39,25 +41,38 @@ export function MovementHistoryPanel({
           withdrawal.username,
           withdrawal.clientName || "",
           withdrawal.workOrderId ? `os ${withdrawal.workOrderId}` : "",
-          withdrawal.createdAt,
-          new Date(withdrawal.createdAt).toLocaleDateString("pt-BR"),
+          withdrawal.withdrawalDate || withdrawal.createdAt,
+          new Date(`${withdrawal.withdrawalDate || withdrawal.createdAt}`).toLocaleDateString("pt-BR"),
           ...withdrawal.items.map(item => `${item.productName} ${item.quantity} ${item.unit} ${item.condition || ""}`),
         ].join(" ").toLowerCase();
 
         return haystack.includes(normalizedSearch);
       })
       .slice()
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => new Date(b.withdrawalDate || b.createdAt).getTime() - new Date(a.withdrawalDate || a.createdAt).getTime());
   }, [search, status, withdrawals]);
 
   const grouped = useMemo(() => {
     const groups = new Map<string, Withdrawal[]>();
     filtered.forEach(withdrawal => {
-      const day = new Date(withdrawal.createdAt).toISOString().slice(0, 10);
-      groups.set(day, [...(groups.get(day) || []), withdrawal]);
+      const date = new Date(`${withdrawal.withdrawalDate || withdrawal.createdAt}`);
+      const day = date.toISOString().slice(0, 10);
+      const key = groupMode === "year" ? day.slice(0, 4)
+        : groupMode === "month" ? day.slice(0, 7)
+        : groupMode === "workOrder" ? `OS ${withdrawal.workOrderId || "Sem OS"}`
+        : groupMode === "employee" ? withdrawal.username
+        : day;
+      groups.set(key, [...(groups.get(key) || []), withdrawal]);
     });
     return Array.from(groups.entries()).sort(([left], [right]) => right.localeCompare(left));
-  }, [filtered]);
+  }, [filtered, groupMode]);
+
+  const groupLabel = (key: string) => {
+    if (groupMode === "day") return new Date(`${key}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    if (groupMode === "month") return new Date(`${key}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    if (groupMode === "year") return `Ano ${key}`;
+    return key;
+  };
 
   const pendingCount = withdrawals.filter(withdrawal => withdrawal.status !== "retornado").length;
   const returnedCount = withdrawals.filter(withdrawal => withdrawal.status === "retornado").length;
@@ -88,7 +103,7 @@ export function MovementHistoryPanel({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_190px]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_190px_210px]">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
           <Input
@@ -110,6 +125,17 @@ export function MovementHistoryPanel({
             <SelectItem value="retornado">Devolvidos</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={groupMode} onValueChange={value => { setGroupMode(value as GroupMode); setSelectedGroup(null); }}>
+          <SelectTrigger className="h-11 rounded-xl" data-testid="select-material-history-group"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Sem agrupamento</SelectItem>
+            <SelectItem value="day">Agrupar por dia</SelectItem>
+            <SelectItem value="month">Agrupar por mês</SelectItem>
+            <SelectItem value="year">Agrupar por ano</SelectItem>
+            <SelectItem value="workOrder">Agrupar por obra/OS</SelectItem>
+            <SelectItem value="employee">Agrupar por funcionário</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="text-xs font-medium text-slate-500">
@@ -123,25 +149,25 @@ export function MovementHistoryPanel({
             <p>Nenhuma movimentação encontrada com os filtros atuais</p>
           </CardContent>
         </Card>
-      ) : groupByDay ? (
+      ) : groupMode !== "none" ? (
         <div className="space-y-3">
-          {grouped.map(([day, dayWithdrawals]) => {
-            const expanded = selectedDay === day;
-            const employees = new Set(dayWithdrawals.map(withdrawal => withdrawal.username));
+          {grouped.map(([groupKey, groupWithdrawals]) => {
+            const expanded = selectedGroup === groupKey;
+            const employees = new Set(groupWithdrawals.map(withdrawal => withdrawal.username));
             return (
-              <div key={day} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                <button type="button" onClick={() => setSelectedDay(expanded ? null : day)} className="flex w-full items-center gap-3 p-4 text-left hover:bg-slate-50" data-testid={`button-open-withdrawals-day-${day}`}>
+              <div key={groupKey} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <button type="button" onClick={() => setSelectedGroup(expanded ? null : groupKey)} className="flex w-full items-center gap-3 p-4 text-left hover:bg-slate-50" data-testid={`button-open-withdrawals-group-${groupKey}`}>
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-700"><CalendarDays className="h-5 w-5" /></div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-slate-900">{new Date(`${day}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</p>
+                    <p className="font-bold capitalize text-slate-900">{groupLabel(groupKey)}</p>
                     <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
-                      <span>{dayWithdrawals.length} retirada(s)</span>
+                      <span>{groupWithdrawals.length} retirada(s)</span>
                       <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {employees.size} funcionário(s)</span>
                     </div>
                   </div>
                   {expanded ? <ChevronDown className="h-5 w-5 text-slate-400" /> : <ChevronRight className="h-5 w-5 text-slate-400" />}
                 </button>
-                {expanded && <div className="space-y-3 border-t border-slate-100 bg-slate-50 p-3">{dayWithdrawals.map(withdrawal => <MovementTimelineCard key={withdrawal.id} withdrawal={withdrawal} />)}</div>}
+                {expanded && <div className="space-y-3 border-t border-slate-100 bg-slate-50 p-3">{groupWithdrawals.map(withdrawal => <MovementTimelineCard key={withdrawal.id} withdrawal={withdrawal} />)}</div>}
               </div>
             );
           })}

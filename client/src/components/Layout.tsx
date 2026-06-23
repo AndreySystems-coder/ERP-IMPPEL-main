@@ -21,7 +21,6 @@ import {
   MessageSquare,
   Package,
   PackageCheck,
-  PenSquare,
   Scale,
   Search,
   Settings,
@@ -61,7 +60,7 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/",
     icon: LayoutDashboard,
     permission: "viewDashboard",
-    items: [{ name: "Dashboard", path: "/", icon: LayoutDashboard }],
+    items: [{ name: "Dashboard", path: "/dashboard", icon: LayoutDashboard }],
   },
   {
     label: "CRM",
@@ -95,7 +94,6 @@ const ALL_SECTIONS: NavSection[] = [
     permission: "viewWorks",
     items: [
       { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, adminOnly: true, permission: "viewWorkOrders" },
-      { name: "Registro de Obra", path: "/registro-obra", icon: PenSquare, permission: "viewObraRegistro" },
       { name: "Calendário", path: "/calendar", icon: CalendarIcon, adminOnly: true, permission: "viewCalendar" },
     ],
   },
@@ -133,6 +131,7 @@ const ALL_SECTIONS: NavSection[] = [
     items: [
       { name: "Produtividade", path: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity" },
       { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials" },
+      { name: "Venda de Materiais", path: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales" },
       { name: "Garantias", path: "/garantias", icon: Shield, permission: "viewWarranties" },
       { name: "Pós-venda & NPS", path: "/pos-venda", icon: Heart, permission: "viewPostSale" },
     ],

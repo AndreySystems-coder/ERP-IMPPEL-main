@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -8,6 +9,7 @@ import {
   FileSignature,
   Package,
   User,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -29,26 +31,39 @@ function conditionClass(condition?: string) {
 }
 
 function ProofPreview({ label, src, kind }: { label: string; src: string | null; kind: "photo" | "signature" }) {
+  const [expanded, setExpanded] = useState(false);
   if (!src) return null;
 
   return (
-    <a
-      href={src}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50"
-    >
-      {kind === "photo" ? <Camera className="h-3.5 w-3.5 text-blue-700" /> : <FileSignature className="h-3.5 w-3.5 text-blue-700" />}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <img src={src} alt={label} className="h-9 w-12 shrink-0 rounded border object-cover" />
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs font-medium text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50"
+        data-testid={`button-expand-${kind}-${label.toLowerCase().replace(/\s+/g, "-")}`}
+      >
+        {kind === "photo" ? <Camera className="h-3.5 w-3.5 text-blue-700" /> : <FileSignature className="h-3.5 w-3.5 text-blue-700" />}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <img src={src} alt={label} className={`h-9 w-12 shrink-0 rounded border bg-white ${kind === "signature" ? "object-contain" : "object-cover"}`} />
+      </button>
+      {expanded && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-4" role="dialog" aria-modal="true" aria-label={label} onClick={() => setExpanded(false)}>
+          <div className="relative max-h-[92vh] max-w-5xl overflow-auto rounded-lg bg-white p-3 shadow-2xl" onClick={event => event.stopPropagation()}>
+            <button type="button" onClick={() => setExpanded(false)} className="absolute right-3 top-3 rounded-full bg-slate-900/80 p-2 text-white" aria-label="Fechar visualização"><X className="h-5 w-5" /></button>
+            <img src={src} alt={label} className="max-h-[85vh] w-auto max-w-full object-contain" />
+            <p className="pt-2 text-center text-sm font-semibold text-slate-700">{label}</p>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
 export function MovementTimelineCard({ withdrawal }: { withdrawal: Withdrawal }) {
   const isReturned = withdrawal.status === "retornado";
   const isPartial = withdrawal.status === "parcial";
-  const days = daysSince(withdrawal.createdAt);
+  const withdrawalDate = withdrawal.withdrawalDate || withdrawal.createdAt;
+  const days = daysSince(withdrawalDate);
   const hasIssue = withdrawal.items.some(item => item.condition === "perdido" || item.condition === "danificado");
 
   return (
@@ -67,7 +82,7 @@ export function MovementTimelineCard({ withdrawal }: { withdrawal: Withdrawal })
                 <User className="h-3.5 w-3.5" /> {withdrawal.username}
               </span>
               <span className="flex items-center gap-1.5">
-                <CalendarClock className="h-3.5 w-3.5" /> {fmtDate(withdrawal.createdAt)}
+                <CalendarClock className="h-3.5 w-3.5" /> {fmtDate(withdrawalDate)}
               </span>
               {withdrawal.clientName && <span className="sm:col-span-2">Cliente: {withdrawal.clientName}</span>}
               {withdrawal.workOrderId && <span>OS #{withdrawal.workOrderId}</span>}
@@ -89,7 +104,7 @@ export function MovementTimelineCard({ withdrawal }: { withdrawal: Withdrawal })
             </div>
             <div className="rounded-xl border border-orange-100 bg-orange-50 p-3">
               <p className="text-sm font-bold text-orange-900">Saída registrada</p>
-              <p className="mt-0.5 text-xs text-orange-700">{fmtDate(withdrawal.createdAt)}</p>
+              <p className="mt-0.5 text-xs text-orange-700">{fmtDate(withdrawalDate)}</p>
               <div className="mt-3 grid gap-2">
                 {withdrawal.items.map((item, index) => (
                   <div key={`${item.inventoryId}-${index}`} className="rounded-lg border border-white bg-white/80 p-2">

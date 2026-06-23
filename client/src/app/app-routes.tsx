@@ -36,6 +36,9 @@ import TeamProductivity from "@/pages/TeamProductivity";
 import Usuarios from "@/pages/Usuarios";
 import Warranties from "@/pages/Warranties";
 import WorkOrders from "@/pages/WorkOrders";
+import MaterialSales from "@/pages/MaterialSales";
+import HomeRedirect from "@/pages/HomeRedirect";
+import AccessDenied from "@/pages/AccessDenied";
 
 export type RouteAccess = "public" | "protected" | "admin";
 
@@ -57,12 +60,15 @@ export const mobileRoutes: AppRoute[] = [
 ];
 
 export const protectedRoutes: AppRoute[] = [
+  { path: "/", component: HomeRedirect, access: "protected" },
+  { path: "/sem-acesso", component: AccessDenied, access: "protected", withLayout: true },
   { path: "/registro-obra", component: RegistroObra, access: "protected", withLayout: true },
   { path: "/catalog", component: Catalog, access: "protected", withLayout: true },
+  { path: "/vendas-materiais", component: MaterialSales, access: "protected", withLayout: true },
 ];
 
 export const adminRoutes: AppRoute[] = [
-  { path: "/", component: Dashboard, access: "admin", withLayout: true },
+  { path: "/dashboard", component: Dashboard, access: "admin", withLayout: true },
   { path: "/crm", component: CrmHub, access: "admin", withLayout: true },
   { path: "/orcamentos", component: QuotesHub, access: "admin", withLayout: true },
   { path: "/obras", component: WorksHub, access: "admin", withLayout: true },

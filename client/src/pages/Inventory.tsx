@@ -739,6 +739,29 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
     applyRapida.mutate(payloads);
   };
 
+  const reviewRapidaRow = (target: RapidaRow, patch: { inventoryId?: number | null; date?: string; qty?: number }) => {
+    setRapidaPreview(current => current.map(row => {
+      if (row !== target) return row;
+      const matchedItem = patch.inventoryId === undefined
+        ? row.matchedItem
+        : itemsList.find(item => item.id === patch.inventoryId) || null;
+      const qty = patch.qty ?? row.qty;
+      const currentQuantity = matchedItem?.quantity ?? 0;
+      const diff = matchedItem ? qty - currentQuantity : 0;
+      return {
+        ...row,
+        date: patch.date ?? row.date,
+        qty,
+        matchedItem,
+        currentQuantity,
+        confidence: matchedItem ? 100 : 0,
+        diff,
+        movType: matchedItem && diff !== 0 ? (diff > 0 ? "ENTRADA" : "SAÍDA") : null,
+        isDuplicate: false,
+      };
+    }));
+  };
+
   const addBatchRow = () => setBatchItems(prev => [...prev, { inventoryId: "", quantity: "", type: "ENTRADA", searchText: "", dropdownOpen: false }]);
   const removeBatchRow = (i: number) => setBatchItems(prev => prev.filter((_, idx) => idx !== i));
   const updateBatchRow = (i: number, field: keyof BatchItem, val: string | boolean) =>
@@ -951,7 +974,10 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
               totalActions={rapidaTotalAcoes}
               confirmZero={rapidaConfirmZerar}
               isApplying={applyRapida.isPending}
+              inventory={sortedInventory}
               onConfirmZeroChange={setRapidaConfirmZerar}
+              onReviewRow={reviewRapidaRow}
+              onRemoveRow={row => setRapidaPreview(current => current.filter(item => item !== row))}
               onApply={handleApplyRapida}
             />
           )}

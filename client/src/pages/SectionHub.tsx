@@ -17,7 +17,6 @@ import {
   MessageSquare,
   Package,
   PackageCheck,
-  PenSquare,
   Scale,
   Settings,
   Shield,
@@ -150,7 +149,6 @@ export function WorksHub() {
         items: [
           { title: "Ordens de Serviço", description: "Criação, progresso, consumo, fotos e finalização.", href: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders", accent: accents.blue },
           { title: "Calendário", description: "Programação semanal e diária das equipes.", href: "/calendar", icon: Calendar, permission: "viewCalendar", accent: accents.violet },
-          { title: "Registro de Obras", description: "Apontamentos operacionais e fotos da execução.", href: "/registro-obra", icon: PenSquare, permission: "viewObraRegistro", accent: accents.orange },
         ],
       }}
     />
@@ -200,6 +198,7 @@ export function TeamHub() {
           { title: "Produtividade", description: "Horas, área executada e desempenho por técnico.", href: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity", accent: accents.blue },
           { title: "Garantias", description: "Certificados, prazos e incidentes de garantia.", href: "/garantias", icon: Shield, permission: "viewWarranties", accent: accents.emerald },
           { title: "Controle de Materiais", description: "Retirada, uso, devolução, fotos e assinatura.", href: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials", accent: accents.orange },
+          { title: "Venda de Materiais", description: "Carrinho, descontos autorizados e aprovação administrativa.", href: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales", accent: accents.blue },
           { title: "Pós-venda & NPS", description: "Acompanhamento após obra e pesquisa de satisfação.", href: "/pos-venda", icon: Heart, permission: "viewPostSale", accent: accents.rose },
         ],
       }}

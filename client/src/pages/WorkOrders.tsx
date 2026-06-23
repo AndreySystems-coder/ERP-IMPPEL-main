@@ -13,6 +13,7 @@ import { CHECKLIST_ITEMS, STATUS_COLORS } from "@/features/work-orders/constants
 import type { ServiceProgress, WorkOrderMaterialReconciliationResponse } from "@/features/work-orders/types";
 import { buildProgressFromJob, ceilQty, getExceededMaterials } from "@/features/work-orders/utils";
 import { asArray } from "@/lib/safeData";
+import type { Withdrawal } from "@/features/materials/types";
 
 const apiRequest = async (method: string, path: string, body?: any) => {
   const res = await fetch(path, {
@@ -358,6 +359,27 @@ export default function WorkOrders() {
     enabled: !!detailWO,
   });
 
+  const { data: obraRecords = [] } = useQuery<any[]>({
+    queryKey: ["/api/obra-registros"],
+    queryFn: () => apiRequest("GET", "/api/obra-registros"),
+    enabled: !!detailWO,
+  });
+
+  const { data: materialWithdrawals = [] } = useQuery<Withdrawal[]>({
+    queryKey: ["/api/material-withdrawals"],
+    queryFn: () => apiRequest("GET", "/api/material-withdrawals"),
+    enabled: !!detailWO,
+  });
+
+  const linkedObraRecords = asArray<any>(obraRecords).filter(record =>
+    Number(record.workOrderId) === Number(detailWO?.id) ||
+    (!record.workOrderId && detailWO?.jobId && Number(record.jobId) === Number(detailWO.jobId))
+  );
+  const linkedWithdrawals = asArray<Withdrawal>(materialWithdrawals).filter(withdrawal =>
+    Number(withdrawal.workOrderId) === Number(detailWO?.id) ||
+    (!withdrawal.workOrderId && detailWO?.jobId && Number(withdrawal.jobId) === Number(detailWO.jobId))
+  );
+
   // â”€â”€ Consumption log query + mutation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { data: consumoLogs = [] } = useQuery({
     queryKey: ["/api/obra-consumo-logs", detailWO?.id],
@@ -485,6 +507,8 @@ export default function WorkOrders() {
         consumoLogs={consumoLogsList}
         pendingMaterials={pendingMaterialsList}
         materialReconciliation={materialReconciliation}
+        obraRecords={linkedObraRecords}
+        materialWithdrawals={linkedWithdrawals}
         isLoadingMaterialReconciliation={isLoadingMaterialReconciliation}
         ignorePendingMaterials={ignorePendingMaterials}
         obraObservations={obraObservations}
