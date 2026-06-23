@@ -80,6 +80,7 @@ export default function Jobs() {
   const { data: costConfig } = useCostConfig();
   const { data: inventoryItems = [] } = useQuery<any[]>({ queryKey: ["/api/inventory"] });
   const { data: workOrders = [] } = useQuery<any[]>({ queryKey: ["/api/work-orders"] });
+  const { data: leads = [] } = useQuery<any[]>({ queryKey: ["/api/leads"] });
   const { data: paymentMethodsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-methods"] });
   const { data: paymentConditionsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-conditions"] });
   const { data: settings = [] } = useSettings();
@@ -90,6 +91,7 @@ export default function Jobs() {
   const jobStatuses = asArray<any>(jobStatusConfigs);
   const inventoryItemsList = asArray<any>(inventoryItems);
   const workOrdersList = asArray<any>(workOrders);
+  const leadsList = asArray<any>(leads);
   const paymentMethods = asArray<any>(paymentMethodsList);
   const paymentConditions = asArray<any>(paymentConditionsList);
   const settingsList = asArray<any>(settings);
@@ -383,6 +385,41 @@ export default function Jobs() {
         }))
       : undefined;
     const primaryClientName = validClientes[0]?.nome || clientName;
+    let effectiveClientId = Number(clientId) || undefined;
+    let effectiveLeadId: number | undefined;
+
+    if (!editingJob && primaryClientName) {
+      const normalizedName = primaryClientName.trim().toLocaleLowerCase("pt-BR");
+      const primaryClient = validClientes[0];
+      const existingClient = clientsList.find(client => String(client.name || "").trim().toLocaleLowerCase("pt-BR") === normalizedName);
+      if (existingClient) {
+        effectiveClientId = existingClient.id;
+      } else {
+        const address = [[primaryClient?.rua, primaryClient?.numero].filter(Boolean).join(", "), primaryClient?.bairro].filter(Boolean).join(" - ");
+        const response = await fetch("/api/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: primaryClientName, phone: primaryClient?.telefone || "", address, city: primaryClient?.cidade || "", state: primaryClient?.estado || "" }),
+        });
+        if (!response.ok) throw new Error("Não foi possível criar o cliente do orçamento.");
+        effectiveClientId = (await response.json()).id;
+        queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      }
+
+      const existingLead = leadsList.find(lead => String(lead.name || "").trim().toLocaleLowerCase("pt-BR") === normalizedName);
+      if (existingLead) {
+        effectiveLeadId = existingLead.id;
+      } else {
+        const response = await fetch("/api/leads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: primaryClientName, phone: primaryClient?.telefone || "", source: "Orçamento", status: "Proposta", notes: "Criado automaticamente pelo fluxo de orçamento." }),
+        });
+        if (!response.ok) throw new Error("Não foi possível criar o lead do orçamento.");
+        effectiveLeadId = (await response.json()).id;
+        queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      }
+    }
 
     // Serialize responsáveis
     const validResp = responsaveis.filter(r => r.nome.trim());
@@ -391,7 +428,8 @@ export default function Jobs() {
       : undefined;
 
     const payload = {
-      clientId: Number(clientId) || undefined,
+      clientId: effectiveClientId,
+      leadId: effectiveLeadId || editingJob?.leadId || undefined,
       clientName: primaryClientName,
       serviceType: primaryService,
       squareMeters: totalSqm,
@@ -653,7 +691,8 @@ export default function Jobs() {
         (c: any) => c.name?.toLowerCase() === newStatus.toLowerCase()
       );
 
-      if (statusCfg?.generateOs) {
+      const existingWorkOrder = workOrdersList.find((workOrder: any) => Number(workOrder.jobId) === Number(job.id));
+      if (statusCfg?.generateOs && !existingWorkOrder) {
         let serviceItemsParsed: any[] = [];
         if (job.serviceItems) {
           try { serviceItemsParsed = JSON.parse(job.serviceItems); } catch {}
@@ -712,16 +751,41 @@ export default function Jobs() {
           address,
           serviceType: job.serviceType,
           materialsNeeded: materialsNeeded.length > 0 ? JSON.stringify(materialsNeeded) : null,
+          selectedServices: serviceItemsParsed.length > 0 ? JSON.stringify(serviceItemsParsed.map(item => item.name)) : null,
           status: "Planejada",
           notes: `OS gerada automaticamente ao aprovar orçamento #${String(job.orcamentoNumero ?? job.id).padStart(4, "0")}`,
         };
 
-        await fetch("/api/work-orders", {
+        const workOrderResponse = await fetch("/api/work-orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(woPayload),
         });
+        if (!workOrderResponse.ok) throw new Error("Não foi possível criar a Ordem de Serviço.");
+        const createdWorkOrder = await workOrderResponse.json();
+
+        const forecast = job.executionDeadline ? new Date(job.executionDeadline).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+        const obraResponse = await fetch("/api/obra-registros", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tipo: "antes",
+            nomeObra: `OS #${createdWorkOrder.id} - ${job.clientName}`,
+            enderecoObra: address || "Endereço pendente de confirmação",
+            nomeResponsavel: job.clientName,
+            nomeEquipe: "A definir",
+            dataInicio: new Date().toISOString().slice(0, 10),
+            dataPrevisaoTermino: forecast,
+            descricaoProblema: job.inspectionNotes || "Conforme orçamento aprovado",
+            tipoServico: job.serviceType,
+            fotos: "[]",
+            jobId: job.id,
+            status: "enviado",
+          }),
+        });
+        if (!obraResponse.ok) throw new Error("A OS foi criada, mas não foi possível criar o Registro de Obra.");
         queryClient.invalidateQueries({ queryKey: ["/api/work-orders"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/obra-registros"] });
         queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
 
         toast({

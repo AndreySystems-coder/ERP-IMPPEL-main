@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, ClipboardList, DollarSign, History, Package, Users } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, ClipboardList, DollarSign, History, Package, Sparkles, Users } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiscountsPanel } from "@/features/materials/components/DiscountsPanel";
 import { EmployeeView } from "@/features/materials/components/EmployeeView";
 import { MaterialFlowStepper } from "@/features/materials/components/MaterialFlowStepper";
+import { QuickMaterialRegistration } from "@/features/materials/components/QuickMaterialRegistration";
 import { MovementHistoryPanel } from "@/features/materials/components/MovementHistoryPanel";
 import { ResponsibilityPanel } from "@/features/materials/components/ResponsibilityPanel";
 import { ReturnForm } from "@/features/materials/components/ReturnForm";
@@ -129,6 +130,7 @@ export default function MaterialControl() {
             <TabsList className="flex w-full justify-start overflow-x-auto">
               <TabsTrigger value="diario" data-testid="tab-controle-diario" className="shrink-0"><ClipboardList className="mr-1 h-3 w-3" /> Controle Diário</TabsTrigger>
               <TabsTrigger value="saida" data-testid="tab-saida" className="shrink-0"><ArrowDownCircle className="mr-1 h-3 w-3" /> Saídas</TabsTrigger>
+              <TabsTrigger value="rapido" data-testid="tab-registro-rapido" className="shrink-0"><Sparkles className="mr-1 h-3 w-3" /> Registro Rápido</TabsTrigger>
               <TabsTrigger value="retorno" data-testid="tab-retorno" className="shrink-0"><ArrowUpCircle className="mr-1 h-3 w-3" /> Retorno</TabsTrigger>
               <TabsTrigger value="responsabilidade" data-testid="tab-responsabilidade" className="shrink-0"><Users className="mr-1 h-3 w-3" /> Responsabilidades</TabsTrigger>
               <TabsTrigger value="descontos" data-testid="tab-descontos" className="relative shrink-0">
@@ -151,7 +153,12 @@ export default function MaterialControl() {
                 withdrawals={pendingWithdrawals}
                 title="Saídas em aberto"
                 description="Materiais que saíram com funcionários e ainda aguardam retorno, conferência ou responsabilidade."
+                groupByDay
               />
+            </TabsContent>
+
+            <TabsContent value="rapido" className="mt-4">
+              <QuickMaterialRegistration inventory={inventory} users={users} />
             </TabsContent>
 
             <TabsContent value="retorno" className="mt-4">

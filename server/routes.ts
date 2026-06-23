@@ -234,11 +234,19 @@ export async function registerRoutes(
     return { ...publicUser, ...extras };
   };
 
+  const findUserByUsername = async (username: string) => {
+    const normalized = String(username || "").trim().toLocaleLowerCase("pt-BR");
+    if (!normalized) return undefined;
+    const exact = await storage.getUserByUsername(String(username).trim());
+    if (exact) return exact;
+    return (await storage.getUsers()).find(user => user.username.trim().toLocaleLowerCase("pt-BR") === normalized);
+  };
+
   // Auth
   app.post(api.auth.login.path, async (req, res) => {
     try {
       const input = api.auth.login.input.parse(req.body);
-      const user = await storage.getUserByUsername(input.username);
+      const user = await findUserByUsername(input.username);
       if (!user) {
         return res.status(401).json({ message: "Usuário ou senha inválidos" });
       }
@@ -249,6 +257,9 @@ export async function registerRoutes(
         : input.password === user.password;
       if (!passwordValid) {
         return res.status(401).json({ message: "Usuário ou senha inválidos" });
+      }
+      if (!isHashed) {
+        await storage.updateUserPassword(user.id, await bcrypt.hash(input.password, BCRYPT_ROUNDS));
       }
       req.session.userId = user.id;
       req.session.userRole = user.role;
@@ -1996,6 +2007,70 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  app.post("/api/material-withdrawals/quick", requireAdmin, async (req, res) => {
+    try {
+      const entries = Array.isArray(req.body?.entries) ? req.body.entries : [];
+      if (!entries.length) return res.status(400).json({ message: "Nenhum registro confirmado" });
+
+      const inventoryItems = await storage.getInventoryItems();
+      const inventoryById = new Map(inventoryItems.map(item => [item.id, item]));
+      const users = await storage.getUsers();
+      const usersById = new Map(users.map(user => [user.id, user]));
+      const now = new Date();
+      const dateStr = now.toISOString().split("T")[0];
+      const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+      const created: any[] = [];
+
+      for (const entry of entries) {
+        const user = usersById.get(Number(entry.userId));
+        const rawItems = Array.isArray(entry.items) ? entry.items : [];
+        if (!user || !rawItems.length) continue;
+        const safeItems = rawItems.map((item: any) => {
+          const inventoryItem = inventoryById.get(Number(item.inventoryId));
+          const quantity = Math.max(0, Math.trunc(Number(item.quantity)));
+          return inventoryItem && quantity > 0
+            ? { withdrawalId: 0, inventoryId: inventoryItem.id, productName: inventoryItem.name, unit: inventoryItem.unit || "unid", quantity }
+            : null;
+        }).filter(Boolean) as any[];
+        if (!safeItems.length) continue;
+
+        const withdrawal = await storage.createMaterialWithdrawal(
+          {
+            userId: user.id,
+            username: user.username,
+            workOrderId: entry.workOrderId ? Number(entry.workOrderId) : null,
+            jobId: null,
+            clientName: entry.clientName || null,
+            status: "pendente",
+            withdrawalPhoto: null,
+            withdrawalSignature: null,
+            notes: `Origem: Registro rápido admin${entry.notes ? ` | ${String(entry.notes)}` : ""}`,
+            returnPhoto: null,
+            returnSignature: null,
+            returnNotes: null,
+          },
+          safeItems,
+        );
+
+        for (const item of withdrawal.items) {
+          await storage.createInventoryMovement({
+            inventoryId: item.inventoryId,
+            productName: item.productName,
+            type: "SAÍDA",
+            quantity: item.quantity,
+            date: dateStr,
+            month: months[now.getMonth()],
+            notes: `Origem: REGISTRO_RAPIDO_ADMIN | Retirada #${withdrawal.id} | Responsavel: ${user.username}`,
+          });
+        }
+        created.push(withdrawal);
+      }
+
+      if (!created.length) return res.status(400).json({ message: "Nenhum funcionário ou material válido foi confirmado" });
+      res.status(201).json({ created: created.length, withdrawals: created });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   app.post("/api/material-withdrawals", requireAuth, async (req, res) => {
     try {
       const sessionUser = await storage.getUser(Number(req.session.userId));
@@ -2203,6 +2278,89 @@ export async function registerRoutes(
   });
 
   // ─── BACKUP / RESTORE ─────────────────────────────────────────────────────────
+
+  app.get("/api/backup/usuarios", requireAdmin, async (req, res) => {
+    try {
+      const [allUsers, allRoles] = await Promise.all([storage.getUsers(), storage.getRoles()]);
+      const rolesById = new Map(allRoles.map(role => [role.id, role]));
+      const roleData = allRoles.map(role => {
+        let permissions: Record<string, boolean> = {};
+        try { permissions = JSON.parse(role.permissions || "{}"); } catch {}
+        return { id: role.id, name: role.name, label: role.label, permissions, isDefault: role.isDefault, createdAt: role.createdAt };
+      });
+      const userData = allUsers.map(user => {
+        const customRole = rolesById.get((user as any).roleId);
+        return {
+          username: user.username,
+          role: user.role,
+          roleId: (user as any).roleId || null,
+          roleName: customRole?.name || null,
+          roleLabel: customRole?.label || null,
+          jobTitle: (user as any).jobTitle || null,
+          active: true,
+          passwordHash: user.password.startsWith("$2") ? user.password : null,
+        };
+      });
+      res.json({
+        type: "usuarios",
+        version: "1.0",
+        exportedAt: new Date().toISOString(),
+        security: { plaintextPasswordsIncluded: false, passwordHashesIncluded: true },
+        data: { users: userData, roles: roleData },
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/usuarios", requireAdmin, async (req, res) => {
+    try {
+      const { data } = req.body;
+      if (!Array.isArray(data?.users) || !Array.isArray(data?.roles)) {
+        return res.status(400).json({ message: "Formato de backup de usuários inválido" });
+      }
+
+      const existingRoles = await storage.getRoles();
+      const rolesByName = new Map(existingRoles.map(role => [role.name.toLocaleLowerCase("pt-BR"), role]));
+      const restoredRoles = new Map<string, number>();
+      let rolesCreated = 0, rolesUpdated = 0, created = 0, updated = 0, skipped = 0;
+
+      for (const role of data.roles) {
+        if (!role?.name || !role?.label) { skipped++; continue; }
+        const key = String(role.name).toLocaleLowerCase("pt-BR");
+        const permissions = typeof role.permissions === "string" ? role.permissions : JSON.stringify(role.permissions || {});
+        const existing = rolesByName.get(key);
+        if (existing) {
+          await storage.updateRole(existing.id, { label: role.label, permissions, isDefault: Boolean(role.isDefault) });
+          restoredRoles.set(key, existing.id);
+          rolesUpdated++;
+        } else {
+          const saved = await storage.createRole({ name: role.name, label: role.label, permissions, isDefault: Boolean(role.isDefault) });
+          restoredRoles.set(key, saved.id);
+          rolesCreated++;
+        }
+      }
+
+      for (const user of data.users) {
+        const username = String(user?.username || "").trim();
+        const passwordHash = String(user?.passwordHash || "");
+        if (!username || !/^\$2[aby]\$/.test(passwordHash)) { skipped++; continue; }
+        const roleId = user.roleName ? restoredRoles.get(String(user.roleName).toLocaleLowerCase("pt-BR")) || null : null;
+        const existing = await findUserByUsername(username);
+        if (existing) {
+          await storage.updateUser(existing.id, { password: passwordHash, role: user.role === "admin" ? "admin" : "funcionario" } as any);
+          await storage.updateUserRoleId(existing.id, roleId);
+          await storage.updateUserJobTitle(existing.id, user.jobTitle || user.roleLabel || "");
+          updated++;
+        } else {
+          const saved = await storage.createUser({ username, password: passwordHash, role: user.role === "admin" ? "admin" : "funcionario" } as any);
+          await storage.updateUserRoleId(saved.id, roleId);
+          await storage.updateUserJobTitle(saved.id, user.jobTitle || user.roleLabel || "");
+          created++;
+        }
+      }
+
+      res.json({ message: "Usuários e cargos restaurados com segurança.", created, updated, deleted: 0, skipped, rolesCreated, rolesUpdated });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
 
   app.get("/api/backup/estoque", requireAdmin, async (req, res) => {
     try {

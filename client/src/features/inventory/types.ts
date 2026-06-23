@@ -29,8 +29,10 @@ export type BatchItem = {
 };
 
 export interface QuickCountRow {
+  date?: string;
   inputName: string;
   qty: number;
+  currentQuantity?: number;
   matchedItem: InventoryItem | null;
   confidence: number;
   diff: number;

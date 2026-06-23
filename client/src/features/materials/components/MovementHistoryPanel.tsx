@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { History, Search } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronRight, History, Search, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,14 +15,17 @@ export function MovementHistoryPanel({
   title = "Histórico de movimentações",
   description = "Timeline de saídas, uso e devoluções registradas.",
   compact = false,
+  groupByDay = false,
 }: {
   withdrawals: Withdrawal[];
   title?: string;
   description?: string;
   compact?: boolean;
+  groupByDay?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("todos");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -36,6 +39,8 @@ export function MovementHistoryPanel({
           withdrawal.username,
           withdrawal.clientName || "",
           withdrawal.workOrderId ? `os ${withdrawal.workOrderId}` : "",
+          withdrawal.createdAt,
+          new Date(withdrawal.createdAt).toLocaleDateString("pt-BR"),
           ...withdrawal.items.map(item => `${item.productName} ${item.quantity} ${item.unit} ${item.condition || ""}`),
         ].join(" ").toLowerCase();
 
@@ -44,6 +49,15 @@ export function MovementHistoryPanel({
       .slice()
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [search, status, withdrawals]);
+
+  const grouped = useMemo(() => {
+    const groups = new Map<string, Withdrawal[]>();
+    filtered.forEach(withdrawal => {
+      const day = new Date(withdrawal.createdAt).toISOString().slice(0, 10);
+      groups.set(day, [...(groups.get(day) || []), withdrawal]);
+    });
+    return Array.from(groups.entries()).sort(([left], [right]) => right.localeCompare(left));
+  }, [filtered]);
 
   const pendingCount = withdrawals.filter(withdrawal => withdrawal.status !== "retornado").length;
   const returnedCount = withdrawals.filter(withdrawal => withdrawal.status === "retornado").length;
@@ -109,6 +123,29 @@ export function MovementHistoryPanel({
             <p>Nenhuma movimentação encontrada com os filtros atuais</p>
           </CardContent>
         </Card>
+      ) : groupByDay ? (
+        <div className="space-y-3">
+          {grouped.map(([day, dayWithdrawals]) => {
+            const expanded = selectedDay === day;
+            const employees = new Set(dayWithdrawals.map(withdrawal => withdrawal.username));
+            return (
+              <div key={day} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <button type="button" onClick={() => setSelectedDay(expanded ? null : day)} className="flex w-full items-center gap-3 p-4 text-left hover:bg-slate-50" data-testid={`button-open-withdrawals-day-${day}`}>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-700"><CalendarDays className="h-5 w-5" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-slate-900">{new Date(`${day}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</p>
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                      <span>{dayWithdrawals.length} retirada(s)</span>
+                      <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {employees.size} funcionário(s)</span>
+                    </div>
+                  </div>
+                  {expanded ? <ChevronDown className="h-5 w-5 text-slate-400" /> : <ChevronRight className="h-5 w-5 text-slate-400" />}
+                </button>
+                {expanded && <div className="space-y-3 border-t border-slate-100 bg-slate-50 p-3">{dayWithdrawals.map(withdrawal => <MovementTimelineCard key={withdrawal.id} withdrawal={withdrawal} />)}</div>}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="space-y-3">
           {filtered.map(withdrawal => (

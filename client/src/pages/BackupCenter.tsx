@@ -16,6 +16,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const ALL_BACKUP_TYPES: { type: BackupType; label: string; icon: React.ElementType; color: string; description: string }[] = [
+  { type: "usuarios", label: "Usuários e Cargos", icon: Users, color: "text-indigo-600 bg-indigo-50 border-indigo-200", description: "Contas, cargos e permissões, sem senha em texto puro" },
   { type: "estoque", label: "Estoque", icon: Package, color: "text-blue-600 bg-blue-50 border-blue-200", description: "Itens e movimentações" },
   { type: "produtos", label: "Catálogo de Produtos", icon: ShoppingCart, color: "text-emerald-600 bg-emerald-50 border-emerald-200", description: "Produtos do catálogo de vendas" },
   { type: "servicos", label: "Catálogo de Serviços", icon: Layers, color: "text-violet-600 bg-violet-50 border-violet-200", description: "Serviços com custos e margens" },
@@ -130,6 +131,13 @@ type TextPreview = {
 };
 
 const RESTORE_GUIDES: Record<BackupType, { format: string; example: string; fields: string[]; applySupported: boolean; limitation?: string }> = {
+  usuarios: {
+    format: "Use o JSON técnico gerado no backup de Usuários e Cargos",
+    example: "A restauração preserva logins, cargos, permissões e hashes bcrypt. Senhas nunca aparecem em texto puro.",
+    fields: ["Login", "Cargo", "Permissões", "Hash bcrypt"],
+    applySupported: false,
+    limitation: "Texto e PDF servem apenas para conferência. Para restaurar contas, envie o JSON técnico.",
+  },
   estoque: {
     format: "Produto; Quantidade; Unidade; Estoque mínimo",
     example: "Manta asfáltica; 20; rolos; mínimo 5\nPrimer; 8; galões; mínimo 2",
@@ -830,7 +838,7 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
 }
 
 export function BackupGenerationPage() {
-  return <BackupCenter mode="exports" />;
+  return <BackupCenter mode="backup" />;
 }
 
 export function BackupExportPage() {

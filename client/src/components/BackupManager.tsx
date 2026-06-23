@@ -12,6 +12,7 @@ import autoTable from "jspdf-autotable";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export type BackupType =
+  | "usuarios"
   | "estoque"
   | "produtos"
   | "servicos"
@@ -48,6 +49,7 @@ export interface RestoreLogEntry {
 }
 
 const TYPE_LABELS: Record<BackupType, string> = {
+  usuarios: "Usuários e Cargos",
   estoque: "Estoque",
   produtos: "Catálogo de Produtos",
   servicos: "Catálogo de Serviços",
@@ -61,6 +63,7 @@ const TYPE_LABELS: Record<BackupType, string> = {
 };
 
 const FILE_LABELS: Record<BackupType, string> = {
+  usuarios: "Usuarios_Cargos",
   estoque: "Estoque",
   produtos: "Catalogo_Produtos",
   servicos: "Catalogo_Servicos",
@@ -124,6 +127,7 @@ function generateFileBaseName(type: BackupType, prefix = "Backup"): string {
 
 function getRecordCount(type: BackupType, backup: any): number {
   const d = backup.data || {};
+  if (type === "usuarios") return asArray(d.users).length + asArray(d.roles).length;
   if (type === "estoque") return asArray(d.items).length;
   if (type === "produtos") return asArray(d.products).length;
   if (type === "servicos") return asArray(d.services).length;
@@ -142,6 +146,7 @@ function getPreviewItems(type: BackupType, backup: any): { name: string; detail?
   const toItem = (arr: unknown, nameKey: string, detailFn?: (r: any) => string) =>
     asArray<any>(arr).slice(0, 5).map((r: any) => ({ name: r[nameKey] || "—", detail: detailFn?.(r) }));
 
+  if (type === "usuarios") return toItem(d.users, "username", r => r.roleLabel || r.jobTitle || r.role || "—");
   if (type === "estoque") return toItem(d.items, "name", r => `${r.quantity} ${r.unit || "un"}`);
   if (type === "produtos") return toItem(d.products, "name", r => `R$ ${Number(r.salePrice || 0).toFixed(2)}`);
   if (type === "servicos") return toItem(d.services, "name", r => `R$ ${Number(r.pricePerUnit || 0).toFixed(2)}/m²`);
@@ -185,7 +190,25 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
   const altRow = { fillColor: [245, 247, 250] as [number, number, number] };
   const baseStyle = { fontSize: 8, cellPadding: 2 };
 
-  if (type === "estoque") {
+  if (type === "usuarios") {
+    const users = asArray<any>(backup.data?.users);
+    const roles = asArray<any>(backup.data?.roles);
+    autoTable(doc, {
+      startY: 28,
+      head: [["Login", "Cargo", "Perfil", "Status"]],
+      body: users.map((user: any) => [user.username, user.roleLabel || user.jobTitle || "—", user.role || "funcionario", user.active === false ? "Inativo" : "Ativo"]),
+      styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
+    });
+    const y = (doc as any).lastAutoTable?.finalY || 28;
+    doc.setFontSize(11); doc.setFont("helvetica", "bold");
+    doc.text("Cargos e permissões", 14, y + 10);
+    autoTable(doc, {
+      startY: y + 14,
+      head: [["Cargo", "Nome técnico", "Permissões"]],
+      body: roles.map((role: any) => [role.label || role.name, role.name, Object.entries(role.permissions || {}).filter(([, allowed]) => allowed).map(([permission]) => permission).join(", ") || "—"]),
+      styles: { fontSize: 7, cellPadding: 2 }, headStyles: { fillColor: [71, 85, 105] as [number, number, number], textColor: 255 as unknown as [number, number, number], fontStyle: "bold" }, alternateRowStyles: altRow,
+    });
+  } else if (type === "estoque") {
     const items = asArray<any>(backup.data?.items);
     const movements = asArray<any>(backup.data?.movements);
     autoTable(doc, {
@@ -443,6 +466,7 @@ interface BackupManagerProps {
 }
 
 const INVALIDATE_KEYS: Record<BackupType, string[]> = {
+  usuarios: ["/api/users", "/api/roles"],
   estoque: ["/api/inventory", "/api/inventory-movements"],
   produtos: ["/api/products"],
   servicos: ["/api/services"],
@@ -517,7 +541,20 @@ export default function BackupManager({
         generatedBy,
       });
 
+      if (!isExport || type === "usuarios") {
+        const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${baseName}.json`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      }
+
       if (!isExport) {
+        const historyBackup = type === "usuarios"
+          ? { ...backup, data: { ...backup.data, users: asArray<any>(backup.data?.users).map(({ passwordHash: _passwordHash, ...user }) => user) } }
+          : backup;
         const entry: BackupHistoryEntry = {
           id: Date.now().toString(36),
           type,
@@ -525,14 +562,16 @@ export default function BackupManager({
           fileName: baseName,
           exportedAt: new Date().toISOString(),
           sizeKB,
-          backup,
+          backup: historyBackup,
         };
         saveBackupHistory(entry);
       }
 
       toast({
         title: isExport ? "Relatório exportado com sucesso!" : "Backup gerado com sucesso!",
-        description: `${baseName}.pdf baixado para conferência segura.`,
+        description: isExport && type !== "usuarios"
+          ? `${baseName}.pdf baixado para conferência segura.`
+          : `${baseName}.json restaurável e PDF de conferência baixados.`,
       });
     } catch (err: any) {
       toast({ title: "Erro ao gerar backup", description: err.message, variant: "destructive" });

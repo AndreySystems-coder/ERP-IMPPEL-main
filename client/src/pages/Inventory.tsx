@@ -557,9 +557,20 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const computeRapidaRows = (text: string, allItems: InventoryItem[]): RapidaRow[] => {
     const lines = text.split("\n");
     const rows: RapidaRow[] = [];
+    const fallbackYear = Number(rapidaDate.slice(0, 4)) || new Date().getFullYear();
+    const simulatedQuantity = new Map(allItems.map(item => [item.id, item.quantity]));
+    let currentDate = rapidaDate;
+    let hasExplicitDates = false;
 
-    // -- Parte 1: itens listados pelo usuário --
     for (const line of lines) {
+      const dateHeader = line.trim().match(/^(\d{1,2})[\/](\d{1,2})(?:[\/](\d{2,4}))?$/);
+      if (dateHeader) {
+        const yearValue = dateHeader[3] ? Number(dateHeader[3]) : fallbackYear;
+        const year = yearValue < 100 ? 2000 + yearValue : yearValue;
+        currentDate = `${year}-${dateHeader[2].padStart(2, "0")}-${dateHeader[1].padStart(2, "0")}`;
+        hasExplicitDates = true;
+        continue;
+      }
       const parsed = parseCountLine(line);
       if (!parsed) continue;
       let best: InventoryItem | null = null;
@@ -568,10 +579,14 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
         const score = scoreMatch(parsed.name, item.name);
         if (score > bestScore) { bestScore = score; best = item; }
       }
-      const diff = best ? parsed.qty - best.quantity : 0;
+      const currentQuantity = best ? simulatedQuantity.get(best.id) ?? best.quantity : 0;
+      const diff = best ? parsed.qty - currentQuantity : 0;
+      if (best && bestScore >= 30) simulatedQuantity.set(best.id, parsed.qty);
       rows.push({
+        date: currentDate,
         inputName: parsed.name,
         qty: parsed.qty,
+        currentQuantity,
         matchedItem: bestScore >= 30 ? best : null,
         confidence: bestScore,
         diff: bestScore >= 30 ? diff : 0,
@@ -579,24 +594,26 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
       });
     }
 
-    // Deduplicação: quando o mesmo produto aparece mais de uma vez, SOMA as quantidades
-    const seenMap = new Map<number, RapidaRow>();
+    const seenMap = new Map<string, RapidaRow>();
     for (const row of rows) {
       if (row.matchedItem) {
-        if (seenMap.has(row.matchedItem.id)) {
-          const first = seenMap.get(row.matchedItem.id)!;
+        const key = `${row.date}|${row.matchedItem.id}`;
+        if (seenMap.has(key)) {
+          const first = seenMap.get(key)!;
           first.qty += row.qty;
           first.diff = first.qty - first.matchedItem!.quantity;
           first.movType = first.diff !== 0 ? (first.diff > 0 ? "ENTRADA" : "SAÍDA") : null;
           first.inputName = `${first.inputName} + ${row.inputName}`;
           row.isDuplicate = true; row.movType = null; row.diff = 0;
         } else {
-          seenMap.set(row.matchedItem.id, row);
+          seenMap.set(key, row);
         }
       }
     }
 
-    // Parte 2: itens não listados serão zerados na contagem física completa.
+    if (hasExplicitDates) return rows;
+
+    // Uma lista sem datas continua sendo uma contagem física completa.
     const countedIds = new Set<number>(
       rows.filter(r => r.matchedItem && !r.isDuplicate).map(r => r.matchedItem!.id)
     );
@@ -608,6 +625,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
       const row: RapidaRow = {
         inputName: "",
         qty: 0,
+        currentQuantity: item.quantity,
         matchedItem: item,
         confidence: 100,
         diff: -item.quantity,           // 0 - estoque atual
@@ -665,7 +683,10 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
 
 
   const applyRapida = useMutation({
-    mutationFn: (payload: any) => apiRequest("POST", "/api/inventory-movements/batch", payload),
+    mutationFn: async (payloads: any[]) => {
+      const results = await Promise.all(payloads.map(payload => apiRequest("POST", "/api/inventory-movements/batch", payload)));
+      return results.flat();
+    },
     onSuccess: (result: any[]) => {
       queryClient.invalidateQueries({ queryKey: ["/api/inventory-movements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
@@ -697,22 +718,25 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
       });
       return;
     }
-    const today = rapidaDate;
-    const todayFmt = fmtDate(today);
     const adjustmentCount = validRows.length;
     const analyzedCount = rapidaPreview.filter(row => row.matchedItem && !row.isDuplicate).length;
     const userName = (currentUser as any)?.username || "Não informado";
-    const batchPayload = {
-      date: today,
-      notes: `Origem: AJUSTE_POR_INVENTARIO | Recontagem ${todayFmt} | Usuario: ${userName} | Itens analisados: ${analyzedCount} | Ajustes: ${adjustmentCount}`,
-      items: validRows.map(r => ({
-        inventoryId: r.matchedItem!.id,
-        productName: r.matchedItem!.name,
-        quantity: Math.abs(r.diff),
-        type: r.movType!,
+    const byDate = new Map<string, RapidaRow[]>();
+    validRows.forEach(row => {
+      const date = row.date || rapidaDate;
+      byDate.set(date, [...(byDate.get(date) || []), row]);
+    });
+    const payloads = Array.from(byDate.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([date, rows]) => ({
+      date,
+      notes: `Origem: CONTAGEM_RAPIDA_IMPORTADA | AJUSTE_POR_INVENTARIO | Recontagem ${fmtDate(date)} | Usuario: ${userName} | Itens analisados: ${analyzedCount} | Ajustes: ${adjustmentCount}`,
+      items: rows.map(row => ({
+        inventoryId: row.matchedItem!.id,
+        productName: row.matchedItem!.name,
+        quantity: Math.abs(row.diff),
+        type: row.movType!,
       })),
-    };
-    applyRapida.mutate(batchPayload);
+    }));
+    applyRapida.mutate(payloads);
   };
 
   const addBatchRow = () => setBatchItems(prev => [...prev, { inventoryId: "", quantity: "", type: "ENTRADA", searchText: "", dropdownOpen: false }]);
