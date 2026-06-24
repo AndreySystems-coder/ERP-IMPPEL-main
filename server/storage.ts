@@ -123,6 +123,7 @@ export interface IStorage {
   updateRole(id: number, data: Partial<InsertRole>): Promise<Role | undefined>;
   deleteRole(id: number): Promise<void>;
   deleteUser(id: number): Promise<void>;
+  clearOperationalData(): Promise<{ deleted: number; preservedUsers: number; preservedRoles: number }>;
 
   // Clients
   getClients(): Promise<Client[]>;
@@ -370,6 +371,24 @@ export class DatabaseStorage implements IStorage {
   }
   async deleteUser(id: number): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  async clearOperationalData(): Promise<{ deleted: number; preservedUsers: number; preservedRoles: number }> {
+    const [preservedUsers, preservedRoles, clientsBefore, servicesBefore, leadsBefore, jobsBefore, ordersBefore, inventoryBefore, movementsBefore, paymentsBefore, productsBefore, transactionsBefore, obrasBefore, contractsBefore, warrantiesBefore, productionBefore, npsBefore, remindersBefore, withdrawalsBefore, discountsBefore] = await Promise.all([
+      this.getUsers(), this.getRoles(), this.getClients(), this.getServices(), this.getLeads(), this.getJobs(), this.getWorkOrders(),
+      this.getInventoryItems(), this.getInventoryMovements(), this.getPayments(), this.getProducts(), this.getTransactions(),
+      this.getObraRegistros(), this.getContracts(), this.getWarranties(), this.getProductionLogs(), this.getNpsResponses(),
+      this.getMaintenanceReminders(), this.getMaterialWithdrawals(), this.getSalaryDiscounts(),
+    ]);
+    const deleted = [clientsBefore, servicesBefore, leadsBefore, jobsBefore, ordersBefore, inventoryBefore, movementsBefore, paymentsBefore, productsBefore, transactionsBefore, obrasBefore, contractsBefore, warrantiesBefore, productionBefore, npsBefore, remindersBefore, withdrawalsBefore, discountsBefore]
+      .reduce((sum, rows) => sum + rows.length, 0);
+    await db.execute(sql.raw(`TRUNCATE TABLE
+      salary_discounts, material_withdrawal_items, material_withdrawals,
+      maintenance_reminders, nps_responses, production_logs, warranty_incidents, warranties,
+      contracts, obra_consumo_logs, obra_registros, job_tracking, payments, transactions,
+      inventory_movements, inventory, products, work_orders, jobs, leads, clients, services
+      RESTART IDENTITY CASCADE`));
+    return { deleted, preservedUsers: preservedUsers.length, preservedRoles: preservedRoles.length };
   }
 
   // ─── Roles ──────────────────────────────────────────────────────────────────
@@ -1322,6 +1341,19 @@ export function createMemoryStorage(): IStorage {
     updateUserRole: async (id: number, role: string) => updateById("users", id, { role }),
     updateUserRoleId: async (id: number, roleId: number | null) => updateById("users", id, { roleId }),
     updateUserJobTitle: async (id: number, jobTitle: string) => updateById("users", id, { jobTitle }),
+    clearOperationalData: async () => {
+      const preservedUsers = data.users.length;
+      const preservedRoles = data.roles.length;
+      const preservedTables = new Set(["users", "roles", "settings", "costConfig", "priorityRules", "jobStatuses", "paymentMethods", "paymentConditions", "whatsappFlows", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"]);
+      let deleted = 0;
+      Object.keys(data).forEach(table => {
+        if (preservedTables.has(table)) return;
+        deleted += data[table].length;
+        data[table] = [];
+        ids[table] = 1;
+      });
+      return { deleted, preservedUsers, preservedRoles };
+    },
     updateSetting: async (key: string, value: number) => {
       const existing = data.settings.find(setting => setting.key === key);
       if (existing) return Object.assign(existing, { value });

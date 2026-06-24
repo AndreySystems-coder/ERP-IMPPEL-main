@@ -14,8 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   UserCog, Plus, Trash2, Shield, User, Key, Check, X, Eye, EyeOff,
-  Briefcase, Settings2, Edit3, Save, ChevronDown, ChevronRight, Users,
+  Briefcase, Settings2, Edit3, Save, ChevronDown, ChevronRight, Users, Upload,
 } from "lucide-react";
+import OperationalUsersPanel from "@/components/OperationalUsersPanel";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface UserItem {
@@ -24,6 +25,10 @@ interface UserItem {
   role: "admin" | "funcionario";
   roleId: number | null;
   jobTitle: string | null;
+  fullName: string | null;
+  birthDate: string | null;
+  status: string;
+  mustChangePassword: boolean;
   roleName: string | null;
   roleLabel: string | null;
 }
@@ -275,9 +280,10 @@ export default function Usuarios() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="usuarios" data-testid="tab-usuarios"><Users className="w-4 h-4 mr-2" />Usuários ({users.length})</TabsTrigger>
           <TabsTrigger value="cargos" data-testid="tab-cargos"><Settings2 className="w-4 h-4 mr-2" />Cargos e Permissões ({roles.length})</TabsTrigger>
+          <TabsTrigger value="importacao" data-testid="tab-importacao"><Upload className="w-4 h-4 mr-2" />Importação e relatórios</TabsTrigger>
         </TabsList>
 
         {/* ── ABA USUÁRIOS ─────────────────────────────────────────────────────── */}
@@ -387,6 +393,17 @@ export default function Usuarios() {
                         {u.jobTitle && (
                           <p className="text-xs text-gray-500 mt-0.5 italic" data-testid={`text-jobtitle-${u.id}`}>{u.jobTitle}</p>
                         )}
+                        {u.fullName && (
+                          <p className="text-xs text-gray-500 mt-0.5" data-testid={`text-fullname-${u.id}`}>{u.fullName}</p>
+                        )}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <Badge variant="outline" className={u.status === "inativo" ? "border-red-200 bg-red-50 text-red-700 text-xs" : "border-emerald-200 bg-emerald-50 text-emerald-700 text-xs"}>
+                            {u.status === "inativo" ? "Inativo" : "Ativo"}
+                          </Badge>
+                          {u.mustChangePassword && (
+                            <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 text-xs">Troca de senha pendente</Badge>
+                          )}
+                        </div>
 
                         {/* Expand/collapse controls */}
                         {u.id !== (currentUser as any)?.id && (
@@ -481,6 +498,10 @@ export default function Usuarios() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="importacao" className="mt-4">
+          <OperationalUsersPanel />
         </TabsContent>
 
         {/* ── ABA CARGOS ───────────────────────────────────────────────────────── */}

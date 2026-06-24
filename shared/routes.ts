@@ -27,6 +27,9 @@ export const publicUserSchema = z.object({
   permissions: z.record(z.boolean()).optional(),
   roleName: z.string().nullable().optional(),
   roleLabel: z.string().nullable().optional(),
+  fullName: z.string().nullable().optional(),
+  status: z.string().optional(),
+  mustChangePassword: z.boolean().optional(),
 });
 
 export const api = {

@@ -18,6 +18,10 @@ export const users = pgTable("users", {
   role: text("role").notNull().default('funcionario'), // 'admin' or 'funcionario'
   roleId: integer("role_id"),
   jobTitle: text("job_title"),
+  fullName: text("full_name"),
+  birthDate: text("birth_date"),
+  status: text("status").notNull().default('ativo'),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
 });
 
 export const clients = pgTable("clients", {

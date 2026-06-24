@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
-  Database, Upload, Clock, FileText, Trash2,
+  Database, Upload, Download, Clock, FileText, Trash2,
   RefreshCw, History, CheckCircle2, AlertTriangle, Package, Users,
   Briefcase, ClipboardList, ShoppingCart, Layers, PackageCheck, Shield,
   HardDrive,
+  ShieldAlert, Eraser,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/Card";
+import { Button } from "@/components/ui/button";
 import BackupManager, {
   getBackupHistory, getRestoreLog, generatePDF, fmtDateTime,
   type BackupType, type BackupHistoryEntry, type RestoreLogEntry,
@@ -17,7 +19,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const ALL_BACKUP_TYPES: { type: BackupType; label: string; icon: React.ElementType; color: string; description: string }[] = [
-  { type: "usuarios", label: "Usuários e Cargos", icon: Users, color: "text-indigo-600 bg-indigo-50 border-indigo-200", description: "Contas, cargos e permissões, sem senha em texto puro" },
+  { type: "usuarios", label: "Usuários e Cargos", icon: Users, color: "text-indigo-600 bg-indigo-50 border-indigo-200", description: "Backup técnico com hashes bcrypt" },
   { type: "estoque", label: "Estoque", icon: Package, color: "text-blue-600 bg-blue-50 border-blue-200", description: "Itens e movimentações" },
   { type: "produtos", label: "Catálogo de Produtos", icon: ShoppingCart, color: "text-emerald-600 bg-emerald-50 border-emerald-200", description: "Produtos do catálogo de vendas" },
   { type: "servicos", label: "Catálogo de Serviços", icon: Layers, color: "text-violet-600 bg-violet-50 border-violet-200", description: "Serviços com custos e margens" },
@@ -55,6 +57,8 @@ function getModuleSummary(entry: BackupHistoryEntry): string {
   if (d.npsResponses?.length) parts.push(`${d.npsResponses.length} NPS`);
   if (d.maintenanceReminders?.length) parts.push(`${d.maintenanceReminders.length} lembretes`);
   if (d.warranties?.length)  parts.push(`${d.warranties.length} garantias`);
+  if (d.users?.length) parts.push(`${d.users.length} usuários`);
+  if (d.roles?.length) parts.push(`${d.roles.length} cargos`);
   return parts.join(" · ") || "—";
 }
 
@@ -133,11 +137,11 @@ type TextPreview = {
 
 const RESTORE_GUIDES: Record<BackupType, { format: string; example: string; fields: string[]; applySupported: boolean; limitation?: string }> = {
   usuarios: {
-    format: "Use o JSON técnico gerado no backup de Usuários e Cargos",
-    example: "A restauração preserva logins, cargos, permissões e hashes bcrypt. Senhas nunca aparecem em texto puro.",
-    fields: ["Login", "Cargo", "Permissões", "Hash bcrypt"],
+    format: "Use o JSON técnico gerado pelo módulo Usuários e Cargos",
+    example: "A importação operacional por texto/JSON fica na tela Gestão de Usuários.",
+    fields: ["Login", "Hash bcrypt", "Cargo", "Perfil", "Status"],
     applySupported: false,
-    limitation: "Texto e PDF servem apenas para conferência. Para restaurar contas, envie o JSON técnico.",
+    limitation: "Usuários não são restaurados por texto livre neste painel. Use o JSON técnico ou a importação operacional com preview na tela Gestão de Usuários.",
   },
   estoque: {
     format: "Produto; Quantidade; Unidade; Estoque mínimo",
@@ -595,7 +599,38 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
   const [history, setHistory] = useState<BackupHistoryEntry[]>([]);
   const [log, setLog] = useState<RestoreLogEntry[]>([]);
   const [refresh, setRefresh] = useState(0);
+  const [resetToken, setResetToken] = useState("");
+  const [resetConfirmation, setResetConfirmation] = useState("");
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const [maintenanceError, setMaintenanceError] = useState("");
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
   const page = PAGE_COPY[mode];
+
+  const generateFullTechnicalBackup = async () => {
+    setMaintenanceLoading(true); setMaintenanceError(""); setMaintenanceMessage("");
+    try {
+      const response = await apiRequest("GET", "/api/backup/completo");
+      const backup = await response.json();
+      const token = String(backup.resetToken || "");
+      const { resetToken: _resetToken, ...downloadable } = backup;
+      const blob = new Blob([JSON.stringify(downloadable, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
+      anchor.href = url; anchor.download = `Backup_Tecnico_Completo_${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); URL.revokeObjectURL(url);
+      setResetToken(token); setMaintenanceMessage("Backup completo baixado. A autorização de limpeza vale por 15 minutos.");
+    } catch (err: any) { setMaintenanceError(err.message || "Falha ao gerar backup completo."); }
+    finally { setMaintenanceLoading(false); }
+  };
+
+  const clearOperationalData = async () => {
+    setMaintenanceLoading(true); setMaintenanceError(""); setMaintenanceMessage("");
+    try {
+      const response = await apiRequest("POST", "/api/maintenance/operational-reset", { resetToken, confirmation: resetConfirmation });
+      const result = await response.json();
+      setMaintenanceMessage(`${result.message} ${result.deleted || 0} registro(s) removido(s); ${result.preservedUsers || 0} usuário(s) e ${result.preservedRoles || 0} cargo(s) preservado(s).`);
+      setResetToken(""); setResetConfirmation(""); queryClient.clear();
+    } catch (err: any) { setMaintenanceError(err.message || "A limpeza não foi executada."); }
+    finally { setMaintenanceLoading(false); }
+  };
 
   useEffect(() => {
     setHistory(getBackupHistory());
@@ -719,6 +754,24 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
               );
             })}
           </div>
+
+          <Card className="border-red-200">
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+                <div><h3 className="font-bold text-slate-900">Backup Completo Técnico e Limpeza Operacional</h3><p className="mt-1 text-sm text-slate-600">O backup técnico inclui usuários, cargos e hashes bcrypt; nunca inclui senha em texto. A limpeza preserva usuários, cargos e configurações essenciais.</p></div>
+              </div>
+              <Button type="button" variant="outline" onClick={generateFullTechnicalBackup} disabled={maintenanceLoading}><Download className="mr-2 h-4 w-4" />Baixar Backup Completo Técnico</Button>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+                <p className="text-sm font-bold text-red-900">Limpeza Operacional</p>
+                <p className="text-xs text-red-800">Remove estoque, movimentações, catálogo, clientes, orçamentos, OS, registros de obra, financeiro, garantias, pós-venda, vendas e controle de materiais. Não executa sem backup completo recém-gerado.</p>
+                <input value={resetConfirmation} onChange={event => setResetConfirmation(event.target.value)} placeholder="Digite: LIMPAR DADOS OPERACIONAIS" className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm" />
+                <Button type="button" onClick={clearOperationalData} disabled={maintenanceLoading || !resetToken || resetConfirmation !== "LIMPAR DADOS OPERACIONAIS"} className="bg-red-700 text-white hover:bg-red-800"><Eraser className="mr-2 h-4 w-4" />Executar Limpeza Operacional</Button>
+              </div>
+              {maintenanceError && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{maintenanceError}</p>}
+              {maintenanceMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{maintenanceMessage}</p>}
+            </CardContent>
+          </Card>
 
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">

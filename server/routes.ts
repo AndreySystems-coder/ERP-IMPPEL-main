@@ -10,9 +10,26 @@ import { api } from "@shared/routes";
 import { insertCostConfigSchema } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import {
+  TECHNICAL_TEAM_ROLE,
+  generateInitialPassword,
+  normalizeOperationalEmployee,
+  type OperationalEmployeeInput,
+} from "@shared/operationalUsers";
 
 const BCRYPT_ROUNDS = 10;
+const operationalResetTokens = new Map<string, number>();
+
+const operationalEmployeeSchema = z.object({
+  nomeCompleto: z.string().min(2),
+  dataNascimento: z.string().min(8).optional(),
+  cargo: z.string().optional(),
+  perfil: z.string().optional(),
+  status: z.string().optional(),
+  login: z.string().optional(),
+  senhaInicial: z.string().optional(),
+});
 
 // ─── Auth Middleware ─────────────────────────────────────────────────────────
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -101,6 +118,37 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  async function ensureTechnicalTeamRole() {
+    const roles = await storage.getRoles();
+    const existing = roles.find(role => role.name === TECHNICAL_TEAM_ROLE.name || role.label === TECHNICAL_TEAM_ROLE.label);
+    const forbidden = [
+      "viewFinancials", "viewPayments", "viewCashFlow", "viewFinancialSettings",
+      "viewSettings", "viewCostSettings", "viewStatusSettings", "viewUsers",
+      "viewPriorityRules", "viewBackups", "viewBackupGeneration", "viewRestore",
+      "viewExports", "editInventory", "viewAllMaterials",
+    ];
+
+    if (existing) {
+      const currentPermissions = (() => { try { return JSON.parse(existing.permissions || "{}"); } catch { return {}; } })();
+      const expectedPermissions: Record<string, boolean> = { ...currentPermissions, ...TECHNICAL_TEAM_ROLE.permissions };
+      forbidden.forEach(permission => { expectedPermissions[permission] = false; });
+      return await storage.updateRole(existing.id, {
+        label: TECHNICAL_TEAM_ROLE.label,
+        permissions: JSON.stringify(expectedPermissions),
+        isDefault: true,
+      }) || existing;
+    }
+
+    const permissions: Record<string, boolean> = { ...TECHNICAL_TEAM_ROLE.permissions };
+    forbidden.forEach(permission => { permissions[permission] = false; });
+    return storage.createRole({
+      name: TECHNICAL_TEAM_ROLE.name,
+      label: TECHNICAL_TEAM_ROLE.label,
+      permissions: JSON.stringify(permissions),
+      isDefault: true,
+    });
+  }
 
   // Seed data function
   async function seedDatabase() {
@@ -257,6 +305,9 @@ export async function registerRoutes(
       if (!user) {
         return res.status(401).json({ message: "Usuário ou senha inválidos" });
       }
+      if ((user as any).status === "inativo") {
+        return res.status(403).json({ message: "Usuário inativo. Procure a administração." });
+      }
       // Support both bcrypt-hashed passwords (start with $2) and legacy plaintext
       const isHashed = user.password.startsWith("$2");
       const passwordValid = isHashed
@@ -308,6 +359,20 @@ export async function registerRoutes(
     res.status(200).json({ message: "Logged out" });
   });
 
+  app.post("/api/auth/change-initial-password", requireAuth, async (req, res) => {
+    try {
+      const newPassword = String(req.body?.newPassword || "");
+      if (newPassword.length < 8) return res.status(400).json({ message: "A nova senha deve ter pelo menos 8 caracteres." });
+      const user = await storage.getUser(Number(req.session.userId));
+      if (!user) return res.status(404).json({ message: "Usuário não encontrado." });
+      if (!(user as any).mustChangePassword) return res.status(400).json({ message: "A troca inicial já foi concluída." });
+      if (await bcrypt.compare(newPassword, user.password)) return res.status(400).json({ message: "Escolha uma senha diferente da senha inicial." });
+      const password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+      await storage.updateUser(user.id, { password, mustChangePassword: false } as any);
+      res.json({ message: "Senha alterada com sucesso." });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // User management (admin only)
   app.get("/api/users", requireAdmin, async (req, res) => {
     try {
@@ -320,6 +385,10 @@ export async function registerRoutes(
           id: u.id, username: u.username, role: u.role,
           roleId: uAny.roleId || null,
           jobTitle: uAny.jobTitle || null,
+          fullName: uAny.fullName || null,
+          birthDate: uAny.birthDate || null,
+          status: uAny.status || "ativo",
+          mustChangePassword: !!uAny.mustChangePassword,
           roleName: customRole?.name || null,
           roleLabel: customRole?.label || null,
         };
@@ -329,14 +398,110 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/users/operational/preview", requireAdmin, async (req, res) => {
+    try {
+      const employees = z.array(operationalEmployeeSchema).min(1).parse(req.body?.employees);
+      const existingUsers = await storage.getUsers();
+      const existingByLogin = new Map(existingUsers.map(user => [user.username.toLowerCase(), user]));
+      const incomingLogins = new Set<string>();
+      const rows = employees.map((employee, index) => {
+        try {
+          const normalized = normalizeOperationalEmployee(employee as OperationalEmployeeInput);
+          const duplicateInFile = incomingLogins.has(normalized.login);
+          incomingLogins.add(normalized.login);
+          const existing = existingByLogin.get(normalized.login);
+          return { ...normalized, row: index + 1, valid: !duplicateInFile, duplicateInFile, exists: !!existing, action: duplicateInFile ? "conflito" : existing ? "existente" : "criar", message: duplicateInFile ? "Login duplicado no arquivo." : existing ? "Usuário já existe; não será sobrescrito sem autorização." : "Pronto para criar." };
+        } catch (err: any) {
+          return { row: index + 1, valid: false, action: "erro", message: err.message, source: employee };
+        }
+      });
+      res.json({ rows, summary: { total: rows.length, valid: rows.filter(row => row.valid).length, existing: rows.filter(row => (row as any).exists).length, errors: rows.filter(row => !row.valid).length } });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/users/operational/apply", requireAdmin, async (req, res) => {
+    try {
+      if (req.body?.confirmed !== true) return res.status(400).json({ message: "Confirme a importação após revisar o preview." });
+      const employees = z.array(operationalEmployeeSchema).min(1).parse(req.body?.employees);
+      const updateExisting = req.body?.updateExisting === true;
+      const resetPasswords = req.body?.resetPasswords === true;
+      const technicalRole = await ensureTechnicalTeamRole();
+      const roles = await storage.getRoles();
+      const existingUsers = await storage.getUsers();
+      const existingByLogin = new Map(existingUsers.map(user => [user.username.toLowerCase(), user]));
+      const result = { created: 0, existing: 0, updated: 0, errors: [] as Array<{ row: number; message: string }> };
+      const seen = new Set<string>();
+      for (let index = 0; index < employees.length; index++) {
+        try {
+          const employee = normalizeOperationalEmployee(employees[index] as OperationalEmployeeInput);
+          if (seen.has(employee.login)) throw new Error("Login duplicado no arquivo.");
+          seen.add(employee.login);
+          const assignedRole = roles.find(item => item.label.toLowerCase() === employee.cargo.toLowerCase() || item.name.toLowerCase() === employee.cargo.toLowerCase()) || technicalRole;
+          const existing = existingByLogin.get(employee.login);
+          const profile = employee.perfil === "Administrador" ? "admin" : "funcionario";
+          const status = employee.status === "Inativo" ? "inativo" : "ativo";
+          if (existing) {
+            if (!updateExisting) { result.existing++; continue; }
+            const updates: any = { fullName: employee.nomeCompleto, birthDate: employee.dataNascimento, role: profile, roleId: assignedRole.id, jobTitle: assignedRole.label, status };
+            if (resetPasswords) { updates.password = await bcrypt.hash(employee.senhaInicial, BCRYPT_ROUNDS); updates.mustChangePassword = true; }
+            await storage.updateUser(existing.id, updates);
+            result.updated++;
+            continue;
+          }
+          await storage.createUser({
+            username: employee.login,
+            password: await bcrypt.hash(employee.senhaInicial, BCRYPT_ROUNDS),
+            role: profile,
+            roleId: assignedRole.id,
+            jobTitle: assignedRole.label,
+            fullName: employee.nomeCompleto,
+            birthDate: employee.dataNascimento,
+            status,
+            mustChangePassword: true,
+          } as any);
+          result.created++;
+        } catch (err: any) {
+          result.errors.push({ row: index + 1, message: err.message });
+        }
+      }
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/users/operational/export", requireAdmin, async (_req, res) => {
+    try {
+      const [allUsers, allRoles] = await Promise.all([storage.getUsers(), storage.getRoles()]);
+      const rows = allUsers.filter(user => user.role !== "admin").map(user => {
+        const item = user as any;
+        const role = allRoles.find(entry => entry.id === item.roleId);
+        return {
+          login: user.username,
+          senhaInicial: item.mustChangePassword && item.birthDate ? generateInitialPassword(item.birthDate) : "",
+          nomeCompleto: item.fullName || user.username,
+          cargo: role?.label || item.jobTitle || TECHNICAL_TEAM_ROLE.label,
+          perfil: "Funcionário",
+          status: item.status === "inativo" ? "Inativo" : "Ativo",
+          trocaPendente: !!item.mustChangePassword,
+        };
+      });
+      res.json({ type: "usuarios-operacionais", version: "1.0", exportedAt: new Date().toISOString(), data: rows });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.post("/api/users", requireAdmin, async (req, res) => {
     try {
-      const { username, password, role, roleId, jobTitle } = req.body;
+      const { username, password, role, roleId, jobTitle, fullName, birthDate, status, mustChangePassword } = req.body;
       if (!username || !password) return res.status(400).json({ message: "Usuário e senha obrigatórios" });
       const existing = await storage.getUserByUsername(username);
       if (existing) return res.status(400).json({ message: "Nome de usuário já existe" });
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      const newUser = await storage.createUser({ username, password: hashedPassword, role: role || "funcionario" } as any);
+      const newUser = await storage.createUser({ username, password: hashedPassword, role: role || "funcionario", fullName: fullName || null, birthDate: birthDate || null, status: status || "ativo", mustChangePassword: !!mustChangePassword } as any);
       if (roleId) await storage.updateUserRoleId(newUser.id, roleId);
       if (jobTitle) await storage.updateUserJobTitle(newUser.id, jobTitle);
       const updatedUser = await storage.getUser(newUser.id);
@@ -364,7 +529,7 @@ export async function registerRoutes(
       const { password } = req.body;
       if (!password || password.length < 4) return res.status(400).json({ message: "Senha deve ter no mínimo 4 caracteres" });
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      const updated = await storage.updateUserPassword(Number(req.params.id), hashedPassword);
+      const updated = await storage.updateUser(Number(req.params.id), { password: hashedPassword, mustChangePassword: false } as any);
       if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
       res.json({ message: "Senha atualizada" });
     } catch {
@@ -2501,10 +2666,13 @@ export async function registerRoutes(
 
   app.get("/api/backup/completo", requireAdmin, async (_req, res) => {
     try {
-      res.json(await buildCompleteBackupPackage(storage, {
+      const backup = await buildCompleteBackupPackage(storage, {
         environment: process.env.DATABASE_URL ? "persistent-postgresql" : "memory-preview",
         erpVersion: process.env.npm_package_version || "1.0.0",
-      }));
+      });
+      const resetToken = randomUUID();
+      operationalResetTokens.set(resetToken, Date.now() + 15 * 60 * 1000);
+      res.json({ ...backup, resetToken });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -2648,6 +2816,10 @@ export async function registerRoutes(
           role: user.role === "admin" ? "admin" : "funcionario",
           roleId: user.roleId ?? null,
           jobTitle: user.jobTitle ?? null,
+          fullName: user.fullName ?? null,
+          birthDate: user.birthDate ?? null,
+          status: user.status === "inativo" ? "inativo" : "ativo",
+          mustChangePassword: !!user.mustChangePassword,
           createdAt: user.createdAt ?? null,
           password: /^\$2[aby]\$/.test(String(user.passwordHash || ""))
             ? user.passwordHash
@@ -2672,21 +2844,26 @@ export async function registerRoutes(
       const userData = allUsers.map(user => {
         const customRole = rolesById.get((user as any).roleId);
         return {
+          id: user.id,
           username: user.username,
           role: user.role,
           roleId: (user as any).roleId || null,
           roleName: customRole?.name || null,
           roleLabel: customRole?.label || null,
           jobTitle: (user as any).jobTitle || null,
+          fullName: (user as any).fullName || null,
+          birthDate: (user as any).birthDate || null,
+          status: (user as any).status || "ativo",
+          mustChangePassword: !!(user as any).mustChangePassword,
           active: true,
           passwordHash: user.password.startsWith("$2") ? user.password : null,
         };
       });
       res.json({
         type: "usuarios",
-        version: "1.0",
+        version: "2.0",
         exportedAt: new Date().toISOString(),
-        security: { plaintextPasswordsIncluded: false, passwordHashesIncluded: true },
+        security: "bcrypt-only",
         data: { users: userData, roles: roleData },
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -2702,6 +2879,7 @@ export async function registerRoutes(
       const existingRoles = await storage.getRoles();
       const rolesByName = new Map(existingRoles.map(role => [role.name.toLocaleLowerCase("pt-BR"), role]));
       const restoredRoles = new Map<string, number>();
+      const restoredRoleIds = new Map<number, number>();
       let rolesCreated = 0, rolesUpdated = 0, created = 0, updated = 0, skipped = 0;
 
       for (const role of data.roles) {
@@ -2712,10 +2890,12 @@ export async function registerRoutes(
         if (existing) {
           await storage.updateRole(existing.id, { label: role.label, permissions, isDefault: Boolean(role.isDefault) });
           restoredRoles.set(key, existing.id);
+          if (role.id) restoredRoleIds.set(Number(role.id), existing.id);
           rolesUpdated++;
         } else {
           const saved = await storage.createRole({ name: role.name, label: role.label, permissions, isDefault: Boolean(role.isDefault) });
           restoredRoles.set(key, saved.id);
+          if (role.id) restoredRoleIds.set(Number(role.id), saved.id);
           rolesCreated++;
         }
       }
@@ -2724,22 +2904,46 @@ export async function registerRoutes(
         const username = String(user?.username || "").trim();
         const passwordHash = String(user?.passwordHash || "");
         if (!username || !/^\$2[aby]\$/.test(passwordHash)) { skipped++; continue; }
-        const roleId = user.roleName ? restoredRoles.get(String(user.roleName).toLocaleLowerCase("pt-BR")) || null : null;
+        const roleId = user.roleName
+          ? restoredRoles.get(String(user.roleName).toLocaleLowerCase("pt-BR")) || null
+          : user.roleId
+            ? restoredRoleIds.get(Number(user.roleId)) || null
+            : null;
         const existing = await findUserByUsername(username);
+        const values: any = {
+          username,
+          password: passwordHash,
+          role: user.role === "admin" ? "admin" : "funcionario",
+          roleId,
+          jobTitle: user.jobTitle || user.roleLabel || null,
+          fullName: user.fullName || null,
+          birthDate: user.birthDate || null,
+          status: user.status === "inativo" ? "inativo" : "ativo",
+          mustChangePassword: !!user.mustChangePassword,
+        };
         if (existing) {
-          await storage.updateUser(existing.id, { password: passwordHash, role: user.role === "admin" ? "admin" : "funcionario" } as any);
-          await storage.updateUserRoleId(existing.id, roleId);
-          await storage.updateUserJobTitle(existing.id, user.jobTitle || user.roleLabel || "");
+          if (existing.role === "admin") { skipped++; continue; }
+          await storage.updateUser(existing.id, values);
           updated++;
         } else {
-          const saved = await storage.createUser({ username, password: passwordHash, role: user.role === "admin" ? "admin" : "funcionario" } as any);
-          await storage.updateUserRoleId(saved.id, roleId);
-          await storage.updateUserJobTitle(saved.id, user.jobTitle || user.roleLabel || "");
+          await storage.createUser(values);
           created++;
         }
       }
 
       res.json({ message: "Usuários e cargos restaurados com segurança.", created, updated, deleted: 0, skipped, rolesCreated, rolesUpdated });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/maintenance/operational-reset", requireAdmin, async (req, res) => {
+    try {
+      if (req.body?.confirmation !== "LIMPAR DADOS OPERACIONAIS") return res.status(400).json({ message: "Digite exatamente LIMPAR DADOS OPERACIONAIS." });
+      const token = String(req.body?.resetToken || "");
+      const expiresAt = operationalResetTokens.get(token);
+      if (!expiresAt || expiresAt < Date.now()) return res.status(400).json({ message: "Gere e baixe um Backup Completo Técnico antes da limpeza." });
+      operationalResetTokens.delete(token);
+      const result = await storage.clearOperationalData();
+      res.json({ ...result, message: "Dados operacionais removidos. Usuários, cargos e configurações foram preservados." });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
