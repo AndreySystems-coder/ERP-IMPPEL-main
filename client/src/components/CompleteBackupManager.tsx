@@ -12,6 +12,50 @@ import {
   type TechnicalBackupPayload,
 } from "@/lib/completeBackupArchive";
 
+type PdfRestoreModule = {
+  id: string;
+  type: "usuarios" | "produtos" | "servicos" | "estoque" | "financeiro" | "clientes" | "orcamentos" | "ordens-servico" | "pos-venda" | "garantias" | "materiais";
+  label: string;
+};
+
+type PdfRestorePreview = {
+  fileName: string;
+  selectedType: string;
+  reportType: string;
+  restoreType?: string;
+  title: string;
+  headerTotal: number;
+  extracted: number;
+  newCount: number;
+  existingCount: number;
+  updatedCount: number;
+  ignoredCount: number;
+  errorCount: number;
+  pendingCount: number;
+  duplicateCount: number;
+  warnings: string[];
+  ignored: string[];
+  pending: string[];
+  errors: string[];
+  rows: { name: string; detail: string; status: string }[];
+  backup?: any;
+  canApply: boolean;
+};
+
+const PDF_RESTORE_MODULES: PdfRestoreModule[] = [
+  { id: "usuarios", type: "usuarios", label: "Usuários e Cargos" },
+  { id: "produtos", type: "produtos", label: "Catálogo de Produtos" },
+  { id: "servicos", type: "servicos", label: "Catálogo de Serviços" },
+  { id: "estoque", type: "estoque", label: "Estoque" },
+  { id: "movimentacoes", type: "estoque", label: "Movimentações" },
+  { id: "clientes", type: "clientes", label: "Clientes" },
+  { id: "orcamentos", type: "orcamentos", label: "Orçamentos" },
+  { id: "ordens-servico", type: "ordens-servico", label: "Ordens de Serviço" },
+  { id: "financeiro", type: "financeiro", label: "Financeiro" },
+  { id: "pos-venda", type: "pos-venda", label: "Garantias / Pós-venda" },
+  { id: "materiais", type: "materiais", label: "Controle de Materiais" },
+];
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -245,6 +289,211 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
               {busy ? "Restaurando…" : "Confirmar restauração"}
             </button>
           </>
+        )}
+        {message && <p className="text-sm text-slate-700" role="status">{message}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Não foi possível ler o PDF."));
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.readAsDataURL(file);
+  });
+}
+
+export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; onRestored: () => void }) {
+  const [selectedModuleId, setSelectedModuleId] = useState("usuarios");
+  const selectedModule = PDF_RESTORE_MODULES.find(module => module.id === selectedModuleId) || PDF_RESTORE_MODULES[0];
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<PdfRestorePreview[]>([]);
+  const [safetyBackup, setSafetyBackup] = useState<CompleteBackupPackage | null>(null);
+  const [confirmation, setConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const loadFiles = (list?: FileList | null) => {
+    const selected = Array.from(list || []);
+    const invalid = selected.find(file => !file.name.toLowerCase().endsWith(".pdf"));
+    setMessage("");
+    setPreviews([]);
+    setSafetyBackup(null);
+    setConfirmation("");
+    if (invalid) {
+      setFiles([]);
+      setMessage("Arquivo bloqueado: selecione somente PDFs gerados pelo ERP IMPPEL.");
+      return;
+    }
+    setFiles(selected);
+  };
+
+  const buildPreview = async () => {
+    if (files.length === 0) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const payloadFiles = await Promise.all(files.map(async file => ({
+        name: file.name,
+        mimeType: file.type || "application/pdf",
+        dataBase64: await fileToBase64(file),
+      })));
+      const response = await fetch("/api/backup/preview/pdf", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ selectedType: selectedModule.type, files: payloadFiles }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível gerar preview dos PDFs.");
+      setPreviews(result.previews || []);
+      setSafetyBackup(result.safetyBackup || null);
+      if (result.safetyBackup) {
+        downloadBlob(new Blob([JSON.stringify(result.safetyBackup, null, 2)], { type: "application/json;charset=utf-8" }), `Backup_Antes_Importacao_PDF_${new Date().toISOString().slice(0, 10)}.json`);
+      }
+      setMessage("Preview gerado. Backup automático baixado para segurança.");
+    } catch (error: any) {
+      setPreviews([]);
+      setSafetyBackup(null);
+      setMessage(error.message || "Não foi possível gerar preview dos PDFs.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restore = async () => {
+    const applicable = previews.filter(preview => preview.canApply && preview.backup && preview.restoreType);
+    if (!applicable.length) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      for (const preview of applicable) {
+        const response = await fetch(`/api/backup/restore/${preview.restoreType}?mode=merge`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(preview.backup),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.message || `Falha ao importar ${preview.fileName}.`);
+      }
+      setMessage(`${applicable.length} PDF(s) importado(s) em modo merge.`);
+      setConfirmation("");
+      onRestored();
+    } catch (error: any) {
+      setMessage(error.message || "A importação por PDF falhou.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const totals = previews.reduce((sum, preview) => ({
+    extracted: sum.extracted + preview.extracted,
+    newCount: sum.newCount + preview.newCount,
+    updatedCount: sum.updatedCount + preview.updatedCount,
+    ignoredCount: sum.ignoredCount + preview.ignoredCount,
+    errorCount: sum.errorCount + preview.errorCount,
+    pendingCount: sum.pendingCount + preview.pendingCount,
+    duplicateCount: sum.duplicateCount + preview.duplicateCount,
+  }), { extracted: 0, newCount: 0, updatedCount: 0, ignoredCount: 0, errorCount: 0, pendingCount: 0, duplicateCount: 0 });
+  const canRestore = isAdmin && safetyBackup && previews.some(preview => preview.canApply) && confirmation === "IMPORTAR PDF";
+
+  return (
+    <Card className="border-amber-200">
+      <CardContent className="space-y-5 p-5">
+        <div className="flex items-start gap-3">
+          <FileArchive className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Restauração por PDF do ERP</h2>
+            <p className="mt-1 text-sm text-slate-600">Escolha o módulo, anexe PDFs gerados pelo próprio ERP e revise o preview antes de importar em merge.</p>
+            <p className="mt-2 text-xs font-semibold text-amber-700">Somente PDFs com cabeçalho IMPPEL ERP e Estrutura ERP são aceitos. Nada é importado automaticamente.</p>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-bold text-slate-900">1. Escolher módulo</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {PDF_RESTORE_MODULES.map(module => (
+              <button
+                key={module.id}
+                type="button"
+                onClick={() => { setSelectedModuleId(module.id); setPreviews([]); setSafetyBackup(null); setConfirmation(""); }}
+                className={`rounded-lg border px-3 py-2 text-left text-sm font-semibold ${selectedModuleId === module.id ? "border-amber-500 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}
+              >
+                {module.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 text-center hover:border-amber-400">
+          <Upload className="mb-2 h-5 w-5 text-slate-500" />
+          <span className="text-sm font-semibold text-slate-700">2. Selecionar PDF(s) do ERP</span>
+          <span className="mt-1 text-xs text-slate-500">{files.length ? `${files.length} arquivo(s) selecionado(s)` : "Apenas .pdf"}</span>
+          <input type="file" multiple accept=".pdf,application/pdf" className="sr-only" onChange={event => loadFiles(event.target.files)} />
+        </label>
+
+        <button type="button" onClick={buildPreview} disabled={!isAdmin || busy || files.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">
+          {busy ? "Lendo PDFs..." : "3. Gerar preview"}
+        </button>
+
+        {previews.length > 0 && (
+          <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
+              {[
+                ["Extraídos", totals.extracted],
+                ["Novos", totals.newCount],
+                ["Atualiz.", totals.updatedCount],
+                ["Ignorados", totals.ignoredCount],
+                ["Erros", totals.errorCount],
+                ["Duplic.", totals.duplicateCount],
+                ["Pendentes", totals.pendingCount],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-md bg-slate-50 p-2 text-center">
+                  <p className="text-lg font-bold text-slate-900">{value}</p>
+                  <p className="text-xs text-slate-500">{label}</p>
+                </div>
+              ))}
+            </div>
+            {previews.map(preview => (
+              <div key={preview.fileName} className="rounded-md border border-slate-100">
+                <div className="border-b bg-slate-50 px-3 py-2 text-sm">
+                  <strong>{preview.fileName}</strong>
+                  <span className="ml-2 text-slate-500">Detectado: {preview.reportType} · Total PDF: {preview.headerTotal || 0} · Extraído: {preview.extracted}</span>
+                </div>
+                <div className="max-h-60 divide-y divide-slate-100 overflow-y-auto">
+                  {preview.rows.slice(0, 60).map((row, index) => (
+                    <div key={`${row.name}-${index}`} className="flex justify-between gap-3 px-3 py-2 text-xs">
+                      <span className="font-semibold text-slate-800">{row.name}</span>
+                      <span className="text-slate-500">{row.detail}</span>
+                      <span className={row.status === "pendente" || row.status === "erro" ? "font-bold text-amber-700" : "text-emerald-700"}>{row.status}</span>
+                    </div>
+                  ))}
+                </div>
+                {[...preview.warnings, ...preview.errors, ...preview.pending.slice(0, 5), ...preview.ignored.slice(0, 5)].length > 0 && (
+                  <div className="space-y-1 border-t border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    {[...preview.warnings, ...preview.errors, ...preview.pending.slice(0, 5), ...preview.ignored.slice(0, 5)].map((item, index) => <p key={index}>{item}</p>)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {previews.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm text-amber-900">Para importar em merge os registros aplicáveis, digite <strong>IMPORTAR PDF</strong>.</p>
+            <input value={confirmation} onChange={event => setConfirmation(event.target.value)} className="mt-3 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="IMPORTAR PDF" />
+          </div>
+        )}
+
+        {previews.length > 0 && (
+          <button type="button" onClick={restore} disabled={!canRestore || busy} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            <CheckCircle2 className="h-4 w-4" />
+            {busy ? "Importando..." : "4. Confirmar importação"}
+          </button>
         )}
         {message && <p className="text-sm text-slate-700" role="status">{message}</p>}
       </CardContent>

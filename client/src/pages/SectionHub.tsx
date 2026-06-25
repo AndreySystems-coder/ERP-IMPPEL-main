@@ -235,7 +235,7 @@ export function BackupsHub() {
         description: "Exporte relatórios e restaure dados com preview e confirmação.",
         items: [
           { title: "Exportação", description: "Baixar relatórios em PDF para conferência humana.", href: "/backups/exportacao", icon: FileText, permission: "viewExports", accent: accents.emerald },
-          { title: "Restauração", description: "Restaurar dados por ZIP completo ou JSON técnico, sempre com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
+          { title: "Restauração", description: "Restaurar por PDFs do ERP ou usar ZIP/JSON técnico, sempre com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
         ],
       }}
     />

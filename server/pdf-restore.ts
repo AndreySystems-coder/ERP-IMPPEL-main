@@ -1,0 +1,440 @@
+type BackupType =
+  | "usuarios"
+  | "estoque"
+  | "produtos"
+  | "servicos"
+  | "materiais"
+  | "clientes"
+  | "orcamentos"
+  | "ordens-servico"
+  | "financeiro"
+  | "pos-venda"
+  | "garantias";
+
+type PdfItem = { text: string; x: number; y: number; page: number };
+type PdfRow = { y: number; page: number; items: PdfItem[] };
+type ErpPdfReportType = BackupType | "movimentacoes" | "backup-completo";
+
+export type ErpPdfRestorePreview = {
+  fileName: string;
+  selectedType: BackupType;
+  reportType: ErpPdfReportType;
+  restoreType?: BackupType;
+  title: string;
+  headerTotal: number;
+  extracted: number;
+  newCount: number;
+  existingCount: number;
+  updatedCount: number;
+  ignoredCount: number;
+  errorCount: number;
+  pendingCount: number;
+  duplicateCount: number;
+  warnings: string[];
+  ignored: string[];
+  pending: string[];
+  errors: string[];
+  rows: { name: string; detail: string; status: "novo" | "atualizar" | "existente" | "ignorado" | "pendente" | "erro" }[];
+  backup?: any;
+  canApply: boolean;
+};
+
+const REPORT_TYPES: Array<{ type: ErpPdfReportType; marker: string; restoreType?: BackupType }> = [
+  { type: "usuarios", restoreType: "usuarios", marker: "tipo=usuarios" },
+  { type: "produtos", restoreType: "produtos", marker: "tipo=produtos" },
+  { type: "servicos", restoreType: "servicos", marker: "tipo=servicos" },
+  { type: "estoque", restoreType: "estoque", marker: "tipo=estoque" },
+  { type: "movimentacoes", restoreType: "estoque", marker: "tipo=movimentacoes" },
+  { type: "clientes", restoreType: "clientes", marker: "tipo=clientes" },
+  { type: "orcamentos", restoreType: "orcamentos", marker: "tipo=orcamentos" },
+  { type: "ordens-servico", restoreType: "ordens-servico", marker: "tipo=ordens-servico" },
+  { type: "financeiro", restoreType: "financeiro", marker: "tipo=financeiro" },
+  { type: "garantias", restoreType: "garantias", marker: "tipo=garantias" },
+  { type: "pos-venda", restoreType: "pos-venda", marker: "tipo=pos-venda" },
+  { type: "materiais", restoreType: "materiais", marker: "tipo=materiais" },
+  { type: "backup-completo", marker: "backup completo" },
+];
+
+const ROLE_TECHNICAL_BY_LABEL: Record<string, string> = {
+  "Administrativo / Financeiro": "administrativo_financeiro",
+  "Comercial / Atendimento": "comercial_atendimento",
+  "Marketing / Redes Sociais": "marketing_redes_sociais",
+  "Equipe Técnica (Obras / Serviços)": "equipe_tecnica",
+  "Gestão de EPIs, Uniformes e Botas": "gestao_epis",
+  "Materiais e Equipamentos": "materiais_equipamentos",
+  "Gestão de Funcionários": "gestao_funcionarios",
+  "Obras / Operações": "obras_operacoes",
+};
+
+function normalizeText(value: string) {
+  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function normalizeKey(value: string) {
+  return normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+
+function parseMoney(value = "") {
+  const match = value.replace(/\s+/g, " ").match(/(?:R\$\s*)?(-?\d+(?:[.,]\d{2})?)/);
+  return match ? Number(match[1].replace(/\./g, "").replace(",", ".")) || 0 : 0;
+}
+
+function parsePercent(value = "") {
+  const match = value.match(/(-?\d+(?:[.,]\d+)?)\s*%?/);
+  return match ? Number(match[1].replace(",", ".")) || 0 : 0;
+}
+
+function parseIntSafe(value = "") {
+  const match = value.match(/-?\d+/);
+  return match ? Number(match[0]) || 0 : 0;
+}
+
+function cell(row: PdfRow, minX: number, maxX: number) {
+  return row.items
+    .filter(item => item.x >= minX && item.x < maxX)
+    .map(item => item.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function groupRows(items: PdfItem[]) {
+  const rows: PdfRow[] = [];
+  const sorted = [...items].sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x);
+  for (const item of sorted) {
+    if (!item.text.trim()) continue;
+    const found = rows.find(row => row.page === item.page && Math.abs(row.y - item.y) <= 2);
+    if (found) found.items.push(item);
+    else rows.push({ page: item.page, y: item.y, items: [item] });
+  }
+  return rows.map(row => ({ ...row, items: row.items.sort((a, b) => a.x - b.x) }));
+}
+
+async function extractPdf(data: Uint8Array) {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdf = await (pdfjs as any).getDocument({ data, disableWorker: true, useWorkerFetch: false, isEvalSupported: false }).promise;
+  const items: PdfItem[] = [];
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    for (const raw of content.items as any[]) {
+      const text = String(raw.str || "").trim();
+      if (!text) continue;
+      items.push({ text, x: Number(raw.transform?.[4] || 0), y: Number(raw.transform?.[5] || 0), page: pageNumber });
+    }
+  }
+  const rawText = items.map(item => item.text).join("\n");
+  return { rows: groupRows(items), rawText };
+}
+
+function detectReport(rawText: string) {
+  const normalized = normalizeText(rawText);
+  if (!normalized.includes("imppel erp") || !normalized.includes("estrutura erp")) {
+    throw new Error("Este PDF não parece ter sido gerado pelo ERP IMPPEL.");
+  }
+  const found = REPORT_TYPES.find(report => normalized.includes(report.marker));
+  if (!found) throw new Error("Relatório do ERP reconhecido, mas o tipo não pôde ser identificado com segurança.");
+  const headerTotal = Number(rawText.match(/Total de registros:\s*(\d+)/i)?.[1] || rawText.match(/registros=(\d+)/i)?.[1] || 0);
+  const title = rawText.split("\n").find(line => normalizeText(line).includes("imppel erp")) || `Relatório ${found.type}`;
+  return { ...found, title, headerTotal };
+}
+
+function basePreview(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>): ErpPdfRestorePreview {
+  return {
+    fileName,
+    selectedType,
+    reportType: report.type,
+    restoreType: report.restoreType,
+    title: report.title,
+    headerTotal: report.headerTotal,
+    extracted: 0,
+    newCount: 0,
+    existingCount: 0,
+    updatedCount: 0,
+    ignoredCount: 0,
+    errorCount: 0,
+    pendingCount: 0,
+    duplicateCount: 0,
+    warnings: [],
+    ignored: [],
+    pending: [],
+    errors: [],
+    rows: [],
+    canApply: false,
+  };
+}
+
+function parseUsers(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>, rows: PdfRow[], rawText: string) {
+  const preview = basePreview(fileName, selectedType, report);
+  const users: any[] = [];
+  const roles: any[] = [];
+  const seenUsers = new Set<string>();
+  const seenRoles = new Set<string>();
+
+  for (const row of rows) {
+    const login = cell(row, 35, 150);
+    const senhaInicial = cell(row, 150, 255);
+    const nomeCompleto = cell(row, 255, 470);
+    const cargo = cell(row, 470, 675);
+    const perfil = cell(row, 675, 745);
+    const status = cell(row, 745, 820);
+    if (!/^(Admin|[a-z][a-z0-9]+(?:\.[a-z0-9]+)+)$/i.test(login)) continue;
+    const userKey = normalizeText(login);
+    if (seenUsers.has(userKey)) {
+      preview.duplicateCount++;
+      preview.ignored.push(`Usuário duplicado no PDF: ${login}`);
+      continue;
+    }
+    seenUsers.add(userKey);
+    const isAdmin = normalizeText(login) === "admin";
+    const hasInitialPassword = senhaInicial && senhaInicial !== "Senha alterada";
+    users.push({
+      login,
+      username: login,
+      senhaInicial,
+      nomeCompleto: nomeCompleto || login,
+      fullName: nomeCompleto || login,
+      cargo: cargo || null,
+      perfil: perfil || (isAdmin ? "admin" : "funcionario"),
+      role: perfil === "admin" ? "admin" : "funcionario",
+      status: status === "Inativo" ? "inativo" : "ativo",
+      roleName: cargo ? (ROLE_TECHNICAL_BY_LABEL[cargo] || normalizeKey(cargo)) : null,
+      roleLabel: cargo || null,
+      jobTitle: cargo || null,
+      mustChangePassword: !isAdmin && hasInitialPassword,
+    });
+    preview.rows.push({
+      name: login,
+      detail: `${nomeCompleto || "sem nome"} · ${cargo || "cargo pendente"} · ${hasInitialPassword ? "senha inicial" : "senha alterada"}`,
+      status: isAdmin ? "ignorado" : cargo ? "novo" : "pendente",
+    });
+    if (isAdmin) {
+      preview.ignoredCount++;
+      preview.ignored.push("Admin será preservado e não será sobrescrito.");
+    } else if (!cargo) {
+      preview.pendingCount++;
+      preview.pending.push(`${login}: cargo/perfil/status não foram extraídos com segurança.`);
+    } else {
+      preview.newCount++;
+    }
+  }
+
+  for (const [label, name] of Object.entries(ROLE_TECHNICAL_BY_LABEL)) {
+    if (!rawText.includes(label) && !rawText.includes(name)) continue;
+    if (seenRoles.has(name)) continue;
+    seenRoles.add(name);
+    roles.push({ name, label, permissions: {}, isDefault: name === "equipe_tecnica" });
+  }
+
+  preview.extracted = users.length + roles.length;
+  preview.existingCount = 1;
+  preview.backup = { type: "usuarios", version: "erp-pdf-preview", exportedAt: new Date().toISOString(), data: { users, roles } };
+  preview.canApply = users.some(user => user.username !== "Admin") || roles.length > 0;
+  if (preview.pendingCount) preview.warnings.push("Alguns usuários ficaram pendentes por quebra de coluna no PDF.");
+  return preview;
+}
+
+function parseProducts(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>, rows: PdfRow[]) {
+  const preview = basePreview(fileName, selectedType, report);
+  const products: any[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const parts = row.items.map(item => item.text).filter(Boolean);
+    let name = cell(row, 35, 260);
+    let category = cell(row, 260, 415);
+    let brand = cell(row, 415, 500);
+    let unit = cell(row, 500, 555);
+    let salePrice = cell(row, 555, 660);
+    let maxDiscount = cell(row, 660, 735);
+    let active = cell(row, 735, 820);
+    if ((!name || !category || !unit || !/R\$/.test(salePrice)) && parts.length >= 6 && /R\$/.test(parts.join(" "))) {
+      [name, category, brand, unit, salePrice, maxDiscount, active = "Sim"] = parts;
+    }
+    if (!name || !category || !unit || !/R\$/.test(salePrice)) continue;
+    if (/^(Produto|IMPPEL ERP)/i.test(name)) continue;
+    const key = normalizeText(name);
+    if (seen.has(key)) {
+      preview.duplicateCount++;
+      preview.ignored.push(`Produto duplicado no PDF: ${name}`);
+      continue;
+    }
+    seen.add(key);
+    products.push({ name, description: "", category, brand: brand === "—" ? "" : brand, unit, salePrice: parseMoney(salePrice), commission: 0, maxDiscount: parsePercent(maxDiscount), active: active !== "Não" });
+    preview.rows.push({ name, detail: `${category} · ${brand || "sem marca"} · ${unit} · ${salePrice}`, status: "atualizar" });
+  }
+  preview.extracted = products.length;
+  preview.updatedCount = products.length;
+  preview.backup = { type: "produtos", version: "erp-pdf-preview", exportedAt: new Date().toISOString(), data: { products } };
+  preview.canApply = products.length > 0;
+  if (report.headerTotal && products.length !== report.headerTotal) {
+    preview.pendingCount = Math.max(0, report.headerTotal - products.length);
+    preview.warnings.push(`PDF informa ${report.headerTotal} produtos; ${products.length} foram extraídos com segurança.`);
+  }
+  return preview;
+}
+
+function parseServices(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>, rows: PdfRow[]) {
+  const preview = basePreview(fileName, selectedType, report);
+  const services: any[] = [];
+  let current: any | null = null;
+  const flush = () => {
+    if (!current) return;
+    if (!current.name || !current.pricePerUnit) {
+      preview.pendingCount++;
+      preview.pending.push(current.name || "Serviço sem nome/valor");
+      preview.rows.push({ name: current.name || "Serviço pendente", detail: "Extração incerta", status: "pendente" });
+    } else {
+      services.push({ name: current.name.trim(), description: current.description.join(" ").replace(/\s+/g, " ").trim(), pricePerUnit: current.pricePerUnit, laborCostPerM2: current.laborCostPerM2 || 0, transportCostPerM2: current.transportCostPerM2 || 0, materialConsumptionPerM2: 0, serviceMaterials: null });
+      preview.rows.push({ name: current.name.trim(), detail: `R$ ${current.pricePerUnit.toFixed(2)} · mão de obra R$ ${(current.laborCostPerM2 || 0).toFixed(2)}`, status: "atualizar" });
+    }
+    current = null;
+  };
+  for (const row of rows) {
+    const namePart = cell(row, 35, 195);
+    const descriptionPart = cell(row, 195, 660);
+    const priceText = cell(row, 655, 695);
+    const laborText = cell(row, 695, 740);
+    const transportText = cell(row, 740, 820);
+    const startsService = Boolean(namePart && /R\$/.test(priceText + laborText + transportText));
+    if (startsService) {
+      flush();
+      current = { name: namePart, description: descriptionPart ? [descriptionPart] : [], pricePerUnit: parseMoney(priceText), laborCostPerM2: parseMoney(laborText), transportCostPerM2: parseMoney(transportText) };
+      continue;
+    }
+    if (!current) continue;
+    if (namePart && !/^(IMPPEL ERP|Serviço|Obra\/m)/i.test(namePart)) current.name = `${current.name} ${namePart}`;
+    if (descriptionPart) current.description.push(descriptionPart);
+    if (!current.pricePerUnit && /\d/.test(priceText)) current.pricePerUnit = parseMoney(priceText);
+    if (!current.laborCostPerM2 && /R\$/.test(laborText)) current.laborCostPerM2 = parseMoney(laborText);
+    if (!current.transportCostPerM2 && /R\$/.test(transportText)) current.transportCostPerM2 = parseMoney(transportText);
+  }
+  flush();
+  const seen = new Set<string>();
+  const uniqueServices = services.filter(service => {
+    const key = normalizeText(service.name);
+    if (seen.has(key)) {
+      preview.duplicateCount++;
+      preview.ignored.push(`Serviço duplicado no PDF: ${service.name}`);
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+  preview.extracted = uniqueServices.length;
+  preview.updatedCount = uniqueServices.length;
+  preview.backup = { type: "servicos", version: "erp-pdf-preview", exportedAt: new Date().toISOString(), data: { services: uniqueServices } };
+  preview.canApply = uniqueServices.length > 0;
+  if (report.headerTotal && uniqueServices.length !== report.headerTotal) {
+    preview.pendingCount += Math.max(0, report.headerTotal - uniqueServices.length);
+    preview.warnings.push(`PDF informa ${report.headerTotal} serviços; ${uniqueServices.length} foram extraídos com segurança.`);
+  }
+  return preview;
+}
+
+function validDateBr(value: string) {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, dd, mm, yyyy] = match;
+  const iso = `${yyyy}-${mm}-${dd}`;
+  const date = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : iso;
+}
+
+function monthLabel(iso: string) {
+  const date = new Date(`${iso}T12:00:00`);
+  return date.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+}
+
+function parseStock(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>, rows: PdfRow[]) {
+  const preview = basePreview(fileName, selectedType, report);
+  const items: any[] = [];
+  const movements: any[] = [];
+  const seenItems = new Set<string>();
+  const seenMovements = new Set<string>();
+  let inMovements = report.type === "movimentacoes";
+  for (const row of rows) {
+    const rowText = row.items.map(item => item.text).join(" ");
+    if (/Histórico de Movimentações|Movimentações/i.test(rowText)) { inMovements = true; continue; }
+    if (/Invalid Date/i.test(rowText)) {
+      preview.ignoredCount++;
+      preview.ignored.push(`Movimentação ignorada por data inválida: ${rowText.slice(0, 90)}`);
+      continue;
+    }
+    if (!inMovements && report.type === "estoque") {
+      const name = cell(row, 35, 285);
+      const type = cell(row, 285, 465);
+      const unit = cell(row, 465, 530);
+      const quantity = cell(row, 530, 620);
+      const minStock = cell(row, 620, 690);
+      const price = cell(row, 690, 820);
+      if (!name || !type || !unit || !/\d/.test(quantity)) continue;
+      if (/^(Produto|IMPPEL ERP)/i.test(name)) continue;
+      const key = normalizeText(name);
+      if (seenItems.has(key)) {
+        preview.duplicateCount++;
+        preview.ignored.push(`Item de estoque duplicado no PDF: ${name}`);
+        continue;
+      }
+      seenItems.add(key);
+      items.push({ name, type, unit, quantity: parseIntSafe(quantity), minStock: parseIntSafe(minStock), pricePerUnit: parseMoney(price) });
+      preview.rows.push({ name, detail: `${parseIntSafe(quantity)} ${unit} · mínimo ${parseIntSafe(minStock)}`, status: "atualizar" });
+      continue;
+    }
+    const dateText = cell(row, 35, 140);
+    const iso = validDateBr(dateText);
+    if (!iso) continue;
+    const productName = cell(row, 140, 360).replace(/\s+(ENTRADA|SAÍDA|AJUSTE)$/i, "").trim();
+    const type = (cell(row, 360, 450).match(/ENTRADA|SAÍDA|AJUSTE/i)?.[0] || "SAÍDA").toUpperCase();
+    const quantity = parseIntSafe(cell(row, 450, 510));
+    const notes = cell(row, 510, 820) || "Importação por relatório ERP";
+    if (!productName || !quantity) {
+      preview.pendingCount++;
+      preview.pending.push(`Movimentação pendente em ${dateText}: ${rowText}`);
+      continue;
+    }
+    const key = `${iso}|${normalizeText(productName)}|${type}|${quantity}|${normalizeText(notes)}`;
+    if (seenMovements.has(key)) {
+      preview.duplicateCount++;
+      preview.ignored.push(`Movimentação duplicada no PDF: ${productName} ${dateText}`);
+      continue;
+    }
+    seenMovements.add(key);
+    movements.push({ productName, type, quantity, date: iso, month: monthLabel(iso), notes });
+  }
+  preview.extracted = items.length + movements.length;
+  preview.updatedCount = items.length;
+  preview.newCount = movements.length;
+  preview.backup = { type: "estoque", version: "erp-pdf-preview", exportedAt: new Date().toISOString(), preserveItemQuantitiesAfterMovements: report.type === "estoque", data: { items, movements } };
+  preview.canApply = items.length > 0 || movements.length > 0;
+  if (report.headerTotal && report.type === "estoque" && items.length !== report.headerTotal) {
+    preview.pendingCount += Math.max(0, report.headerTotal - items.length);
+    preview.warnings.push(`PDF informa ${report.headerTotal} itens de estoque; ${items.length} foram extraídos com segurança.`);
+  }
+  if (preview.ignoredCount) preview.warnings.push(`${preview.ignoredCount} linha(s) ignorada(s), incluindo datas inválidas quando existirem.`);
+  return preview;
+}
+
+function unsupportedPreview(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>) {
+  const preview = basePreview(fileName, selectedType, report);
+  preview.pendingCount = report.headerTotal || 1;
+  preview.warnings.push("Este módulo foi reconhecido, mas ainda exige parser específico para importação segura por PDF.");
+  preview.pending.push("Use preview para conferência; a importação automática fica bloqueada para evitar dados incorretos.");
+  preview.rows.push({ name: report.title, detail: "Parser PDF específico pendente para este módulo", status: "pendente" });
+  return preview;
+}
+
+export async function previewErpPdfBuffer(input: { fileName: string; selectedType: BackupType; data: Uint8Array }) {
+  const { rows, rawText } = await extractPdf(input.data);
+  const report = detectReport(rawText);
+  if (report.restoreType && input.selectedType !== report.restoreType && !(input.selectedType === "estoque" && report.type === "movimentacoes")) {
+    const preview = basePreview(input.fileName, input.selectedType, report);
+    preview.errorCount = 1;
+    preview.errors.push(`Módulo selecionado (${input.selectedType}) não confere com o PDF detectado (${report.restoreType}).`);
+    return preview;
+  }
+  if (report.type === "usuarios") return parseUsers(input.fileName, input.selectedType, report, rows, rawText);
+  if (report.type === "produtos") return parseProducts(input.fileName, input.selectedType, report, rows);
+  if (report.type === "servicos") return parseServices(input.fileName, input.selectedType, report, rows);
+  if (report.type === "estoque" || report.type === "movimentacoes") return parseStock(input.fileName, input.selectedType, report, rows);
+  return unsupportedPreview(input.fileName, input.selectedType, report);
+}

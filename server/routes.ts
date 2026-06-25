@@ -20,6 +20,7 @@ import {
   normalizeOperationalEmployee,
   type OperationalEmployeeInput,
 } from "@shared/operationalUsers";
+import { previewErpPdfBuffer } from "./pdf-restore";
 
 const BCRYPT_ROUNDS = 10;
 const operationalResetTokens = new Map<string, number>();
@@ -2694,6 +2695,56 @@ export async function registerRoutes(
       const preview = buildRestorePreview(current, technical.data, technical.modules, mode, technical.tables);
       res.json({ preview, module: packageData.module, type: packageData.type });
     } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/preview/pdf", requireAdmin, async (req, res) => {
+    try {
+      const selectedType = String(req.body?.selectedType || "") as any;
+      const allowedTypes = new Set(["usuarios", "produtos", "servicos", "estoque", "financeiro", "clientes", "orcamentos", "ordens-servico", "pos-venda", "garantias", "materiais"]);
+      if (!allowedTypes.has(selectedType)) return res.status(400).json({ message: "Selecione um módulo válido." });
+      const files: Array<{ name?: string; dataBase64?: string; mimeType?: string }> = Array.isArray(req.body?.files) ? req.body.files : [];
+      if (files.length === 0) return res.status(400).json({ message: "Anexe ao menos um PDF." });
+      if (files.length > 12) return res.status(400).json({ message: "Envie no máximo 12 PDFs por preview." });
+
+      const safetyBackup = await buildCompleteBackupPackage(storage, {
+        environment: process.env.DATABASE_URL ? "persistent-postgresql" : "memory-preview",
+        erpVersion: process.env.npm_package_version || "1.0.0",
+      });
+      const previews = [];
+      for (const file of files) {
+        const fileName = String(file.name || "relatorio.pdf");
+        if (!fileName.toLowerCase().endsWith(".pdf")) {
+          previews.push({
+            fileName,
+            selectedType,
+            reportType: selectedType,
+            title: fileName,
+            headerTotal: 0,
+            extracted: 0,
+            newCount: 0,
+            existingCount: 0,
+            updatedCount: 0,
+            ignoredCount: 0,
+            errorCount: 1,
+            pendingCount: 0,
+            duplicateCount: 0,
+            warnings: [],
+            ignored: [],
+            pending: [],
+            errors: ["Arquivo bloqueado: selecione somente PDFs."],
+            rows: [],
+            canApply: false,
+          });
+          continue;
+        }
+        const encoded = String(file.dataBase64 || "").replace(/^data:application\/pdf;base64,/i, "");
+        const bytes = Uint8Array.from(Buffer.from(encoded, "base64"));
+        previews.push(await previewErpPdfBuffer({ fileName, selectedType, data: bytes }));
+      }
+      res.json({ previews, safetyBackup });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message || "Não foi possível ler o PDF do ERP." });
+    }
   });
 
   // Material sales / cart

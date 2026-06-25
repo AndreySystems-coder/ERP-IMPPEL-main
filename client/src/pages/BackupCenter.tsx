@@ -12,7 +12,7 @@ import BackupManager, {
   getBackupHistory, getRestoreLog, generatePDF, fmtDateTime,
   type BackupType, type BackupHistoryEntry, type RestoreLogEntry,
 } from "@/components/BackupManager";
-import { CompleteBackupGeneration, CompleteBackupRestore, ModularBackupRestore } from "@/components/CompleteBackupManager";
+import { CompleteBackupGeneration, CompleteBackupRestore, ModularBackupRestore, PdfBackupRestore } from "@/components/CompleteBackupManager";
 import { useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -144,9 +144,9 @@ const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; pan
   },
   restore: {
     title: "Restauração",
-    subtitle: "Restaurar dados a partir de backup",
-    panelTitle: "Restaurar dados a partir de backup",
-    panelDescription: "Restaure somente ZIP completo ou JSON técnico modular gerado pelo ERP, sempre com preview e confirmação.",
+    subtitle: "Restaurar dados com preview e confirmação",
+    panelTitle: "Restaurar dados com preview e confirmação",
+    panelDescription: "Importe PDFs gerados pelo ERP IMPPEL em modo merge, ou use ZIP/JSON técnico nas seções avançadas.",
   },
 };
 
@@ -365,8 +365,13 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
           <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
             <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
             <p className="text-sm text-slate-600">{page.panelDescription}</p>
-            <p className="mt-2 text-xs font-semibold text-amber-700">PDF é somente conferência humana. O ERP não interpreta PDF, OCR, CSV ou texto para restaurar dados.</p>
-            <p className="mt-1 text-xs text-slate-600">Aviso de segurança: confira manifesto, checksums, preview e modo antes de confirmar qualquer gravação.</p>
+            <p className="mt-2 text-xs font-semibold text-amber-700">PDF aceito apenas quando tiver cabeçalho IMPPEL ERP e Estrutura ERP. JSON, ZIP, texto e imagens não entram no fluxo de PDF.</p>
+            <p className="mt-1 text-xs text-slate-600">Aviso de segurança: o ERP gera backup automático antes da importação por PDF e nunca aplica sem confirmação.</p>
+          </div>
+          <PdfBackupRestore isAdmin={isAdmin} onRestored={() => setRefresh(r => r + 1)} />
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <h3 className="text-sm font-bold text-slate-900">Seção técnica ZIP/JSON</h3>
+            <p className="mt-1 text-sm text-slate-600">Use estas opções quando tiver um pacote completo ZIP ou JSON técnico modular gerado pelo ERP.</p>
           </div>
           <CompleteBackupRestore isAdmin={isAdmin} onRestored={() => setRefresh(r => r + 1)} />
           <ModularBackupRestore isAdmin={isAdmin} onRestored={() => setRefresh(r => r + 1)} />
