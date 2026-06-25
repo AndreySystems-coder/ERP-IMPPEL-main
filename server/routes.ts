@@ -2883,31 +2883,39 @@ export async function registerRoutes(
       }
 
       for (const user of data.users) {
-        const username = String(user?.username || "").trim();
+        const username = String(user?.username || user?.login || "").trim();
         const passwordHash = String(user?.passwordHash || "");
-        if (!username || !/^\$2[aby]\$/.test(passwordHash)) { skipped++; continue; }
-        const roleId = user.roleName
-          ? restoredRoles.get(String(user.roleName).toLocaleLowerCase("pt-BR")) || null
+        const initialPassword = String(user?.senhaInicial || user?.initialPassword || "").trim();
+        if (!username) { skipped++; continue; }
+        const roleName = user.roleName || user.cargo;
+        const roleId = roleName
+          ? restoredRoles.get(String(roleName).toLocaleLowerCase("pt-BR")) ||
+            restoredRoles.get(String(user.roleName || "").toLocaleLowerCase("pt-BR")) ||
+            null
           : user.roleId
             ? restoredRoleIds.get(Number(user.roleId)) || null
             : null;
         const existing = await findUserByUsername(username);
+        const hasBcrypt = /^\$2[aby]\$/.test(passwordHash);
+        const hasInitialPassword = Boolean(initialPassword && initialPassword !== "Senha alterada" && initialPassword !== "Não disponível");
+        if (!existing && !hasBcrypt && !hasInitialPassword) { skipped++; continue; }
         const values: any = {
           username,
-          password: passwordHash,
-          role: user.role === "admin" ? "admin" : "funcionario",
+          role: user.role === "admin" || user.perfil === "admin" ? "admin" : "funcionario",
           roleId,
-          jobTitle: user.jobTitle || user.roleLabel || null,
-          fullName: user.fullName || null,
+          jobTitle: user.jobTitle || user.roleLabel || user.cargo || null,
+          fullName: user.fullName || user.nomeCompleto || null,
           birthDate: user.birthDate || null,
-          status: user.status === "inativo" ? "inativo" : "ativo",
-          mustChangePassword: !!user.mustChangePassword,
+          status: user.status === "Inativo" || user.status === "inativo" ? "inativo" : "ativo",
+          mustChangePassword: !!user.mustChangePassword || (!existing && hasInitialPassword),
         };
         if (existing) {
           if (existing.role === "admin") { skipped++; continue; }
+          if (hasBcrypt) values.password = passwordHash;
           await storage.updateUser(existing.id, values);
           updated++;
         } else {
+          values.password = hasBcrypt ? passwordHash : await bcrypt.hash(initialPassword, BCRYPT_ROUNDS);
           await storage.createUser(values);
           created++;
         }
@@ -2984,6 +2992,7 @@ export async function registerRoutes(
       if (!data?.items) return res.status(400).json({ message: "Formato de backup inválido" });
 
       const movements: any[] = data.movements || [];
+      const preserveItemQuantitiesAfterMovements = Boolean(req.body?.preserveItemQuantitiesAfterMovements);
       let updated = 0, created = 0, deleted = 0;
       let movementsRestored = 0, movementsDeleted = 0;
 
@@ -3070,6 +3079,19 @@ export async function registerRoutes(
             notes: mov.notes || "",
           });
           movementsRestored++;
+        }
+      }
+
+      if (preserveItemQuantitiesAfterMovements) {
+        for (const item of data.items) {
+          const key = String(item.name || "").toLowerCase().trim();
+          const inventoryId = nameToNewId.get(key);
+          if (!inventoryId) continue;
+          await storage.updateInventoryItem(inventoryId, {
+            quantity: item.quantity ?? 0,
+            minStock: item.minStock ?? 5,
+            pricePerUnit: item.pricePerUnit ?? 0,
+          });
         }
       }
 

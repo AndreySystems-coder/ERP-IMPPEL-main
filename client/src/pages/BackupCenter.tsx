@@ -16,6 +16,7 @@ import BackupManager, {
 import { CompleteBackupGeneration, CompleteBackupRestore } from "@/components/CompleteBackupManager";
 import { useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { previewErpPdfReport, type ErpPdfImportPreview } from "@/lib/erpPdfImport";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const ALL_BACKUP_TYPES: { type: BackupType; label: string; icon: React.ElementType; color: string; description: string }[] = [
@@ -378,6 +379,186 @@ function parseTextRestore(type: BackupType, text: string): TextPreview {
   }
 
   return previewOnly(type, lines, RESTORE_GUIDES[type].limitation);
+}
+
+function downloadJsonFile(fileName: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function InternalErpPdfImportPanel({ onRestored }: { onRestored: () => void }) {
+  const [fileName, setFileName] = useState("");
+  const [preview, setPreview] = useState<ErpPdfImportPreview | null>(null);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleFile = async (file?: File) => {
+    if (!file) return;
+    setLoading(true);
+    setError("");
+    setMessage("");
+    setPreview(null);
+    setFileName(file.name);
+    try {
+      const nextPreview = await previewErpPdfReport(file);
+      setPreview(nextPreview);
+    } catch (err: any) {
+      setError(err.message || "Não foi possível interpretar este PDF com segurança.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const importMutation = useMutation({
+    mutationFn: async (currentPreview: ErpPdfImportPreview) => {
+      if (!currentPreview.restoreType || !currentPreview.backup || !currentPreview.canApply) {
+        throw new Error("Este preview não está pronto para importação automática.");
+      }
+      const backupResponse = await apiRequest("GET", "/api/backup/completo");
+      const fullBackup = await backupResponse.json();
+      const { resetToken: _resetToken, ...downloadableBackup } = fullBackup;
+      downloadJsonFile(`Backup_Antes_Importacao_PDF_${new Date().toISOString().slice(0, 10)}.json`, downloadableBackup);
+
+      const restoreResponse = await apiRequest("POST", `/api/backup/restore/${currentPreview.restoreType}?mode=merge`, currentPreview.backup);
+      const restoreResult = await restoreResponse.json();
+      const log = {
+        importedAt: new Date().toISOString(),
+        fileName,
+        reportType: currentPreview.reportType,
+        restoreType: currentPreview.restoreType,
+        mode: "merge",
+        preview: {
+          headerTotal: currentPreview.headerTotal,
+          extracted: currentPreview.extracted,
+          ignored: currentPreview.ignoredCount,
+          pending: currentPreview.pendingCount,
+          errors: currentPreview.errorCount,
+          duplicates: currentPreview.duplicateCount,
+        },
+        result: restoreResult,
+      };
+      downloadJsonFile(`Log_Importacao_PDF_ERP_${new Date().toISOString().slice(0, 10)}.json`, log);
+      return restoreResult;
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries();
+      setMessage(result?.message || "Importação em merge concluída.");
+      onRestored();
+    },
+    onError: (err: any) => {
+      setError(err.message || "A importação não foi aplicada.");
+    },
+  });
+
+  return (
+    <Card>
+      <CardContent className="space-y-5 p-5">
+        <div className="flex items-start gap-3">
+          <FileText className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Importar Relatórios do ERP</h2>
+            <p className="text-sm text-slate-600">
+              Aceita somente PDFs gerados pelo ERP IMPPEL com cabeçalho e Estrutura ERP. O fluxo sempre mostra preview e importa em merge.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <label className="block text-sm font-semibold text-slate-800">Arquivo PDF gerado pelo ERP</label>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            onChange={event => handleFile(event.target.files?.[0])}
+            className="mt-2 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+            data-testid="input-erp-pdf-import"
+          />
+          <p className="mt-2 text-xs text-slate-500">
+            Relatórios aceitos: Usuários e Cargos, Catálogo de Produtos, Catálogo de Serviços, Estoque e Movimentações.
+          </p>
+        </div>
+
+        {loading && <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">Lendo PDF e montando preview...</p>}
+        {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+        {message && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
+
+        {preview && (
+          <div className="space-y-4 rounded-xl border border-slate-200">
+            <div className="border-b bg-slate-50 px-4 py-3">
+              <p className="text-sm font-bold text-slate-900">Preview: {preview.title}</p>
+              <p className="mt-1 text-xs text-slate-500">Tipo detectado: {preview.reportType} · Total no cabeçalho: {preview.headerTotal || "—"} · Extraído: {preview.extracted}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 px-4 sm:grid-cols-4">
+              {[
+                ["Novos", preview.newCount],
+                ["Atualizados", preview.updatedCount],
+                ["Existentes", preview.existingCount],
+                ["Ignorados", preview.ignoredCount],
+                ["Pendentes", preview.pendingCount],
+                ["Duplicados", preview.duplicateCount],
+                ["Erros", preview.errorCount],
+                ["Extraídos", preview.extracted],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-slate-200 bg-white p-3 text-center">
+                  <p className="text-xl font-bold text-slate-900">{value}</p>
+                  <p className="text-xs text-slate-500">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {(preview.warnings.length > 0 || preview.pending.length > 0 || preview.ignored.length > 0 || preview.errors.length > 0) && (
+              <div className="mx-4 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                {preview.warnings.map((item, index) => <p key={`w-${index}`}>Aviso: {item}</p>)}
+                {preview.pending.slice(0, 5).map((item, index) => <p key={`p-${index}`}>Pendente: {item}</p>)}
+                {preview.ignored.slice(0, 5).map((item, index) => <p key={`i-${index}`}>Ignorado: {item}</p>)}
+                {preview.errors.slice(0, 5).map((item, index) => <p key={`e-${index}`}>Erro: {item}</p>)}
+              </div>
+            )}
+
+            <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto px-4">
+              {preview.rows.slice(0, 80).map((row, index) => (
+                <div key={`${row.name}-${index}`} className="flex items-start justify-between gap-3 py-2 text-sm">
+                  <div>
+                    <p className="font-semibold text-slate-800">{row.name}</p>
+                    <p className="text-xs text-slate-500">{row.detail}</p>
+                  </div>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                    row.status === "erro" ? "bg-red-100 text-red-700" :
+                    row.status === "pendente" ? "bg-amber-100 text-amber-700" :
+                    row.status === "ignorado" ? "bg-slate-100 text-slate-600" :
+                    "bg-emerald-100 text-emerald-700"
+                  }`}>
+                    {row.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2 border-t bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-600">
+                Antes de aplicar, o ERP baixa automaticamente um Backup Completo técnico. Se o backup falhar, a importação é bloqueada.
+              </p>
+              <Button
+                type="button"
+                onClick={() => preview && importMutation.mutate(preview)}
+                disabled={!preview.canApply || importMutation.isPending}
+                className="bg-blue-900 text-white"
+                data-testid="button-confirm-erp-pdf-import"
+              >
+                {importMutation.isPending ? "Importando..." : "Confirmar Importação"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function AssistedRestorePanel({ modules, onRestored }: { modules: typeof ALL_BACKUP_TYPES; onRestored: () => void }) {
@@ -812,6 +993,7 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
             <p className="mt-1 text-xs text-slate-600">Aviso de segurança: confira o preview e confirme o modo de restauração antes de aplicar.</p>
           </div>
           <CompleteBackupRestore isAdmin={isAdmin} onRestored={() => setRefresh(r => r + 1)} />
+          <InternalErpPdfImportPanel onRestored={() => setRefresh(r => r + 1)} />
           <AssistedRestorePanel modules={ALL_BACKUP_TYPES} onRestored={() => setRefresh(r => r + 1)} />
 
           <Card className="overflow-hidden">
