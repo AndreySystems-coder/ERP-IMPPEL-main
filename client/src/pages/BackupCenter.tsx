@@ -12,7 +12,7 @@ import BackupManager, {
   getBackupHistory, getRestoreLog, generatePDF, fmtDateTime,
   type BackupType, type BackupHistoryEntry, type RestoreLogEntry,
 } from "@/components/BackupManager";
-import { CompleteBackupGeneration, CompleteBackupRestore, ModularBackupRestore, PdfBackupRestore } from "@/components/CompleteBackupManager";
+import { CompleteBackupGeneration, PdfBackupRestore } from "@/components/CompleteBackupManager";
 import { useUser } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -144,9 +144,9 @@ const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; pan
   },
   restore: {
     title: "Restauração",
-    subtitle: "Restaurar dados com preview e confirmação",
-    panelTitle: "Restaurar dados com preview e confirmação",
-    panelDescription: "Importe PDFs gerados pelo ERP IMPPEL em modo merge, ou use ZIP/JSON técnico nas seções avançadas.",
+    subtitle: "Importar PDFs gerados pelo ERP",
+    panelTitle: "Importar",
+    panelDescription: "",
   },
 };
 
@@ -227,33 +227,34 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
         </button>
       </div>
 
-      {/* Summary KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-slate-900">{history.length}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Backups gerados</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-slate-900">{log.length}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Restaurações realizadas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-slate-900">{totalSizeKB > 1024 ? `${(totalSizeKB / 1024).toFixed(1)} MB` : `${totalSizeKB} KB`}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Volume exportado</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-slate-900">{ALL_BACKUP_TYPES.length}</p>
-            <p className="text-xs text-slate-500 mt-0.5">Tipos exportáveis</p>
-          </CardContent>
-        </Card>
-      </div>
+      {mode !== "restore" && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-slate-900">{history.length}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Backups gerados</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-slate-900">{log.length}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Restaurações realizadas</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-slate-900">{totalSizeKB > 1024 ? `${(totalSizeKB / 1024).toFixed(1)} MB` : `${totalSizeKB} KB`}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Volume exportado</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-2xl font-bold text-slate-900">{ALL_BACKUP_TYPES.length}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Tipos exportáveis</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Tab: Backup */}
       {mode === "backup" && (
@@ -362,39 +363,7 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
       {/* Tab: Restauração */}
       {mode === "restore" && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-4 py-3">
-            <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
-            <p className="text-sm text-slate-600">{page.panelDescription}</p>
-            <p className="mt-2 text-xs font-semibold text-amber-700">PDF aceito apenas quando tiver cabeçalho IMPPEL ERP e Estrutura ERP. JSON, ZIP, texto e imagens não entram no fluxo de PDF.</p>
-            <p className="mt-1 text-xs text-slate-600">Aviso de segurança: o ERP gera backup automático antes da importação por PDF e nunca aplica sem confirmação.</p>
-          </div>
-          <PdfBackupRestore isAdmin={isAdmin} onRestored={() => setRefresh(r => r + 1)} />
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <h3 className="text-sm font-bold text-slate-900">Seção técnica ZIP/JSON</h3>
-            <p className="mt-1 text-sm text-slate-600">Use estas opções quando tiver um pacote completo ZIP ou JSON técnico modular gerado pelo ERP.</p>
-          </div>
-          <CompleteBackupRestore isAdmin={isAdmin} onRestored={() => setRefresh(r => r + 1)} />
-          <ModularBackupRestore isAdmin={isAdmin} onRestored={() => setRefresh(r => r + 1)} />
-
-          <Card className="overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50">
-              <CheckCircle2 className="w-4 h-4 text-slate-500" />
-              <span className="text-sm font-semibold text-slate-700">Histórico de Restaurações</span>
-            </div>
-            {log.length === 0 ? (
-              <div className="p-10 text-center">
-                <Upload className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 font-medium">Nenhuma restauração realizada ainda</p>
-                <p className="text-sm text-slate-400 mt-1">O histórico de restaurações aparecerá aqui automaticamente.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {log.map(entry => (
-                  <LogRow key={entry.id} entry={entry} />
-                ))}
-              </div>
-            )}
-          </Card>
+          <PdfBackupRestore isAdmin={isAdmin} username={user?.username || "Admin"} onRestored={() => setRefresh(r => r + 1)} />
         </div>
       )}
 

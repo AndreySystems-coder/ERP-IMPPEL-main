@@ -48,13 +48,38 @@ const PDF_RESTORE_MODULES: PdfRestoreModule[] = [
   { id: "servicos", type: "servicos", label: "Catálogo de Serviços" },
   { id: "estoque", type: "estoque", label: "Estoque" },
   { id: "movimentacoes", type: "estoque", label: "Movimentações" },
-  { id: "clientes", type: "clientes", label: "Clientes" },
-  { id: "orcamentos", type: "orcamentos", label: "Orçamentos" },
-  { id: "ordens-servico", type: "ordens-servico", label: "Ordens de Serviço" },
-  { id: "financeiro", type: "financeiro", label: "Financeiro" },
-  { id: "pos-venda", type: "pos-venda", label: "Garantias / Pós-venda" },
-  { id: "materiais", type: "materiais", label: "Controle de Materiais" },
 ];
+
+type PdfImportHistoryEntry = {
+  id: string;
+  importedAt: string;
+  username: string;
+  moduleLabel: string;
+  files: string[];
+  imported: number;
+  ignored: number;
+  errors: number;
+  status: "Concluído" | "Falhou";
+  backupGenerated: boolean;
+};
+
+const PDF_IMPORT_HISTORY_KEY = "imppel_pdf_import_history";
+
+function getPdfImportHistory(): PdfImportHistoryEntry[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PDF_IMPORT_HISTORY_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePdfImportHistory(entry: PdfImportHistoryEntry) {
+  const history = getPdfImportHistory();
+  history.unshift(entry);
+  localStorage.setItem(PDF_IMPORT_HISTORY_KEY, JSON.stringify(history.slice(0, 80)));
+  return history.slice(0, 80);
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -305,7 +330,7 @@ function fileToBase64(file: File) {
   });
 }
 
-export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; onRestored: () => void }) {
+export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { isAdmin: boolean; onRestored: () => void; username?: string }) {
   const [selectedModuleId, setSelectedModuleId] = useState("usuarios");
   const selectedModule = PDF_RESTORE_MODULES.find(module => module.id === selectedModuleId) || PDF_RESTORE_MODULES[0];
   const [files, setFiles] = useState<File[]>([]);
@@ -314,6 +339,7 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [history, setHistory] = useState<PdfImportHistoryEntry[]>(() => getPdfImportHistory());
 
   const loadFiles = (list?: FileList | null) => {
     const selected = Array.from(list || []);
@@ -324,7 +350,7 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
     setConfirmation("");
     if (invalid) {
       setFiles([]);
-      setMessage("Arquivo bloqueado: selecione somente PDFs gerados pelo ERP IMPPEL.");
+      setMessage("Use apenas PDFs gerados pelo ERP.");
       return;
     }
     setFiles(selected);
@@ -350,10 +376,7 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
       if (!response.ok) throw new Error(result.message || "Não foi possível gerar preview dos PDFs.");
       setPreviews(result.previews || []);
       setSafetyBackup(result.safetyBackup || null);
-      if (result.safetyBackup) {
-        downloadBlob(new Blob([JSON.stringify(result.safetyBackup, null, 2)], { type: "application/json;charset=utf-8" }), `Backup_Antes_Importacao_PDF_${new Date().toISOString().slice(0, 10)}.json`);
-      }
-      setMessage("Preview gerado. Backup automático baixado para segurança.");
+      setMessage(result.safetyBackup ? "Preview gerado. Backup automático interno gerado." : "Preview gerado, mas o backup automático não foi confirmado.");
     } catch (error: any) {
       setPreviews([]);
       setSafetyBackup(null);
@@ -369,6 +392,7 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
     setBusy(true);
     setMessage("");
     try {
+      let imported = 0;
       for (const preview of applicable) {
         const response = await fetch(`/api/backup/restore/${preview.restoreType}?mode=merge`, {
           method: "POST",
@@ -378,11 +402,39 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.message || `Falha ao importar ${preview.fileName}.`);
+        imported += Number(result.created || 0) + Number(result.updated || 0);
       }
+      setHistory(savePdfImportHistory({
+        id: Date.now().toString(36),
+        importedAt: new Date().toISOString(),
+        username,
+        moduleLabel: selectedModule.label,
+        files: files.map(file => file.name),
+        imported,
+        ignored: totals.ignoredCount + totals.pendingCount + totals.duplicateCount,
+        errors: totals.errorCount,
+        status: "Concluído",
+        backupGenerated: Boolean(safetyBackup),
+      }));
       setMessage(`${applicable.length} PDF(s) importado(s) em modo merge.`);
       setConfirmation("");
+      setPreviews([]);
+      setSafetyBackup(null);
+      setFiles([]);
       onRestored();
     } catch (error: any) {
+      setHistory(savePdfImportHistory({
+        id: Date.now().toString(36),
+        importedAt: new Date().toISOString(),
+        username,
+        moduleLabel: selectedModule.label,
+        files: files.map(file => file.name),
+        imported: 0,
+        ignored: totals.ignoredCount + totals.pendingCount + totals.duplicateCount,
+        errors: Math.max(1, totals.errorCount),
+        status: "Falhou",
+        backupGenerated: Boolean(safetyBackup),
+      }));
       setMessage(error.message || "A importação por PDF falhou.");
     } finally {
       setBusy(false);
@@ -398,7 +450,14 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
     pendingCount: sum.pendingCount + preview.pendingCount,
     duplicateCount: sum.duplicateCount + preview.duplicateCount,
   }), { extracted: 0, newCount: 0, updatedCount: 0, ignoredCount: 0, errorCount: 0, pendingCount: 0, duplicateCount: 0 });
-  const canRestore = isAdmin && safetyBackup && previews.some(preview => preview.canApply) && confirmation === "IMPORTAR PDF";
+  const canRestore = isAdmin && safetyBackup && previews.some(preview => preview.canApply) && confirmation === "IMPORTAR";
+  const cancelImport = () => {
+    setFiles([]);
+    setPreviews([]);
+    setSafetyBackup(null);
+    setConfirmation("");
+    setMessage("");
+  };
 
   return (
     <Card className="border-amber-200">
@@ -406,9 +465,8 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
         <div className="flex items-start gap-3">
           <FileArchive className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
           <div>
-            <h2 className="text-base font-bold text-slate-900">Restauração por PDF do ERP</h2>
-            <p className="mt-1 text-sm text-slate-600">Escolha o módulo, anexe PDFs gerados pelo próprio ERP e revise o preview antes de importar em merge.</p>
-            <p className="mt-2 text-xs font-semibold text-amber-700">Somente PDFs com cabeçalho IMPPEL ERP e Estrutura ERP são aceitos. Nada é importado automaticamente.</p>
+            <h2 className="text-base font-bold text-slate-900">Importar</h2>
+            <p className="mt-1 text-sm text-slate-600">Escolha o tipo, anexe PDFs gerados pelo ERP e confira o preview antes de confirmar.</p>
           </div>
         </div>
 
@@ -441,6 +499,10 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
 
         {previews.length > 0 && (
           <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex flex-col gap-1 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+              <strong>Módulo selecionado: {selectedModule.label}</strong>
+              <span>{files.length} arquivo(s) lido(s)</span>
+            </div>
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
               {[
                 ["Extraídos", totals.extracted],
@@ -484,18 +546,48 @@ export function PdfBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; on
 
         {previews.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm text-amber-900">Para importar em merge os registros aplicáveis, digite <strong>IMPORTAR PDF</strong>.</p>
-            <input value={confirmation} onChange={event => setConfirmation(event.target.value)} className="mt-3 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="IMPORTAR PDF" />
+            <p className="text-sm text-amber-900">Para confirmar a importação em merge, digite <strong>IMPORTAR</strong>.</p>
+            <input value={confirmation} onChange={event => setConfirmation(event.target.value)} className="mt-3 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="IMPORTAR" />
           </div>
         )}
 
         {previews.length > 0 && (
-          <button type="button" onClick={restore} disabled={!canRestore || busy} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-            <CheckCircle2 className="h-4 w-4" />
-            {busy ? "Importando..." : "4. Confirmar importação"}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={restore} disabled={!canRestore || busy} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+              <CheckCircle2 className="h-4 w-4" />
+              {busy ? "Importando..." : "Confirmar importação"}
+            </button>
+            <button type="button" onClick={cancelImport} disabled={busy} className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
+              Cancelar
+            </button>
+          </div>
         )}
         {message && <p className="text-sm text-slate-700" role="status">{message}</p>}
+
+        <div className="rounded-lg border border-slate-200">
+          <div className="border-b border-slate-100 bg-slate-50 px-3 py-2">
+            <h3 className="text-sm font-bold text-slate-900">Histórico</h3>
+          </div>
+          {history.length === 0 ? (
+            <p className="px-3 py-5 text-sm text-slate-500">Nenhuma importação registrada ainda.</p>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {history.map(entry => (
+                <div key={entry.id} className="grid gap-2 px-3 py-3 text-xs sm:grid-cols-7">
+                  <span className="font-semibold text-slate-800">{new Date(entry.importedAt).toLocaleString("pt-BR")}</span>
+                  <span>{entry.username}</span>
+                  <span>{entry.moduleLabel}</span>
+                  <span className="truncate" title={entry.files.join(", ")}>{entry.files.join(", ")}</span>
+                  <span>{entry.imported} importado(s)</span>
+                  <span>{entry.ignored} ignorado(s) · {entry.errors} erro(s)</span>
+                  <span className={entry.status === "Concluído" ? "font-semibold text-emerald-700" : "font-semibold text-red-700"}>
+                    {entry.status}{entry.backupGenerated ? " · backup OK" : " · sem backup"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
