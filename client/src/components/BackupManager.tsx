@@ -624,17 +624,12 @@ export default function BackupManager({
     const file = e.target.files?.[0];
     if (!file) return;
     const lowerName = file.name.toLowerCase();
-    if (lowerName.endsWith(".pdf")) {
+    if (!lowerName.endsWith(".json")) {
       toast({
-        title: "PDF não é restaurado automaticamente",
-        description: "PDF é indicado para conferência. Para restauração segura, use a tela Restauração e gere um preview antes de confirmar.",
+        title: "Arquivo não suportado",
+        description: "Restauração modular aceita somente JSON técnico gerado pelo ERP. PDF, CSV e texto são apenas conferência ou não são suportados.",
         variant: "destructive",
       });
-      e.target.value = "";
-      return;
-    }
-    if (lowerName.endsWith(".csv")) {
-      toast({ title: "CSV ainda não suportado", description: "Use texto estruturado na tela Restauração para gerar preview antes de aplicar.", variant: "destructive" });
       e.target.value = "";
       return;
     }
@@ -700,7 +695,7 @@ export default function BackupManager({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".json,.txt,.csv,.pdf"
+          accept=".json,application/json"
           className="hidden"
           onChange={handleFileSelect}
           data-testid={`input-file-restore-${type}`}

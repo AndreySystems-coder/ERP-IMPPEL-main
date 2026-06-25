@@ -34,6 +34,42 @@ export type CompleteBackupPackage = {
   data: Record<string, Record<string, any[]>>;
 };
 
+export type TechnicalBackupPayload = {
+  type: string;
+  version: string;
+  exportedAt: string;
+  module: string;
+  tables: string[];
+  data: Record<string, any[]>;
+};
+
+export type RestorePreview = {
+  mode: "merge" | "replace";
+  modules: string[];
+  tables: Array<{
+    table: string;
+    incoming: number;
+    current: number;
+    newCount: number;
+    updatedCount: number;
+    duplicateCount: number;
+    ignoredCount: number;
+    conflictCount: number;
+    conflicts: string[];
+  }>;
+  totals: {
+    incoming: number;
+    current: number;
+    newCount: number;
+    updatedCount: number;
+    duplicateCount: number;
+    ignoredCount: number;
+    conflictCount: number;
+  };
+  relationships: string[];
+  dependencies: string[];
+};
+
 export const MODULE_LABELS: Record<string, string> = {
   usuarios: "Usuários e cargos",
   clientes: "Clientes",
@@ -93,15 +129,15 @@ export const TABLE_LABELS: Record<string, string> = {
   paymentConditions: "Condições de pagamento",
 };
 
-type TechnicalFile = { path: string; data: unknown; records: number };
+type TechnicalFile = { path: string; data: TechnicalBackupPayload; records: number };
 type ExtractedAttachment = { path: string; source: string; mimeType: string; bytes: Uint8Array };
 
 function array(value: unknown): any[] {
   return Array.isArray(value) ? value : [];
 }
 
-function technicalPayload(backup: CompleteBackupPackage, name: string, data: unknown) {
-  return { type: name, version: backup.version, exportedAt: backup.exportedAt, data };
+function technicalPayload(backup: CompleteBackupPackage, name: string, module: string, tables: string[], data: Record<string, any[]>): TechnicalBackupPayload {
+  return { type: name, version: backup.version, exportedAt: backup.exportedAt, module, tables, data };
 }
 
 function countNested(value: unknown) {
@@ -113,40 +149,32 @@ function countNested(value: unknown) {
 export function buildTechnicalFiles(backup: CompleteBackupPackage): TechnicalFile[] {
   const users = array(backup.data.usuarios?.users);
   const roles = array(backup.data.usuarios?.roles);
-  const withdrawals = array(backup.data.controleMateriais?.materialWithdrawals);
-  const withdrawalItems = array(backup.data.controleMateriais?.materialWithdrawalItems);
-  const materialData = backup.data.controleMateriais || {};
-  const inventoryData = backup.data.estoque || {};
-  const warrantyData = backup.data.garantias || {};
 
-  const definitions: Array<[string, string, unknown]> = [
-    ["usuarios.json", "usuarios", { users }],
-    ["cargos.json", "cargos", { roles }],
-    ["clientes.json", "clientes", backup.data.clientes || {}],
-    ["leads.json", "leads", backup.data.leads || {}],
-    ["orcamentos.json", "orcamentos", backup.data.orcamentos || {}],
-    ["ordens-servico.json", "ordens-servico", backup.data.ordensServico || {}],
-    ["registros-obra.json", "registros-obra", backup.data.registrosObra || {}],
-    ["controle-materiais.json", "controle-materiais", materialData],
-    ["saidas-aberto.json", "saidas-aberto", { withdrawals: withdrawals.filter(row => row.status !== "retornado"), withdrawalItems }],
-    ["devolucoes.json", "devolucoes", { withdrawals: withdrawals.filter(row => row.status === "retornado" || row.returnedAt), withdrawalItems }],
-    ["responsabilidades.json", "responsabilidades", { withdrawals, withdrawalItems, salaryDiscounts: array(materialData.salaryDiscounts) }],
-    ["estoque.json", "estoque", { inventory: array(inventoryData.inventory) }],
-    ["movimentacoes-estoque.json", "movimentacoes-estoque", { inventoryMovements: array(inventoryData.inventoryMovements) }],
-    ["catalogo-materiais.json", "catalogo-materiais", backup.data.catalogoMateriais || {}],
-    ["vendas-materiais.json", "vendas-materiais", backup.data.vendasMateriais || {}],
-    ["catalogo-servicos.json", "catalogo-servicos", backup.data.catalogoServicos || {}],
-    ["financeiro.json", "financeiro", backup.data.financeiro || {}],
-    ["garantias.json", "garantias", { warranties: array(warrantyData.warranties), warrantyIncidents: array(warrantyData.warrantyIncidents), contracts: array(warrantyData.contracts) }],
-    ["pos-venda.json", "pos-venda", backup.data.posVenda || {}],
-    ["configuracoes.json", "configuracoes", backup.data.configuracoes || {}],
-    ["formas-pagamento.json", "formas-pagamento", backup.data.formasPagamento || {}],
-    ["condicoes-pagamento.json", "condicoes-pagamento", backup.data.condicoesPagamento || {}],
+  const definitions: Array<[string, string, string, string[], Record<string, any[]>]> = [
+    ["usuarios.json", "usuarios", "usuarios", ["users"], { users }],
+    ["cargos.json", "cargos", "usuarios", ["roles"], { roles }],
+    ["clientes.json", "clientes", "clientes", ["clients"], backup.data.clientes || {}],
+    ["leads.json", "leads", "leads", ["leads"], backup.data.leads || {}],
+    ["produtos.json", "produtos", "catalogoMateriais", ["products"], backup.data.catalogoMateriais || {}],
+    ["servicos.json", "servicos", "catalogoServicos", ["services"], backup.data.catalogoServicos || {}],
+    ["estoque.json", "estoque", "estoque", ["inventory"], { inventory: array(backup.data.estoque?.inventory) }],
+    ["movimentacoes.json", "movimentacoes", "estoque", ["inventoryMovements"], { inventoryMovements: array(backup.data.estoque?.inventoryMovements) }],
+    ["ordensServico.json", "ordensServico", "ordensServico", ["workOrders", "jobTracking"], backup.data.ordensServico || {}],
+    ["orcamentos.json", "orcamentos", "orcamentos", ["jobs"], backup.data.orcamentos || {}],
+    ["garantias.json", "garantias", "garantias", ["warranties", "warrantyIncidents", "contracts"], backup.data.garantias || {}],
+    ["financeiro.json", "financeiro", "financeiro", ["payments", "transactions"], backup.data.financeiro || {}],
+    ["materiais.json", "materiais", "controleMateriais", ["materialWithdrawals", "materialWithdrawalItems", "obraConsumoLogs", "salaryDiscounts"], backup.data.controleMateriais || {}],
+    ["configuracoes.json", "configuracoes", "configuracoes", ["settings", "costConfig", "priorityRules", "jobStatuses", "whatsappFlows", "whatsappSendLogs", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"], backup.data.configuracoes || {}],
+    ["registrosObra.json", "registrosObra", "registrosObra", ["obraRegistros", "productionLogs"], backup.data.registrosObra || {}],
+    ["vendasMateriais.json", "vendasMateriais", "vendasMateriais", ["materialSales"], backup.data.vendasMateriais || {}],
+    ["posVenda.json", "posVenda", "posVenda", ["npsResponses", "maintenanceReminders"], backup.data.posVenda || {}],
+    ["formasPagamento.json", "formasPagamento", "formasPagamento", ["paymentMethods"], backup.data.formasPagamento || {}],
+    ["condicoesPagamento.json", "condicoesPagamento", "condicoesPagamento", ["paymentConditions"], backup.data.condicoesPagamento || {}],
   ];
 
-  return definitions.map(([path, name, data]) => ({
+  return definitions.map(([path, name, module, tables, data]) => ({
     path,
-    data: technicalPayload(backup, name, data),
+    data: technicalPayload(backup, name, module, tables, data),
     records: countNested(data),
   }));
 }
@@ -320,10 +348,7 @@ async function validateDataChecksum(backup: CompleteBackupPackage) {
 
 export async function parseCompleteBackupFile(file: File): Promise<CompleteBackupPackage> {
   if (!file.name.toLowerCase().endsWith(".zip")) {
-    const backup = JSON.parse(await file.text());
-    validatePackageShape(backup);
-    await validateDataChecksum(backup);
-    return backup;
+    throw new Error("Restauração completa aceita somente ZIP gerado pelo Backup Completo do ERP.");
   }
 
   const files = unzipSync(new Uint8Array(await file.arrayBuffer()));
@@ -341,4 +366,18 @@ export async function parseCompleteBackupFile(file: File): Promise<CompleteBacku
     }
   }
   return backup;
+}
+
+export async function parseTechnicalBackupJsonFile(file: File): Promise<TechnicalBackupPayload> {
+  if (!file.name.toLowerCase().endsWith(".json")) {
+    throw new Error("Importação modular aceita somente JSON técnico gerado pelo ERP.");
+  }
+  const payload = JSON.parse(await file.text());
+  if (!payload?.type || payload?.version !== "3.0" || !payload?.module || !Array.isArray(payload?.tables) || !payload?.data) {
+    throw new Error("JSON técnico inválido ou incompatível.");
+  }
+  if (payload.type === "erp-completo" || payload.manifest) {
+    throw new Error("Backup completo deve ser restaurado pelo ZIP, não por JSON solto.");
+  }
+  return payload;
 }

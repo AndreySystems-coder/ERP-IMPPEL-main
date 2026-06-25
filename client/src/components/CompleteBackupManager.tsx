@@ -5,8 +5,11 @@ import {
   buildCompleteBackupArchive,
   MODULE_LABELS,
   parseCompleteBackupFile,
+  parseTechnicalBackupJsonFile,
   TABLE_LABELS,
   type CompleteBackupPackage,
+  type RestorePreview,
+  type TechnicalBackupPayload,
 } from "@/lib/completeBackupArchive";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -69,6 +72,7 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
   const [backup, setBackup] = useState<CompleteBackupPackage | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [mode, setMode] = useState<"merge" | "replace">("merge");
+  const [preview, setPreview] = useState<RestorePreview | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [replaceConfirmation, setReplaceConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -84,12 +88,36 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
       setBackup(parsed);
       setSelected([...parsed.manifest.includedModules]);
       setMode("merge");
+      setPreview(null);
       setConfirmation("");
       setReplaceConfirmation("");
     } catch (error: any) {
       setBackup(null);
       setSelected([]);
+      setPreview(null);
       setMessage(error.message || "Não foi possível ler o pacote.");
+    }
+  };
+
+  const buildPreview = async (nextMode = mode, nextSelected = selected) => {
+    if (!backup || nextSelected.length === 0) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/backup/preview/completo", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backup, modules: nextSelected, mode: nextMode }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível gerar o preview.");
+      setPreview(result.preview);
+    } catch (error: any) {
+      setPreview(null);
+      setMessage(error.message || "Não foi possível gerar o preview.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -107,6 +135,7 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "A restauração completa falhou.");
       setMessage(`${result.message} ${result.total} registro(s) processado(s).`);
+      setPreview(null);
       onRestored();
     } catch (error: any) {
       setMessage(error.message || "A restauração completa falhou.");
@@ -115,7 +144,7 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
     }
   };
 
-  const canRestore = isAdmin && backup && selected.length > 0 && confirmation === "RESTAURAR ERP" && (mode === "merge" || replaceConfirmation === "SUBSTITUIR MODULOS");
+  const canRestore = isAdmin && backup && preview && preview.totals.conflictCount === 0 && selected.length > 0 && confirmation === "RESTAURAR ERP" && (mode === "merge" || replaceConfirmation === "SUBSTITUIR MODULOS");
 
   return (
     <Card className="border-emerald-200">
@@ -124,14 +153,14 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
           <FileArchive className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
           <div>
             <h2 className="text-base font-bold text-slate-900">Restaurar pacote completo</h2>
-            <p className="mt-1 text-sm text-slate-600">Selecione um ZIP ou JSON gerado pela Exportação Completa, revise o manifesto e escolha os módulos.</p>
+            <p className="mt-1 text-sm text-slate-600">Selecione um ZIP gerado pela Exportação Completa, valide manifesto, checksums e gere o preview antes de aplicar.</p>
           </div>
         </div>
 
         <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 text-center hover:border-emerald-400">
           <Upload className="mb-2 h-5 w-5 text-slate-500" />
-          <span className="text-sm font-semibold text-slate-700">Selecionar ZIP ou JSON completo</span>
-          <input type="file" accept=".zip,.json,application/zip,application/json" className="sr-only" onChange={event => loadFile(event.target.files?.[0])} />
+          <span className="text-sm font-semibold text-slate-700">Selecionar ZIP completo</span>
+          <input type="file" accept=".zip,application/zip" className="sr-only" onChange={event => loadFile(event.target.files?.[0])} />
         </label>
 
         {backup && (
@@ -165,7 +194,7 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {backup.manifest.includedModules.map(moduleName => (
                 <label key={moduleName} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
-                  <input type="checkbox" checked={selected.includes(moduleName)} onChange={() => setSelected(current => current.includes(moduleName) ? current.filter(name => name !== moduleName) : [...current, moduleName])} />
+                  <input type="checkbox" checked={selected.includes(moduleName)} onChange={() => { setPreview(null); setSelected(current => current.includes(moduleName) ? current.filter(name => name !== moduleName) : [...current, moduleName]); }} />
                   <span className="min-w-0 flex-1 text-sm font-medium text-slate-700">{MODULE_LABELS[moduleName] || moduleName}</span>
                   <span className="text-xs tabular-nums text-slate-500">{backup.manifest.counts[moduleName] || 0}</span>
                 </label>
@@ -174,12 +203,12 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
 
             <div className="grid gap-3 sm:grid-cols-2">
               <label className={`cursor-pointer rounded-lg border-2 p-3 ${mode === "merge" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
-                <input type="radio" name="complete-mode" checked={mode === "merge"} onChange={() => setMode("merge")} className="mr-2" />
+                <input type="radio" name="complete-mode" checked={mode === "merge"} onChange={() => { setMode("merge"); setPreview(null); }} className="mr-2" />
                 <span className="text-sm font-semibold">Mesclar</span>
                 <p className="mt-1 text-xs text-slate-600">Atualiza IDs existentes e adiciona os ausentes em uma transação.</p>
               </label>
               <label className={`cursor-pointer rounded-lg border-2 p-3 ${mode === "replace" ? "border-red-500 bg-red-50" : "border-slate-200"}`}>
-                <input type="radio" name="complete-mode" checked={mode === "replace"} onChange={() => setMode("replace")} className="mr-2" />
+                <input type="radio" name="complete-mode" checked={mode === "replace"} onChange={() => { setMode("replace"); setPreview(null); }} className="mr-2" />
                 <span className="text-sm font-semibold">Substituir selecionados</span>
                 <p className="mt-1 text-xs text-slate-600">Apaga apenas os módulos marcados e restaura seus IDs originais.</p>
               </label>
@@ -192,8 +221,14 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
               </div>
             )}
 
+            <button type="button" onClick={() => buildPreview()} disabled={!isAdmin || busy || selected.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-900 disabled:opacity-50 sm:w-auto">
+              {busy ? "Gerando preview..." : "Gerar preview técnico"}
+            </button>
+
+            {preview && <RestorePreviewPanel preview={preview} />}
+
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-sm text-amber-900">Para aplicar {total} registro(s) dos módulos selecionados, digite <strong>RESTAURAR ERP</strong>.</p>
+              <p className="text-sm text-amber-900">Para aplicar {total} registro(s) dos módulos selecionados após o preview, digite <strong>RESTAURAR ERP</strong>.</p>
               <input value={confirmation} onChange={event => setConfirmation(event.target.value)} className="mt-3 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="RESTAURAR ERP" />
             </div>
 
@@ -208,6 +243,173 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
             <button type="button" onClick={restore} disabled={!canRestore || busy} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto">
               <CheckCircle2 className="h-4 w-4" />
               {busy ? "Restaurando…" : "Confirmar restauração"}
+            </button>
+          </>
+        )}
+        {message && <p className="text-sm text-slate-700" role="status">{message}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function RestorePreviewPanel({ preview }: { preview: RestorePreview }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <h3 className="text-sm font-bold text-slate-900">Preview técnico da restauração</h3>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {[
+          ["Novos", preview.totals.newCount],
+          ["Atualizados", preview.totals.updatedCount],
+          ["Duplicados", preview.totals.duplicateCount],
+          ["Ignorados", preview.totals.ignoredCount],
+          ["Conflitos", preview.totals.conflictCount],
+          ["Entrada", preview.totals.incoming],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-md bg-slate-50 p-2 text-center">
+            <p className="text-lg font-bold text-slate-900">{value}</p>
+            <p className="text-xs text-slate-500">{label}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 max-h-72 overflow-y-auto rounded-md border border-slate-100">
+        {preview.tables.map(table => (
+          <div key={table.table} className="grid gap-2 border-b border-slate-100 px-3 py-2 text-xs last:border-b-0 sm:grid-cols-7">
+            <strong className="text-slate-800">{TABLE_LABELS[table.table] || table.table}</strong>
+            <span>Atual: {table.current}</span>
+            <span>Entrada: {table.incoming}</span>
+            <span>Novos: {table.newCount}</span>
+            <span>Atualiz.: {table.updatedCount}</span>
+            <span>Duplic.: {table.duplicateCount}</span>
+            <span className={table.conflictCount ? "font-bold text-red-700" : "text-slate-500"}>Conflitos: {table.conflictCount}</span>
+          </div>
+        ))}
+      </div>
+      {preview.relationships.length > 0 && <p className="mt-3 text-xs text-slate-600">Relacionamentos validados: {preview.relationships.join(" · ")}</p>}
+      {preview.totals.conflictCount > 0 && (
+        <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+          {preview.tables.flatMap(table => table.conflicts).slice(0, 10).map((item, index) => <p key={index}>{item}</p>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ModularBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean; onRestored: () => void }) {
+  const [payload, setPayload] = useState<TechnicalBackupPayload | null>(null);
+  const [preview, setPreview] = useState<RestorePreview | null>(null);
+  const [mode, setMode] = useState<"merge" | "replace">("merge");
+  const [confirmation, setConfirmation] = useState("");
+  const [replaceConfirmation, setReplaceConfirmation] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const loadFile = async (file?: File) => {
+    if (!file) return;
+    setMessage("");
+    try {
+      const parsed = await parseTechnicalBackupJsonFile(file);
+      setPayload(parsed);
+      setPreview(null);
+      setConfirmation("");
+      setReplaceConfirmation("");
+    } catch (error: any) {
+      setPayload(null);
+      setPreview(null);
+      setMessage(error.message || "Não foi possível ler o JSON técnico.");
+    }
+  };
+
+  const buildPreview = async () => {
+    if (!payload) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/backup/preview/modular", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backup: payload, mode }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Não foi possível gerar o preview modular.");
+      setPreview(result.preview);
+    } catch (error: any) {
+      setPreview(null);
+      setMessage(error.message || "Não foi possível gerar o preview modular.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restore = async () => {
+    if (!payload) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/backup/restore/modular", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ backup: payload, mode, confirmation, replaceConfirmation }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "A importação modular falhou.");
+      setMessage(`${result.message} ${result.total} registro(s) processado(s).`);
+      setPreview(null);
+      onRestored();
+    } catch (error: any) {
+      setMessage(error.message || "A importação modular falhou.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const canRestore = isAdmin && payload && preview && preview.totals.conflictCount === 0 && confirmation === "RESTAURAR MODULO" && (mode === "merge" || replaceConfirmation === "SUBSTITUIR MODULO");
+
+  return (
+    <Card className="border-blue-200">
+      <CardContent className="space-y-4 p-5">
+        <div className="flex items-start gap-3">
+          <Upload className="mt-0.5 h-5 w-5 shrink-0 text-blue-700" />
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Importação modular por JSON técnico</h2>
+            <p className="mt-1 text-sm text-slate-600">Aceita somente JSON técnico gerado dentro do ZIP do ERP. O módulo é detectado pelo campo técnico do arquivo.</p>
+          </div>
+        </div>
+
+        <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 text-center hover:border-blue-400">
+          <Upload className="mb-2 h-5 w-5 text-slate-500" />
+          <span className="text-sm font-semibold text-slate-700">Selecionar JSON técnico modular</span>
+          <input type="file" accept=".json,application/json" className="sr-only" onChange={event => loadFile(event.target.files?.[0])} />
+        </label>
+
+        {payload && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Tipo detectado</p><p className="mt-1 text-sm font-semibold text-slate-800">{payload.type}</p></div>
+              <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Módulo</p><p className="mt-1 text-sm font-semibold text-slate-800">{MODULE_LABELS[payload.module] || payload.module}</p></div>
+              <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Tabelas</p><p className="mt-1 truncate text-sm font-semibold text-slate-800">{payload.tables.join(", ")}</p></div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={`cursor-pointer rounded-lg border-2 p-3 ${mode === "merge" ? "border-blue-500 bg-blue-50" : "border-slate-200"}`}>
+                <input type="radio" name="modular-mode" checked={mode === "merge"} onChange={() => { setMode("merge"); setPreview(null); }} className="mr-2" />
+                <span className="text-sm font-semibold">Mesclar</span>
+              </label>
+              <label className={`cursor-pointer rounded-lg border-2 p-3 ${mode === "replace" ? "border-red-500 bg-red-50" : "border-slate-200"}`}>
+                <input type="radio" name="modular-mode" checked={mode === "replace"} onChange={() => { setMode("replace"); setPreview(null); }} className="mr-2" />
+                <span className="text-sm font-semibold">Substituir módulo</span>
+              </label>
+            </div>
+            <button type="button" onClick={buildPreview} disabled={busy} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-900 disabled:opacity-50">
+              {busy ? "Gerando preview..." : "Gerar preview modular"}
+            </button>
+            {preview && <RestorePreviewPanel preview={preview} />}
+            {mode === "replace" && (
+              <input value={replaceConfirmation} onChange={event => setReplaceConfirmation(event.target.value)} className="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm" placeholder="SUBSTITUIR MODULO" />
+            )}
+            <input value={confirmation} onChange={event => setConfirmation(event.target.value)} className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="RESTAURAR MODULO" />
+            <button type="button" onClick={restore} disabled={!canRestore || busy} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+              Confirmar importação modular
             </button>
           </>
         )}

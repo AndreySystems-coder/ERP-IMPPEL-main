@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   COMPLETE_BACKUP_MODULE_TABLES,
+  type CompleteBackupData,
   type CompleteBackupModule,
   type IStorage,
 } from "./storage";
@@ -39,6 +40,66 @@ export type CompleteBackupPackage = {
   exportedAt: string;
   manifest: CompleteBackupManifest;
   data: Record<CompleteBackupModule, Record<string, unknown[]>>;
+};
+
+export type TechnicalBackupPayload = {
+  type: string;
+  version: string;
+  exportedAt: string;
+  module: CompleteBackupModule;
+  tables: string[];
+  data: Record<string, unknown[]>;
+};
+
+export type RestorePreviewTable = {
+  table: string;
+  incoming: number;
+  current: number;
+  newCount: number;
+  updatedCount: number;
+  duplicateCount: number;
+  ignoredCount: number;
+  conflictCount: number;
+  conflicts: string[];
+};
+
+export type RestorePreview = {
+  mode: "merge" | "replace";
+  modules: CompleteBackupModule[];
+  tables: RestorePreviewTable[];
+  totals: {
+    incoming: number;
+    current: number;
+    newCount: number;
+    updatedCount: number;
+    duplicateCount: number;
+    ignoredCount: number;
+    conflictCount: number;
+  };
+  relationships: string[];
+  dependencies: string[];
+};
+
+export const TECHNICAL_BACKUP_TYPES: Record<string, { module: CompleteBackupModule; tables: string[]; label: string }> = {
+  usuarios: { module: "usuarios", tables: ["users"], label: "Usuários" },
+  cargos: { module: "usuarios", tables: ["roles"], label: "Cargos" },
+  clientes: { module: "clientes", tables: ["clients"], label: "Clientes" },
+  leads: { module: "leads", tables: ["leads"], label: "Leads" },
+  produtos: { module: "catalogoMateriais", tables: ["products"], label: "Produtos" },
+  servicos: { module: "catalogoServicos", tables: ["services"], label: "Serviços" },
+  estoque: { module: "estoque", tables: ["inventory"], label: "Estoque" },
+  movimentacoes: { module: "estoque", tables: ["inventoryMovements"], label: "Movimentações" },
+  ordensServico: { module: "ordensServico", tables: ["workOrders", "jobTracking"], label: "Ordens de Serviço" },
+  orcamentos: { module: "orcamentos", tables: ["jobs"], label: "Orçamentos" },
+  garantias: { module: "garantias", tables: ["warranties", "warrantyIncidents", "contracts"], label: "Garantias" },
+  financeiro: { module: "financeiro", tables: ["payments", "transactions"], label: "Financeiro" },
+  materiais: { module: "controleMateriais", tables: ["materialWithdrawals", "materialWithdrawalItems", "obraConsumoLogs", "salaryDiscounts"], label: "Materiais" },
+  configuracoes: { module: "configuracoes", tables: ["settings", "costConfig", "priorityRules", "jobStatuses", "whatsappFlows", "whatsappSendLogs", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"], label: "Configurações" },
+  registrosObra: { module: "registrosObra", tables: ["obraRegistros", "productionLogs"], label: "Registros de Obra" },
+  vendasMateriais: { module: "vendasMateriais", tables: ["materialSales"], label: "Vendas de Materiais" },
+  posVenda: { module: "posVenda", tables: ["npsResponses", "maintenanceReminders"], label: "Pós-venda" },
+  formasPagamento: { module: "formasPagamento", tables: ["paymentMethods"], label: "Formas de Pagamento" },
+  condicoesPagamento: { module: "condicoesPagamento", tables: ["paymentConditions"], label: "Condições de Pagamento" },
 };
 
 function recordCount(value: unknown) {
@@ -171,4 +232,136 @@ export function flattenCompleteBackupData(
     }
   }
   return flatData;
+}
+
+export function validateTechnicalBackupPayload(value: any): asserts value is TechnicalBackupPayload {
+  const config = TECHNICAL_BACKUP_TYPES[String(value?.type || "")];
+  if (!config || value?.version !== COMPLETE_BACKUP_VERSION || !value?.data || typeof value.data !== "object") {
+    throw new Error("JSON tecnico invalido ou incompatível com esta versao do ERP.");
+  }
+  if (value.module !== config.module) {
+    throw new Error("JSON tecnico invalido: modulo declarado nao confere com o tipo.");
+  }
+  const allowedTables = new Set(config.tables);
+  for (const tableName of Object.keys(value.data)) {
+    if (!allowedTables.has(tableName)) {
+      throw new Error(`JSON tecnico invalido: tabela nao permitida para ${value.type} (${tableName}).`);
+    }
+  }
+}
+
+export function flattenTechnicalBackupPayload(payload: TechnicalBackupPayload) {
+  validateTechnicalBackupPayload(payload);
+  const config = TECHNICAL_BACKUP_TYPES[payload.type];
+  const flatData: Record<string, any[]> = {};
+  for (const tableName of config.tables) {
+    flatData[tableName] = Array.isArray(payload.data?.[tableName]) ? payload.data[tableName] as any[] : [];
+  }
+  return { modules: [config.module], tables: config.tables, data: flatData };
+}
+
+const RELATIONSHIPS: Record<string, Array<{ field: string; target: string }>> = {
+  users: [{ field: "roleId", target: "roles" }],
+  leads: [{ field: "clientId", target: "clients" }],
+  jobs: [{ field: "clientId", target: "clients" }, { field: "leadId", target: "leads" }],
+  workOrders: [{ field: "jobId", target: "jobs" }, { field: "clientId", target: "clients" }],
+  jobTracking: [{ field: "workOrderId", target: "workOrders" }],
+  obraRegistros: [{ field: "workOrderId", target: "workOrders" }],
+  productionLogs: [{ field: "workOrderId", target: "workOrders" }, { field: "userId", target: "users" }],
+  materialWithdrawals: [{ field: "userId", target: "users" }, { field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
+  materialWithdrawalItems: [{ field: "withdrawalId", target: "materialWithdrawals" }, { field: "inventoryId", target: "inventory" }],
+  obraConsumoLogs: [{ field: "workOrderId", target: "workOrders" }, { field: "inventoryId", target: "inventory" }],
+  salaryDiscounts: [{ field: "userId", target: "users" }, { field: "withdrawalId", target: "materialWithdrawals" }],
+  inventoryMovements: [{ field: "inventoryId", target: "inventory" }],
+  payments: [{ field: "jobId", target: "jobs" }],
+  materialSales: [{ field: "createdByUserId", target: "users" }, { field: "approvedByUserId", target: "users" }],
+  warranties: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
+  warrantyIncidents: [{ field: "warrantyId", target: "warranties" }],
+  contracts: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
+  npsResponses: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
+  maintenanceReminders: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
+};
+
+export function buildRestorePreview(
+  currentData: CompleteBackupData,
+  incomingData: CompleteBackupData,
+  modules: CompleteBackupModule[],
+  mode: "merge" | "replace",
+  tableFilter?: string[],
+): RestorePreview {
+  const selectedTables = tableFilter?.length
+    ? tableFilter
+    : Array.from(new Set(modules.flatMap(moduleName => [...COMPLETE_BACKUP_MODULE_TABLES[moduleName]])));
+  const incomingIds = Object.fromEntries(selectedTables.map(tableName => [
+    tableName,
+    new Set((incomingData[tableName] || []).map((row: any) => Number(row?.id)).filter(Boolean)),
+  ]));
+  const currentIds = Object.fromEntries(Object.entries(currentData).map(([tableName, rows]) => [
+    tableName,
+    new Set((Array.isArray(rows) ? rows : []).map((row: any) => Number(row?.id)).filter(Boolean)),
+  ]));
+  const dependencies = new Set<string>();
+  const relationships = new Set<string>();
+
+  const tables = selectedTables.map(tableName => {
+    const rows = Array.isArray(incomingData[tableName]) ? incomingData[tableName] : [];
+    const currentRows = Array.isArray(currentData[tableName]) ? currentData[tableName] : [];
+    const seen = new Set<number>();
+    const conflicts: string[] = [];
+    let newCount = 0;
+    let updatedCount = 0;
+    let duplicateCount = 0;
+    let ignoredCount = 0;
+    let conflictCount = 0;
+
+    for (const row of rows) {
+      if (!row || typeof row !== "object") { ignoredCount++; continue; }
+      const id = Number((row as any).id);
+      if (id && seen.has(id)) { duplicateCount++; continue; }
+      if (id) seen.add(id);
+      if (mode === "merge" && id && currentIds[tableName]?.has(id)) updatedCount++;
+      else newCount++;
+
+      for (const relation of RELATIONSHIPS[tableName] || []) {
+        const ref = Number((row as any)[relation.field]);
+        if (!ref) continue;
+        relationships.add(`${tableName}.${relation.field} -> ${relation.target}.id`);
+        const existsInIncoming = incomingIds[relation.target]?.has(ref);
+        const existsInCurrent = currentIds[relation.target]?.has(ref);
+        if (!existsInIncoming && !existsInCurrent) {
+          conflictCount++;
+          conflicts.push(`${tableName}#${id || "sem-id"} referencia ${relation.target}#${ref}, mas o registro nao existe no pacote nem no banco atual.`);
+        }
+      }
+    }
+
+    for (const relation of RELATIONSHIPS[tableName] || []) dependencies.add(relation.target);
+
+    return {
+      table: tableName,
+      incoming: rows.length,
+      current: currentRows.length,
+      newCount,
+      updatedCount,
+      duplicateCount,
+      ignoredCount,
+      conflictCount,
+      conflicts: conflicts.slice(0, 20),
+    };
+  });
+
+  const totals = tables.reduce(
+    (sum, table) => ({
+      incoming: sum.incoming + table.incoming,
+      current: sum.current + table.current,
+      newCount: sum.newCount + table.newCount,
+      updatedCount: sum.updatedCount + table.updatedCount,
+      duplicateCount: sum.duplicateCount + table.duplicateCount,
+      ignoredCount: sum.ignoredCount + table.ignoredCount,
+      conflictCount: sum.conflictCount + table.conflictCount,
+    }),
+    { incoming: 0, current: 0, newCount: 0, updatedCount: 0, duplicateCount: 0, ignoredCount: 0, conflictCount: 0 },
+  );
+
+  return { mode, modules, tables, totals, relationships: [...relationships], dependencies: [...dependencies] };
 }

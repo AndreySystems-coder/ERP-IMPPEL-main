@@ -2,8 +2,11 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
 import {
+  buildRestorePreview,
   buildCompleteBackupPackage,
   flattenCompleteBackupData,
+  flattenTechnicalBackupPayload,
+  validateTechnicalBackupPayload,
   validateCompleteBackupPackage,
 } from "./complete-backup";
 import { api } from "@shared/routes";
@@ -2641,6 +2644,58 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  const normalizeCompleteRestoreUsers = async (flatData: Record<string, any[]>) => {
+    if (!flatData.users) return flatData;
+    flatData.users = await Promise.all(flatData.users.map(async (user: any) => ({
+      id: user.id,
+      username: user.username,
+      role: user.role === "admin" ? "admin" : "funcionario",
+      roleId: user.roleId ?? null,
+      jobTitle: user.jobTitle ?? null,
+      fullName: user.fullName ?? null,
+      birthDate: user.birthDate ?? null,
+      status: user.status === "inativo" ? "inativo" : "ativo",
+      mustChangePassword: !!user.mustChangePassword,
+      createdAt: user.createdAt ?? null,
+      password: /^\$2[aby]\$/.test(String(user.passwordHash || user.password || ""))
+        ? String(user.passwordHash || user.password)
+        : await bcrypt.hash(randomBytes(32).toString("hex"), BCRYPT_ROUNDS),
+    })));
+    return flatData;
+  };
+
+  app.post("/api/backup/preview/completo", requireAdmin, async (req, res) => {
+    try {
+      const packageData = req.body?.backup;
+      const mode = req.body?.mode === "replace" ? "replace" : "merge";
+      const validModules = Object.keys(COMPLETE_BACKUP_MODULE_TABLES) as CompleteBackupModule[];
+      const requestedModules: unknown[] = Array.isArray(req.body?.modules) ? req.body.modules : [];
+      const modules: CompleteBackupModule[] = requestedModules.filter(
+        (name): name is CompleteBackupModule => typeof name === "string" && validModules.includes(name as CompleteBackupModule),
+      );
+
+      validateCompleteBackupPackage(packageData);
+      if (modules.length === 0) return res.status(400).json({ message: "Selecione ao menos um modulo." });
+
+      const current = await storage.getCompleteBackupData();
+      const incoming = flattenCompleteBackupData(packageData, modules);
+      const preview = buildRestorePreview(current, incoming, modules, mode);
+      res.json({ preview });
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/preview/modular", requireAdmin, async (req, res) => {
+    try {
+      const packageData = req.body?.backup;
+      const mode = req.body?.mode === "replace" ? "replace" : "merge";
+      validateTechnicalBackupPayload(packageData);
+      const technical = flattenTechnicalBackupPayload(packageData);
+      const current = await storage.getCompleteBackupData();
+      const preview = buildRestorePreview(current, technical.data, technical.modules, mode, technical.tables);
+      res.json({ preview, module: packageData.module, type: packageData.type });
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
+  });
+
   // Material sales / cart
   app.get("/api/material-sales", async (req, res) => {
     try {
@@ -2774,26 +2829,44 @@ export async function registerRoutes(
 
       const flatData = flattenCompleteBackupData(packageData, modules);
 
-      if (flatData.users) {
-        flatData.users = await Promise.all(flatData.users.map(async (user: any) => ({
-          id: user.id,
-          username: user.username,
-          role: user.role === "admin" ? "admin" : "funcionario",
-          roleId: user.roleId ?? null,
-          jobTitle: user.jobTitle ?? null,
-          fullName: user.fullName ?? null,
-          birthDate: user.birthDate ?? null,
-          status: user.status === "inativo" ? "inativo" : "ativo",
-          mustChangePassword: !!user.mustChangePassword,
-          createdAt: user.createdAt ?? null,
-          password: /^\$2[aby]\$/.test(String(user.passwordHash || ""))
-            ? user.passwordHash
-            : await bcrypt.hash(randomBytes(32).toString("hex"), BCRYPT_ROUNDS),
-        })));
-      }
+      const preview = buildRestorePreview(await storage.getCompleteBackupData(), flatData, modules, mode);
+      if (preview.totals.conflictCount > 0) return res.status(409).json({ message: "Restauração bloqueada por conflitos de relacionamento.", preview });
+
+      await normalizeCompleteRestoreUsers(flatData);
 
       const result = await storage.restoreCompleteBackup(flatData, modules, mode);
       res.json({ message: "Pacote restaurado com integridade.", mode, modules, ...result });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/backup/restore/modular", requireAdmin, async (req, res) => {
+    try {
+      const packageData = req.body?.backup;
+      const mode = req.body?.mode === "replace" ? "replace" : "merge";
+      validateTechnicalBackupPayload(packageData);
+      if (req.body?.confirmation !== "RESTAURAR MODULO") {
+        return res.status(400).json({ message: "Confirmacao de restauracao modular ausente." });
+      }
+      if (mode === "replace" && req.body?.replaceConfirmation !== "SUBSTITUIR MODULO") {
+        return res.status(400).json({ message: "Confirmacao forte para substituicao modular ausente." });
+      }
+
+      const technical = flattenTechnicalBackupPayload(packageData);
+      const current = await storage.getCompleteBackupData();
+      const preview = buildRestorePreview(current, technical.data, technical.modules, mode, technical.tables);
+      if (preview.totals.conflictCount > 0) return res.status(409).json({ message: "Importação modular bloqueada por conflitos de relacionamento.", preview });
+
+      const restoreData = { ...technical.data };
+      if (mode === "replace") {
+        for (const moduleName of technical.modules) {
+          for (const tableName of COMPLETE_BACKUP_MODULE_TABLES[moduleName]) {
+            if (!technical.tables.includes(tableName)) restoreData[tableName] = current[tableName] || [];
+          }
+        }
+      }
+      await normalizeCompleteRestoreUsers(restoreData);
+      const result = await storage.restoreCompleteBackup(restoreData, technical.modules, mode);
+      res.json({ message: "JSON tecnico modular restaurado com integridade.", mode, module: packageData.module, type: packageData.type, ...result });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

@@ -13,7 +13,7 @@ const {
   flattenCompleteBackupData,
   validateCompleteBackupPackage,
 } = await import("../server/complete-backup");
-const { buildCompleteBackupArchive, parseCompleteBackupFile } = await import("../client/src/lib/completeBackupArchive");
+const { buildCompleteBackupArchive, parseCompleteBackupFile, parseTechnicalBackupJsonFile } = await import("../client/src/lib/completeBackupArchive");
 
 const modules = Object.keys(COMPLETE_BACKUP_MODULE_TABLES) as Array<keyof typeof COMPLETE_BACKUP_MODULE_TABLES>;
 const passwordHash = await bcrypt.hash("senha-sintetica", 4);
@@ -84,13 +84,16 @@ const parsedArchive = await parseCompleteBackupFile(new File([new Uint8Array(arc
 assert.equal(parsedArchive.manifest.checksum.value, backup.manifest.checksum.value, "parser do ZIP alterou o checksum");
 const requiredFiles = [
   "manifest.json", "usuarios.json", "cargos.json", "clientes.json", "leads.json", "orcamentos.json",
-  "ordens-servico.json", "registros-obra.json", "controle-materiais.json", "saidas-aberto.json",
-  "devolucoes.json", "responsabilidades.json", "estoque.json", "movimentacoes-estoque.json",
-  "catalogo-materiais.json", "vendas-materiais.json", "catalogo-servicos.json", "financeiro.json", "garantias.json",
-  "pos-venda.json", "configuracoes.json", "formas-pagamento.json", "condicoes-pagamento.json",
+  "ordensServico.json", "registrosObra.json", "materiais.json", "estoque.json", "movimentacoes.json",
+  "produtos.json", "vendasMateriais.json", "servicos.json", "financeiro.json", "garantias.json",
+  "posVenda.json", "configuracoes.json", "formasPagamento.json", "condicoesPagamento.json",
   "attachments/index.json", "relatorios/relatorio-conferencia.pdf", "ERP-IMPPEL-backup-completo.json",
 ];
 requiredFiles.forEach(path => assert.ok(files[path], `arquivo ausente no ZIP: ${path}`));
+const modularProducts = await parseTechnicalBackupJsonFile(new File([new Uint8Array(files["produtos.json"])], "produtos.json", { type: "application/json" }));
+assert.equal(modularProducts.type, "produtos", "JSON modular não detectou o tipo correto");
+assert.deepEqual(modularProducts.tables, ["products"], "JSON modular não declarou as tabelas corretas");
+await assert.rejects(() => parseCompleteBackupFile(new File([new Uint8Array(files["ERP-IMPPEL-backup-completo.json"])], "ERP-IMPPEL-backup-completo.json", { type: "application/json" })), /somente ZIP/i);
 assert.ok(Object.keys(files).some(path => path.startsWith("photos/") && path.endsWith(".png")), "fotos não foram extraídas");
 assert.ok(Object.keys(files).some(path => path.startsWith("signatures/") && path.endsWith(".png")), "assinaturas não foram extraídas");
 assert.ok(Object.keys(files).some(path => path.startsWith("generated-pdfs/") && path.endsWith(".pdf")), "PDF armazenado não foi extraído");
