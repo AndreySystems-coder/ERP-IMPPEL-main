@@ -2807,28 +2807,45 @@ export async function registerRoutes(
         return { id: role.id, name: role.name, label: role.label, permissions, isDefault: role.isDefault, createdAt: role.createdAt };
       });
       const userData = allUsers.map(user => {
+        const userAny = user as any;
         const customRole = rolesById.get((user as any).roleId);
+        const mustChangePassword = userAny.mustChangePassword === true;
+        const initialPassword =
+          userAny.senhaInicial ||
+          userAny.initialPassword ||
+          (userAny.birthDate ? generateInitialPassword(userAny.birthDate) : null) ||
+          (userAny.birth_date ? generateInitialPassword(userAny.birth_date) : null) ||
+          (userAny.dataNascimento ? generateInitialPassword(userAny.dataNascimento) : null) ||
+          null;
+        const status = userAny.active === false || userAny.status === "inativo" ? "Inativo" : "Ativo";
+        const fullName = userAny.nomeCompleto || userAny.fullName || userAny.name || user.username;
+        const cargo = customRole?.label || userAny.jobTitle || null;
         return {
           id: user.id,
+          login: user.username,
+          senhaInicial: mustChangePassword ? (initialPassword ? String(initialPassword) : "Não disponível") : "Senha alterada",
+          nomeCompleto: fullName,
+          cargo,
+          perfil: user.role,
+          status,
           username: user.username,
           role: user.role,
-          roleId: (user as any).roleId || null,
+          roleId: userAny.roleId || null,
           roleName: customRole?.name || null,
           roleLabel: customRole?.label || null,
-          jobTitle: (user as any).jobTitle || null,
-          fullName: (user as any).fullName || null,
-          birthDate: (user as any).birthDate || null,
-          status: (user as any).status || "ativo",
-          mustChangePassword: !!(user as any).mustChangePassword,
+          jobTitle: userAny.jobTitle || null,
+          fullName: userAny.fullName || null,
+          birthDate: userAny.birthDate || null,
+          operationalStatus: userAny.status || "ativo",
           active: true,
-          passwordHash: user.password.startsWith("$2") ? user.password : null,
+          mustChangePassword,
         };
       });
       res.json({
         type: "usuarios",
         version: "2.0",
         exportedAt: new Date().toISOString(),
-        security: "bcrypt-only",
+        security: { plaintextPasswordsIncluded: false, passwordHashesIncluded: false },
         data: { users: userData, roles: roleData },
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }

@@ -141,6 +141,48 @@ function getRecordCount(type: BackupType, backup: any): number {
   return 0;
 }
 
+function getOperationalInitialPassword(user: any): string {
+  if (user.mustChangePassword === false) return "Senha alterada";
+  const source = user.senhaInicial || user.initialPassword || user.birthDate || user.birth_date || user.dataNascimento;
+  if (source) return String(source);
+  if (user.mustChangePassword === true) return "Não disponível";
+  return user.passwordChanged ? "Senha alterada" : "Não disponível";
+}
+
+function getOperationalFullName(user: any): string {
+  return String(user.nomeCompleto || user.fullName || user.name || user.username || user.login || "—");
+}
+
+function getOperationalUserRows(users: unknown): string[][] {
+  return asArray<any>(users).map((user: any) => [
+    user.login || user.username || "—",
+    getOperationalInitialPassword(user),
+    getOperationalFullName(user),
+    user.cargo || user.roleLabel || user.jobTitle || "—",
+    user.perfil || user.role || "funcionario",
+    user.status || (user.active === false ? "Inativo" : "Ativo"),
+  ]);
+}
+
+function buildOperationalUsersBackup(backup: any): any {
+  const users = asArray<any>(backup.data?.users).map((user: any) => ({
+    login: user.login || user.username || "",
+    senhaInicial: getOperationalInitialPassword(user),
+    nomeCompleto: getOperationalFullName(user),
+    cargo: user.cargo || user.roleLabel || user.jobTitle || "—",
+    perfil: user.perfil || user.role || "funcionario",
+    status: user.status || (user.active === false ? "Inativo" : "Ativo"),
+  }));
+  return {
+    ...backup,
+    security: { plaintextPasswordsIncluded: false, passwordHashesIncluded: false },
+    data: {
+      ...backup.data,
+      users,
+    },
+  };
+}
+
 function getPreviewItems(type: BackupType, backup: any): { name: string; detail?: string }[] {
   const d = backup.data || {};
   const toItem = (arr: unknown, nameKey: string, detailFn?: (r: any) => string) =>
@@ -195,8 +237,8 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
     const roles = asArray<any>(backup.data?.roles);
     autoTable(doc, {
       startY: 28,
-      head: [["Login", "Cargo", "Perfil", "Status"]],
-      body: users.map((user: any) => [user.username, user.roleLabel || user.jobTitle || "—", user.role || "funcionario", user.active === false ? "Inativo" : "Ativo"]),
+      head: [["Login", "Senha Inicial", "Nome Completo", "Cargo", "Perfil", "Status"]],
+      body: getOperationalUserRows(users),
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
     const y = (doc as any).lastAutoTable?.finalY || 28;
@@ -530,12 +572,13 @@ export default function BackupManager({
     try {
       const backupRes = await apiRequest("GET", `/api/backup/${type}`);
       const backup = await backupRes.json();
+      const downloadableBackup = type === "usuarios" ? buildOperationalUsersBackup(backup) : backup;
       const isExport = purpose === "export";
       const baseName = generateFileBaseName(type, isExport ? "Relatorio" : "Backup");
-      const jsonStr = JSON.stringify(backup, null, 2);
+      const jsonStr = JSON.stringify(downloadableBackup, null, 2);
       const sizeKB = Math.round(jsonStr.length / 1024 * 10) / 10;
 
-      generatePDF(type, backup, {
+      generatePDF(type, downloadableBackup, {
         titlePrefix: isExport ? "Relatório" : "Backup",
         filePrefix: isExport ? "Relatorio" : "Backup",
         generatedBy,
@@ -552,9 +595,6 @@ export default function BackupManager({
       }
 
       if (!isExport) {
-        const historyBackup = type === "usuarios"
-          ? { ...backup, data: { ...backup.data, users: asArray<any>(backup.data?.users).map(({ passwordHash: _passwordHash, ...user }) => user) } }
-          : backup;
         const entry: BackupHistoryEntry = {
           id: Date.now().toString(36),
           type,
@@ -562,7 +602,7 @@ export default function BackupManager({
           fileName: baseName,
           exportedAt: new Date().toISOString(),
           sizeKB,
-          backup: historyBackup,
+          backup: downloadableBackup,
         };
         saveBackupHistory(entry);
       }
