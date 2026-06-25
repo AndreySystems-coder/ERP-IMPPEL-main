@@ -374,19 +374,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async clearOperationalData(): Promise<{ deleted: number; preservedUsers: number; preservedRoles: number }> {
-    const [preservedUsers, preservedRoles, clientsBefore, servicesBefore, leadsBefore, jobsBefore, ordersBefore, inventoryBefore, movementsBefore, paymentsBefore, productsBefore, transactionsBefore, obrasBefore, contractsBefore, warrantiesBefore, productionBefore, npsBefore, remindersBefore, withdrawalsBefore, discountsBefore] = await Promise.all([
+    const [preservedUsers, preservedRoles, clientsBefore, servicesBefore, leadsBefore, jobsBefore, ordersBefore, inventoryBefore, movementsBefore, paymentsBefore, productsBefore, materialSalesBefore, transactionsBefore, obrasBefore, contractsBefore, warrantiesBefore, productionBefore, npsBefore, remindersBefore, withdrawalsBefore, discountsBefore] = await Promise.all([
       this.getUsers(), this.getRoles(), this.getClients(), this.getServices(), this.getLeads(), this.getJobs(), this.getWorkOrders(),
-      this.getInventoryItems(), this.getInventoryMovements(), this.getPayments(), this.getProducts(), this.getTransactions(),
+      this.getInventoryItems(), this.getInventoryMovements(), this.getPayments(), this.getProducts(), this.getMaterialSales(), this.getTransactions(),
       this.getObraRegistros(), this.getContracts(), this.getWarranties(), this.getProductionLogs(), this.getNpsResponses(),
       this.getMaintenanceReminders(), this.getMaterialWithdrawals(), this.getSalaryDiscounts(),
     ]);
-    const deleted = [clientsBefore, servicesBefore, leadsBefore, jobsBefore, ordersBefore, inventoryBefore, movementsBefore, paymentsBefore, productsBefore, transactionsBefore, obrasBefore, contractsBefore, warrantiesBefore, productionBefore, npsBefore, remindersBefore, withdrawalsBefore, discountsBefore]
+    const deleted = [clientsBefore, servicesBefore, leadsBefore, jobsBefore, ordersBefore, inventoryBefore, movementsBefore, paymentsBefore, productsBefore, materialSalesBefore, transactionsBefore, obrasBefore, contractsBefore, warrantiesBefore, productionBefore, npsBefore, remindersBefore, withdrawalsBefore, discountsBefore]
       .reduce((sum, rows) => sum + rows.length, 0);
     await db.execute(sql.raw(`TRUNCATE TABLE
       salary_discounts, material_withdrawal_items, material_withdrawals,
       maintenance_reminders, nps_responses, production_logs, warranty_incidents, warranties,
       contracts, obra_consumo_logs, obra_registros, job_tracking, payments, transactions,
-      inventory_movements, inventory, products, work_orders, jobs, leads, clients, services
+      material_sales, inventory_movements, inventory, products, work_orders, jobs, leads, clients, services
       RESTART IDENTITY CASCADE`));
     return { deleted, preservedUsers: preservedUsers.length, preservedRoles: preservedRoles.length };
   }

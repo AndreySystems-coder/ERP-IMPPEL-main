@@ -203,41 +203,6 @@ export async function registerRoutes(
       }
     }
 
-    // Seed waterproofing services
-    const waterproofingServices = [
-      { name: "Impermeabilização piscina + prainha + hidro", description: "Aplicação de argamassa polimérica semi-flexível 4,0 + argamassa polimérica flexível consumo 3,50 Kg/M² - estruturado com tela de poliéster + selamento dos tubos com poliuretano.", pricePerUnit: 95.15, materialConsumptionPerM2: 1.2, laborCostPerM2: 25.5, transportCostPerM2: 5.0, defaultMargin: 0.40 },
-      { name: "Impermeabilização manta líquida + tela V50", description: "Aplicação de argamassa polimérica semi-flexível + manta líquida consumo 2,0 Kg/M² - estruturado com tela de poliéster V-50 + selamento dos tubos com poliuretano.", pricePerUnit: 104.50, materialConsumptionPerM2: 1.1, laborCostPerM2: 28.0, transportCostPerM2: 5.5, defaultMargin: 0.40 },
-      { name: "Impermeabilização manta líquida", description: "Aplicação de argamassa polimérica semi-flexível 2,0 kg/m² + manta líquida consumo 2,0 Kg/M² - estruturado com tela de poliéster + selamento dos tubos com poliuretano.", pricePerUnit: 97.10, materialConsumptionPerM2: 1.0, laborCostPerM2: 26.0, transportCostPerM2: 5.0, defaultMargin: 0.40 },
-      { name: "Macdrain + tubo dreno + mac pipe", description: "Estendido sobre toda a manta asfáltica e nos rodapés colocado o tubo dreno enrolado sobre o Macdrain, após colocado sobre o mesmo, uma camada de pedra, facilitando a passagem de água.", pricePerUnit: 91.74, materialConsumptionPerM2: 1.3, laborCostPerM2: 24.0, transportCostPerM2: 5.5, defaultMargin: 0.40 },
-      { name: "Manta asfáltica poliéster 3mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica sob o primer, aquecida com maçarico a gás.", pricePerUnit: 80.04, materialConsumptionPerM2: 0.9, laborCostPerM2: 22.0, transportCostPerM2: 4.5, defaultMargin: 0.40 },
-      { name: "Manta asfáltica poliéster 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 92.67, materialConsumptionPerM2: 1.1, laborCostPerM2: 24.5, transportCostPerM2: 5.0, defaultMargin: 0.40 },
-      { name: "Manta ardosiada 3mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica ardosiada 3mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 93.48, materialConsumptionPerM2: 0.95, laborCostPerM2: 24.0, transportCostPerM2: 5.0, defaultMargin: 0.40 },
-      { name: "Manta ardosiada 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica ardosiada 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 106.08, materialConsumptionPerM2: 1.15, laborCostPerM2: 27.0, transportCostPerM2: 5.5, defaultMargin: 0.40 },
-      { name: "Manta alumínio 3mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica com acabamento em alumínio 3mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 89.66, materialConsumptionPerM2: 0.88, laborCostPerM2: 23.0, transportCostPerM2: 4.8, defaultMargin: 0.40 },
-      { name: "Manta alumínio 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica com acabamento em alumínio 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 96.96, materialConsumptionPerM2: 1.05, laborCostPerM2: 25.5, transportCostPerM2: 5.2, defaultMargin: 0.40 },
-      { name: "Manta torodin 3mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta torodin 3mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 83.84, materialConsumptionPerM2: 0.92, laborCostPerM2: 22.5, transportCostPerM2: 4.6, defaultMargin: 0.40 },
-      { name: "Manta torodin 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta torodin 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 95.70, materialConsumptionPerM2: 1.08, laborCostPerM2: 25.0, transportCostPerM2: 5.0, defaultMargin: 0.40 },
-      { name: "Manta anti raiz 4mm", description: "Será aplicado o primer sobre o local onde o mesmo deverá estar totalmente seco, pois a pintura não adere, se o local estiver molhado. Após, será aplicado a manta asfáltica anti-raiz 4mm sob o primer, aquecida com maçarico a gás.", pricePerUnit: 98.41, materialConsumptionPerM2: 1.1, laborCostPerM2: 26.5, transportCostPerM2: 5.2, defaultMargin: 0.40 },
-    ];
-
-    const existingServices = await storage.getServices();
-    if (existingServices.length === 0) {
-      for (const service of waterproofingServices) {
-        await storage.createService(service);
-      }
-    } else {
-      // Always sync descriptions and prices for existing services
-      for (const service of waterproofingServices) {
-        const existing = existingServices.find(s => s.name === service.name);
-        if (existing) {
-          await storage.updateService(existing.id, {
-            description: service.description,
-            pricePerUnit: service.pricePerUnit,
-          });
-        }
-      }
-    }
-
     // Seed cost config defaults on startup
     const existingCostConfig = await storage.getCostConfig();
     if (!existingCostConfig) {

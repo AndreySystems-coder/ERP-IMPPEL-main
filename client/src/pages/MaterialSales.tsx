@@ -12,6 +12,9 @@ type CatalogItem = {
   id: number;
   inventoryId: number;
   name: string;
+  code?: string | null;
+  brand?: string | null;
+  description?: string | null;
   unit: string | null;
   salePrice: number;
   maxDiscount: number;
@@ -48,6 +51,7 @@ async function apiRequest(method: string, path: string, body?: unknown) {
 }
 
 const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
+const normalizeSearch = (value: unknown) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 function generateReceipt(sale: Sale) {
   const doc = new jsPDF();
@@ -93,7 +97,12 @@ export default function MaterialSales() {
   const generalMaxDiscount = data?.generalMaxDiscount ?? 10;
   const canCreate = canAccess(user as any, "createMaterialSales");
 
-  const filteredCatalog = catalog.filter(item => item.name.toLowerCase().includes(search.toLowerCase()));
+  const searchTerm = normalizeSearch(search);
+  const filteredCatalog = catalog.filter(item => {
+    if (!searchTerm) return true;
+    return [item.name, item.code, item.brand, item.description]
+      .some(field => normalizeSearch(field).includes(searchTerm));
+  });
   const totals = useMemo(() => cart.reduce((summary, item) => {
     const original = item.salePrice * item.quantity;
     const final = original * (1 - item.discountPercent / 100);
@@ -164,7 +173,36 @@ export default function MaterialSales() {
           <section>
             <div className="relative mb-4">
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-              <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Buscar material" className="h-10 w-full rounded-md border border-slate-300 pl-10 pr-3" />
+              <input
+                value={search}
+                onChange={event => setSearch(event.target.value)}
+                placeholder="Buscar por nome, código ou SKU..."
+                className="h-10 w-full rounded-md border border-slate-300 pl-10 pr-3"
+                data-testid="input-material-sale-search"
+              />
+              {searchTerm && (
+                <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg">
+                  {filteredCatalog.slice(0, 8).map(product => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => { addToCart(product); setSearch(product.name); }}
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-slate-50"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-slate-800">{product.name}</span>
+                        <span className="block truncate text-xs text-slate-500">
+                          {[product.code ? `SKU ${product.code}` : "", product.brand || "", `${product.stock} ${product.unit || "un"} em estoque`].filter(Boolean).join(" • ")}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-sm font-bold text-blue-800">{money(product.salePrice)}</span>
+                    </button>
+                  ))}
+                  {filteredCatalog.length === 0 && (
+                    <div className="px-3 py-3 text-sm text-slate-500">Nenhum material encontrado para "{search}".</div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {filteredCatalog.map(product => (

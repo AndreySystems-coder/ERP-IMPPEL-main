@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import {
   DollarSign, TrendingUp, Activity, Briefcase, Users, Target,
   Package, AlertTriangle, Plus, ClipboardList, Warehouse, CheckSquare,
-  ArrowRight, Calendar, ChevronRight, BarChart2, FileText, Clock,
+  ArrowRight, Calendar, ChevronRight, BarChart2, FileText, Clock, ShoppingCart, PackageCheck,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -28,6 +28,40 @@ function formatBRL(n: number | undefined | null) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function parseJsonArray(value: unknown) {
+  try {
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function statusIncludes(value: unknown, terms: string[]) {
+  const normalized = String(value || "").toLowerCase();
+  return terms.some(term => normalized.includes(term.toLowerCase()));
+}
+
+function MiniList({ title, rows, empty }: { title: string; rows: { name: string; detail: string }[]; empty: string }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">{title}</p>
+      {rows.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">{empty}</p>
+      ) : (
+        <div className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+          {rows.map((row, index) => (
+            <div key={`${row.name}-${index}`} className="flex items-center justify-between gap-3 px-3 py-2">
+              <span className="min-w-0 truncate text-xs font-bold text-slate-700">{row.name}</span>
+              <span className="shrink-0 text-[11px] text-slate-500">{row.detail}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: metrics } = useQuery({
     queryKey: ["/api/dashboard/metrics"],
@@ -37,20 +71,95 @@ export default function Dashboard() {
   const { data: workOrders = [] } = useQuery({ queryKey: ["/api/work-orders"], queryFn: () => apiGet("/api/work-orders") });
   const { data: inventory = [] } = useQuery({ queryKey: ["/api/inventory"], queryFn: () => apiGet("/api/inventory") });
   const { data: leads = [] } = useQuery({ queryKey: ["/api/leads"], queryFn: () => apiGet("/api/leads") });
+  const { data: inventoryMovements = [] } = useQuery({ queryKey: ["/api/inventory-movements"], queryFn: () => apiGet("/api/inventory-movements") });
+  const { data: materialWithdrawals = [] } = useQuery({ queryKey: ["/api/material-withdrawals"], queryFn: () => apiGet("/api/material-withdrawals") });
+  const { data: productionLogs = [] } = useQuery({ queryKey: ["/api/production-logs"], queryFn: () => apiGet("/api/production-logs") });
+  const { data: payments = [] } = useQuery({ queryKey: ["/api/payments"], queryFn: () => apiGet("/api/payments") });
+  const { data: materialSales } = useQuery({ queryKey: ["/api/material-sales"], queryFn: () => apiGet("/api/material-sales") });
 
   const jobsList = asArray<any>(jobs);
   const workOrdersList = asArray<any>(workOrders);
   const inventoryList = asArray<any>(inventory);
   const leadsList = asArray<any>(leads);
+  const movementList = asArray<any>(inventoryMovements);
+  const withdrawalList = asArray<any>(materialWithdrawals);
+  const productionList = asArray<any>(productionLogs);
+  const paymentsList = asArray<any>(payments);
+  const salesList = asArray<any>((materialSales as any)?.sales);
 
   const pendingJobs = jobsList.filter((j: any) => ["Lead", "Proposta", "Negociação"].includes(j.status)).length;
   const activeOrders = workOrdersList.filter((w: any) => ["Em Andamento", "Agendada"].includes(w.status)).length;
   const lowStock = inventoryList.filter((i: any) => i.quantity <= i.minStock).length;
   const newLeads = leadsList.filter((l: any) => ["New Lead", "Contacted"].includes(l.status)).length;
+  const runningWorks = workOrdersList.filter((w: any) => statusIncludes(w.status, ["andamento", "execução"]));
+  const finishedWorks = workOrdersList.filter((w: any) => statusIncludes(w.status, ["concluída", "finalizada"]));
+  const scheduledWorks = workOrdersList.filter((w: any) => statusIncludes(w.status, ["agendada", "planejada"]));
+  const openWithdrawals = withdrawalList.filter((w: any) => !statusIncludes(w.status, ["retornado", "devolvido", "concluído"]));
+  const pendingReturns = openWithdrawals.filter((w: any) => Number(w.returnedQuantity || 0) < Number(w.quantity || w.withdrawn || 0));
+  const receivedPayments = paymentsList.filter((p: any) => statusIncludes(p.status, ["paid", "pago", "recebido"]));
+  const pendingPayments = paymentsList.filter((p: any) => statusIncludes(p.status, ["pending", "pendente", "aberto"]));
+  const approvedSales = salesList.filter((sale: any) => statusIncludes(sale.status, ["aprovada", "aprovado"]));
   const recentJobs = [...jobsList].sort((a, b) => b.id - a.id).slice(0, 5);
   const recentOrders = [...workOrdersList].sort((a, b) => b.id - a.id).slice(0, 4);
   const weekday = format(new Date(), "EEEE", { locale: ptBR });
   const formattedDate = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+
+  const movementChart = React.useMemo(() => {
+    const grouped = new Map<string, { name: string; entradas: number; saidas: number }>();
+    movementList.slice(-60).forEach((movement: any) => {
+      const date = movement.date || movement.createdAt;
+      const key = date ? format(new Date(date), "dd/MM") : "Sem data";
+      const row = grouped.get(key) || { name: key, entradas: 0, saidas: 0 };
+      const quantity = Math.abs(Number(movement.quantity || 0));
+      if (statusIncludes(movement.type, ["entrada"])) row.entradas += quantity;
+      else row.saidas += quantity;
+      grouped.set(key, row);
+    });
+    return Array.from(grouped.values()).slice(-10);
+  }, [movementList]);
+
+  const mostUsedProducts = React.useMemo(() => {
+    const totals = new Map<string, number>();
+    movementList.forEach((movement: any) => {
+      if (!statusIncludes(movement.type, ["saida", "saída", "ajuste negativo"])) return;
+      const name = movement.productName || movement.inventoryName || movement.name || `Item #${movement.inventoryId || movement.id}`;
+      totals.set(name, (totals.get(name) || 0) + Math.abs(Number(movement.quantity || 0)));
+    });
+    withdrawalList.forEach((withdrawal: any) => {
+      parseJsonArray(withdrawal.items).forEach((item: any) => {
+        const name = item.name || item.productName || item.materialName || "Material";
+        totals.set(name, (totals.get(name) || 0) + Math.abs(Number(item.quantity || item.withdrawn || 0)));
+      });
+    });
+    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }, [movementList, withdrawalList]);
+
+  const productivity = React.useMemo(() => {
+    const totals = new Map<string, { logs: number; hours: number; area: number }>();
+    productionList.forEach((log: any) => {
+      const name = log.employeeName || log.username || log.workerName || log.createdBy || "Equipe";
+      const current = totals.get(name) || { logs: 0, hours: 0, area: 0 };
+      current.logs += 1;
+      current.hours += Number(log.hoursWorked || log.hours || 0);
+      current.area += Number(log.areaCompleted || log.area || log.squareMeters || 0);
+      totals.set(name, current);
+    });
+    return Array.from(totals.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.logs - a.logs).slice(0, 5);
+  }, [productionList]);
+
+  const topSoldProducts = React.useMemo(() => {
+    const totals = new Map<string, { quantity: number; total: number }>();
+    salesList.forEach((sale: any) => {
+      parseJsonArray(sale.items).forEach((item: any) => {
+        const name = item.name || "Produto";
+        const current = totals.get(name) || { quantity: 0, total: 0 };
+        current.quantity += Number(item.quantity || 0);
+        current.total += Number(item.total || 0);
+        totals.set(name, current);
+      });
+    });
+    return Array.from(totals.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
+  }, [salesList]);
 
   const kpis = [
     {
@@ -205,6 +314,81 @@ export default function Dashboard() {
             </Link>
           ))}
         </div>
+      </div>
+
+      {/* ── Operational widgets ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Package className="w-4 h-4 text-blue-700" /> Estoque</h3>
+            <Link href="/estoque/atual" className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">Abrir <ChevronRight className="w-3.5 h-3.5" /></Link>
+          </div>
+          <div className="grid gap-4 p-5 lg:grid-cols-[1.2fr_1fr]">
+            <div className="h-56 rounded-xl border border-slate-100 p-3">
+              <p className="mb-2 text-xs font-bold uppercase text-slate-400">Movimentações recentes</p>
+              {movementChart.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={movementChart}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" fontSize={11} />
+                    <YAxis fontSize={11} />
+                    <RechartsTooltip />
+                    <Bar dataKey="entradas" fill="#059669" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="saidas" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="flex h-full items-center justify-center text-sm text-slate-400">Sem movimentações registradas.</p>
+              )}
+            </div>
+            <div className="space-y-4">
+              <MiniList title="Estoque baixo" empty="Nenhum item abaixo do mínimo." rows={inventoryList.filter((item: any) => item.quantity <= item.minStock).slice(0, 5).map((item: any) => ({ name: item.name, detail: `${item.quantity} ${item.unit || "un"} / mín. ${item.minStock}` }))} />
+              <MiniList title="Produtos mais utilizados" empty="Sem consumo registrado." rows={mostUsedProducts.map(([name, quantity]) => ({ name, detail: `${quantity} un.` }))} />
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2"><ClipboardList className="w-4 h-4 text-emerald-600" /> Obras</h3>
+            <Link href="/work-orders" className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">Abrir <ChevronRight className="w-3.5 h-3.5" /></Link>
+          </div>
+          <div className="p-5">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><p className="text-2xl font-bold">{runningWorks.length}</p><p className="text-xs font-bold text-slate-700">Em andamento</p></div>
+              <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><p className="text-2xl font-bold">{finishedWorks.length}</p><p className="text-xs font-bold text-slate-700">Concluídas</p></div>
+              <div className="rounded-xl bg-amber-50 p-3 text-amber-700"><p className="text-2xl font-bold">{scheduledWorks.length}</p><p className="text-xs font-bold text-slate-700">Agendadas</p></div>
+            </div>
+            <MiniList title="Últimas OS" empty="Nenhuma ordem de serviço cadastrada." rows={[...workOrdersList].sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 5).map((item: any) => ({ name: `OS #${item.id} - ${item.clientName || "Cliente"}`, detail: item.status || "Sem status" }))} />
+          </div>
+        </section>
+
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Users className="w-4 h-4 text-violet-600" /> Equipe</h3>
+            <Link href="/equipe-produtividade" className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">Abrir <ChevronRight className="w-3.5 h-3.5" /></Link>
+          </div>
+          <div className="grid gap-4 p-5 lg:grid-cols-2">
+            <MiniList title="Produtividade por funcionário" empty="Sem produção lançada." rows={productivity.map(item => ({ name: item.name, detail: `${item.logs} registro(s), ${item.hours || 0}h, ${item.area || 0} m²` }))} />
+            <MiniList title="Retiradas e devoluções pendentes" empty="Sem retiradas pendentes." rows={openWithdrawals.slice(0, 6).map((item: any) => ({ name: item.username || item.createdByUsername || "Funcionário", detail: `${item.status || "pendente"} - ${pendingReturns.includes(item) ? "devolução pendente" : "em aberto"}` }))} />
+          </div>
+        </section>
+
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2"><ShoppingCart className="w-4 h-4 text-orange-600" /> Vendas e Financeiro</h3>
+            <Link href="/vendas-materiais" className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">Abrir <ChevronRight className="w-3.5 h-3.5" /></Link>
+          </div>
+          <div className="p-5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-violet-50 p-3 text-violet-700"><p className="text-2xl font-bold">{salesList.length}</p><p className="text-xs font-bold text-slate-700">Vendas de materiais</p></div>
+              <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><p className="text-2xl font-bold">{formatBRL(approvedSales.reduce((sum: number, item: any) => sum + Number(item.total || 0), 0))}</p><p className="text-xs font-bold text-slate-700">Faturamento materiais</p></div>
+              <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><p className="text-2xl font-bold">{receivedPayments.length}</p><p className="text-xs font-bold text-slate-700">Contas recebidas</p></div>
+              <div className="rounded-xl bg-amber-50 p-3 text-amber-700"><p className="text-2xl font-bold">{pendingPayments.length}</p><p className="text-xs font-bold text-slate-700">Contas pendentes</p></div>
+            </div>
+            <MiniList title="Produtos mais vendidos" empty="Sem vendas de materiais registradas." rows={topSoldProducts.map(item => ({ name: item.name, detail: `${item.quantity} un. - ${formatBRL(item.total)}` }))} />
+          </div>
+        </section>
       </div>
 
       {/* ── Bottom grid ────────────────────────────────────────────────────── */}
