@@ -144,9 +144,25 @@ function getRecordCount(type: BackupType, backup: any): number {
 function getOperationalInitialPassword(user: any): string {
   if (user.mustChangePassword === false) return "Senha alterada";
   const source = user.senhaInicial || user.initialPassword || user.birthDate || user.birth_date || user.dataNascimento;
-  if (source) return String(source);
+  const digits = source ? String(source).replace(/\D/g, "") : "";
+  if (digits.length === 8) {
+    if (/^\d{4}/.test(String(source)) && Number(digits.slice(4, 6)) <= 12) {
+      return `${digits.slice(6, 8)}${digits.slice(4, 6)}${digits.slice(0, 4)}`;
+    }
+    return digits;
+  }
   if (user.mustChangePassword === true) return "Não disponível";
   return user.passwordChanged ? "Senha alterada" : "Não disponível";
+}
+
+function getOperationalBirthDate(user: any): string | null {
+  const source = user.birthDate || user.birth_date || user.dataNascimento;
+  const digits = source ? String(source).replace(/\D/g, "") : "";
+  if (digits.length !== 8) return null;
+  if (/^\d{4}/.test(String(source)) && Number(digits.slice(4, 6)) <= 12) {
+    return `${digits.slice(6, 8)}/${digits.slice(4, 6)}/${digits.slice(0, 4)}`;
+  }
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
 }
 
 function getOperationalFullName(user: any): string {
@@ -168,10 +184,12 @@ function buildOperationalUsersBackup(backup: any): any {
   const users = asArray<any>(backup.data?.users).map((user: any) => ({
     login: user.login || user.username || "",
     senhaInicial: getOperationalInitialPassword(user),
+    birthDate: getOperationalBirthDate(user),
     nomeCompleto: getOperationalFullName(user),
     cargo: user.cargo || user.roleLabel || user.jobTitle || "—",
     perfil: user.perfil || user.role || "funcionario",
     status: user.status || (user.active === false ? "Inativo" : "Ativo"),
+    mustChangePassword: user.mustChangePassword === true,
   }));
   return {
     ...backup,

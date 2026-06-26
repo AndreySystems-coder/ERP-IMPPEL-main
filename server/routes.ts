@@ -2925,6 +2925,28 @@ export async function registerRoutes(
     try {
       const [allUsers, allRoles] = await Promise.all([storage.getUsers(), storage.getRoles()]);
       const rolesById = new Map(allRoles.map(role => [role.id, role]));
+      const safeInitialPassword = (value: any) => {
+        const raw = String(value || "").trim();
+        if (!raw) return null;
+        const digits = raw.replace(/\D/g, "");
+        if (digits.length === 8) {
+          if (/^\d{4}/.test(raw) && Number(digits.slice(4, 6)) <= 12) {
+            return `${digits.slice(6, 8)}${digits.slice(4, 6)}${digits.slice(0, 4)}`;
+          }
+          return digits;
+        }
+        try { return generateInitialPassword(raw); } catch { return null; }
+      };
+      const safeBirthDate = (value: any) => {
+        const raw = String(value || "").trim();
+        if (!raw) return null;
+        const digits = raw.replace(/\D/g, "");
+        if (digits.length !== 8) return raw;
+        if (/^\d{4}/.test(raw) && Number(digits.slice(4, 6)) <= 12) {
+          return `${digits.slice(6, 8)}/${digits.slice(4, 6)}/${digits.slice(0, 4)}`;
+        }
+        return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+      };
       const roleData = allRoles.map(role => {
         let permissions: Record<string, boolean> = {};
         try { permissions = JSON.parse(role.permissions || "{}"); } catch {}
@@ -2935,12 +2957,13 @@ export async function registerRoutes(
         const customRole = rolesById.get((user as any).roleId);
         const mustChangePassword = userAny.mustChangePassword === true;
         const initialPassword =
-          userAny.senhaInicial ||
-          userAny.initialPassword ||
-          (userAny.birthDate ? generateInitialPassword(userAny.birthDate) : null) ||
-          (userAny.birth_date ? generateInitialPassword(userAny.birth_date) : null) ||
-          (userAny.dataNascimento ? generateInitialPassword(userAny.dataNascimento) : null) ||
+          safeInitialPassword(userAny.senhaInicial) ||
+          safeInitialPassword(userAny.initialPassword) ||
+          safeInitialPassword(userAny.birthDate) ||
+          safeInitialPassword(userAny.birth_date) ||
+          safeInitialPassword(userAny.dataNascimento) ||
           null;
+        const birthDate = safeBirthDate(userAny.birthDate || userAny.birth_date || userAny.dataNascimento);
         const status = userAny.active === false || userAny.status === "inativo" ? "Inativo" : "Ativo";
         const fullName = userAny.nomeCompleto || userAny.fullName || userAny.name || user.username;
         const cargo = customRole?.label || userAny.jobTitle || null;
@@ -2959,7 +2982,7 @@ export async function registerRoutes(
           roleLabel: customRole?.label || null,
           jobTitle: userAny.jobTitle || null,
           fullName: userAny.fullName || null,
-          birthDate: userAny.birthDate || null,
+          birthDate,
           operationalStatus: userAny.status || "ativo",
           active: true,
           mustChangePassword,
@@ -2981,6 +3004,29 @@ export async function registerRoutes(
       if (!Array.isArray(data?.users) || !Array.isArray(data?.roles)) {
         return res.status(400).json({ message: "Formato de backup de usuários inválido" });
       }
+
+      const restoreInitialPassword = (user: any) => {
+        const explicit = String(user?.senhaInicial || user?.initialPassword || "").trim();
+        if (explicit && !/^(Senha alterada|Não disponível|—)$/i.test(explicit)) {
+          const digits = explicit.replace(/\D/g, "");
+          if (digits.length === 8) {
+            if (/^\d{4}/.test(explicit) && Number(digits.slice(4, 6)) <= 12) {
+              return `${digits.slice(6, 8)}${digits.slice(4, 6)}${digits.slice(0, 4)}`;
+            }
+            return digits;
+          }
+        }
+        const birthDate = String(user?.birthDate || user?.dataNascimento || user?.birth_date || "").trim();
+        if (!birthDate) return "";
+        try { return generateInitialPassword(birthDate); } catch { return ""; }
+      };
+
+      const restoreBirthDate = (user: any, initialPassword: string) => {
+        const supplied = String(user?.birthDate || user?.dataNascimento || user?.birth_date || "").trim();
+        if (supplied) return supplied;
+        const digits = initialPassword.replace(/\D/g, "");
+        return digits.length === 8 ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}` : null;
+      };
 
       const existingRoles = await storage.getRoles();
       const rolesByName = new Map(existingRoles.map(role => [role.name.toLocaleLowerCase("pt-BR"), role]));
@@ -3009,8 +3055,9 @@ export async function registerRoutes(
       for (const user of data.users) {
         const username = String(user?.username || user?.login || "").trim();
         const passwordHash = String(user?.passwordHash || "");
-        const initialPassword = String(user?.senhaInicial || user?.initialPassword || "").trim();
+        const initialPassword = restoreInitialPassword(user);
         if (!username) { skipped++; continue; }
+        if (username.toLocaleLowerCase("pt-BR") === "admin") { skipped++; continue; }
         const roleName = user.roleName || user.cargo;
         const roleId = roleName
           ? restoredRoles.get(String(roleName).toLocaleLowerCase("pt-BR")) ||
@@ -3021,21 +3068,23 @@ export async function registerRoutes(
             : null;
         const existing = await findUserByUsername(username);
         const hasBcrypt = /^\$2[aby]\$/.test(passwordHash);
-        const hasInitialPassword = Boolean(initialPassword && initialPassword !== "Senha alterada" && initialPassword !== "Não disponível");
+        const hasInitialPassword = Boolean(initialPassword);
         if (!existing && !hasBcrypt && !hasInitialPassword) { skipped++; continue; }
+        const shouldResetInitialPassword = hasInitialPassword && (user.resetInitialPassword === true || user.mustChangePassword === true || !existing);
         const values: any = {
           username,
           role: user.role === "admin" || user.perfil === "admin" ? "admin" : "funcionario",
           roleId,
           jobTitle: user.jobTitle || user.roleLabel || user.cargo || null,
           fullName: user.fullName || user.nomeCompleto || null,
-          birthDate: user.birthDate || null,
+          birthDate: restoreBirthDate(user, initialPassword),
           status: user.status === "Inativo" || user.status === "inativo" ? "inativo" : "ativo",
-          mustChangePassword: !!user.mustChangePassword || (!existing && hasInitialPassword),
+          mustChangePassword: shouldResetInitialPassword || (!!user.mustChangePassword && hasInitialPassword),
         };
         if (existing) {
           if (existing.role === "admin") { skipped++; continue; }
           if (hasBcrypt) values.password = passwordHash;
+          else if (shouldResetInitialPassword) values.password = await bcrypt.hash(initialPassword, BCRYPT_ROUNDS);
           await storage.updateUser(existing.id, values);
           updated++;
         } else {

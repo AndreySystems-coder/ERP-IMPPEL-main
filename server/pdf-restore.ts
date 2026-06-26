@@ -89,6 +89,23 @@ function parseIntSafe(value = "") {
   return match ? Number(match[0]) || 0 : 0;
 }
 
+function normalizeInitialPassword(value = "") {
+  const normalized = value.trim();
+  if (!normalized || /^(Senha alterada|Não disponível|—)$/i.test(normalized)) return "";
+  const digits = normalized.replace(/\D/g, "");
+  if (digits.length !== 8) return "";
+  if (/^\d{4}/.test(normalized) && Number(digits.slice(4, 6)) <= 12) {
+    return `${digits.slice(6, 8)}${digits.slice(4, 6)}${digits.slice(0, 4)}`;
+  }
+  return digits;
+}
+
+function birthDateFromInitialPassword(initialPassword = "") {
+  const digits = initialPassword.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+}
+
 function cell(row: PdfRow, minX: number, maxX: number) {
   return row.items
     .filter(item => item.x >= minX && item.x < maxX)
@@ -173,7 +190,7 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
 
   for (const row of rows) {
     const login = cell(row, 35, 150);
-    const senhaInicial = cell(row, 150, 255);
+    const senhaInicialRaw = cell(row, 150, 255);
     const nomeCompleto = cell(row, 255, 470);
     const cargo = cell(row, 470, 675);
     const perfil = cell(row, 675, 745);
@@ -187,13 +204,19 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
     }
     seenUsers.add(userKey);
     const isAdmin = normalizeText(login) === "admin";
-    const hasInitialPassword = senhaInicial && senhaInicial !== "Senha alterada";
+    const senhaInicial = normalizeInitialPassword(senhaInicialRaw);
+    const hasInitialPassword = Boolean(senhaInicial);
+    const birthDate = birthDateFromInitialPassword(senhaInicial);
     users.push({
       login,
       username: login,
-      senhaInicial,
+      senhaInicial: hasInitialPassword ? senhaInicial : "Senha alterada",
+      initialPassword: hasInitialPassword ? senhaInicial : undefined,
+      resetInitialPassword: !isAdmin && hasInitialPassword,
       nomeCompleto: nomeCompleto || login,
       fullName: nomeCompleto || login,
+      birthDate,
+      dataNascimento: birthDate,
       cargo: cargo || null,
       perfil: perfil || (isAdmin ? "admin" : "funcionario"),
       role: perfil === "admin" ? "admin" : "funcionario",
@@ -205,7 +228,7 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
     });
     preview.rows.push({
       name: login,
-      detail: `${nomeCompleto || "sem nome"} · ${cargo || "cargo pendente"} · ${hasInitialPassword ? "senha inicial" : "senha alterada"}`,
+      detail: `${nomeCompleto || "sem nome"} · ${cargo || "cargo pendente"} · ${hasInitialPassword ? `senha inicial aplicada: ${senhaInicial}` : "senha alterada"}`,
       status: isAdmin ? "ignorado" : cargo ? "novo" : "pendente",
     });
     if (isAdmin) {
