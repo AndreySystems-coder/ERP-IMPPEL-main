@@ -151,6 +151,10 @@ export default function Usuarios() {
   const [newRole, setNewRole] = useState<"admin" | "funcionario">("funcionario");
   const [newRoleId, setNewRoleId] = useState<string>("");
   const [newJobTitle, setNewJobTitle] = useState("");
+  const [newFullName, setNewFullName] = useState("");
+  const [newBirthDate, setNewBirthDate] = useState("");
+  const [newStatus, setNewStatus] = useState("ativo");
+  const [newMustChangePassword, setNewMustChangePassword] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [editingPassword, setEditingPassword] = useState<number | null>(null);
   const [newPassValue, setNewPassValue] = useState("");
@@ -158,6 +162,18 @@ export default function Usuarios() {
   const [editingJobTitle, setEditingJobTitle] = useState<number | null>(null);
   const [jobTitleValue, setJobTitleValue] = useState("");
   const [expandedUser, setExpandedUser] = useState<number | null>(null);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [userDraft, setUserDraft] = useState({
+    username: "",
+    fullName: "",
+    birthDate: "",
+    status: "ativo",
+    role: "funcionario" as "admin" | "funcionario",
+    roleId: "none",
+    jobTitle: "",
+    mustChangePassword: false,
+    initialPassword: "",
+  });
 
   // ── Role form state ──────────────────────────────────────────────────────────
   const [showRoleForm, setShowRoleForm] = useState(false);
@@ -177,12 +193,18 @@ export default function Usuarios() {
   const users = asArray<UserItem>(usersData);
   const roles = asArray<Role>(rolesData);
 
+  const refreshUsersAndSession = () => {
+    qc.invalidateQueries({ queryKey: ["/api/users"] });
+    qc.invalidateQueries({ queryKey: ["/api/roles"] });
+    qc.invalidateQueries({ queryKey: ["/api/auth/me"] });
+  };
+
   // ── User mutations ────────────────────────────────────────────────────────────
   const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/users", data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/users"] });
-      setShowForm(false); setNewUsername(""); setNewPassword(""); setNewRole("funcionario"); setNewRoleId(""); setNewJobTitle("");
+      refreshUsersAndSession();
+      setShowForm(false); setNewUsername(""); setNewPassword(""); setNewRole("funcionario"); setNewRoleId(""); setNewJobTitle(""); setNewFullName(""); setNewBirthDate(""); setNewStatus("ativo"); setNewMustChangePassword(false);
       toast({ title: "Usuário criado com sucesso!" });
     },
     onError: async (err: any) => toast({ title: err.message || "Erro ao criar usuário", variant: "destructive" }),
@@ -190,18 +212,18 @@ export default function Usuarios() {
 
   const roleMutation = useMutation({
     mutationFn: ({ id, role }: { id: number; role: string }) => apiRequest("PATCH", `/api/users/${id}/role`, { role }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/users"] }); toast({ title: "Papel atualizado!" }); },
+    onSuccess: refreshUsersAndSession,
   });
 
   const roleIdMutation = useMutation({
     mutationFn: ({ id, roleId }: { id: number; roleId: number | null }) => apiRequest("PATCH", `/api/users/${id}/role-id`, { roleId }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/users"] }); toast({ title: "Cargo atualizado!" }); },
+    onSuccess: () => { refreshUsersAndSession(); toast({ title: "Cargo atualizado!" }); },
   });
 
   const jobTitleMutation = useMutation({
     mutationFn: ({ id, jobTitle }: { id: number; jobTitle: string }) => apiRequest("PATCH", `/api/users/${id}/job-title`, { jobTitle }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/users"] });
+      refreshUsersAndSession();
       setEditingJobTitle(null); setJobTitleValue("");
       toast({ title: "Título atualizado!" });
     },
@@ -209,31 +231,42 @@ export default function Usuarios() {
 
   const passwordMutation = useMutation({
     mutationFn: ({ id, password }: { id: number; password: string }) => apiRequest("PATCH", `/api/users/${id}/password`, { password }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/users"] }); setEditingPassword(null); setNewPassValue(""); toast({ title: "Senha atualizada!" }); },
+    onSuccess: () => { refreshUsersAndSession(); setEditingPassword(null); setNewPassValue(""); toast({ title: "Senha atualizada!" }); },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/users/${id}`, data),
+    onSuccess: () => {
+      refreshUsersAndSession();
+      setEditingUserId(null);
+      setUserDraft({ username: "", fullName: "", birthDate: "", status: "ativo", role: "funcionario", roleId: "none", jobTitle: "", mustChangePassword: false, initialPassword: "" });
+      toast({ title: "Usuário atualizado!" });
+    },
+    onError: async (err: any) => toast({ title: err.message || "Erro ao atualizar usuário", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/users/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/users"] }); toast({ title: "Usuário excluído." }); },
+    onSuccess: () => { refreshUsersAndSession(); toast({ title: "Usuário excluído." }); },
     onError: async (err: any) => toast({ title: err.message || "Erro ao excluir", variant: "destructive" }),
   });
 
   // ── Role mutations ────────────────────────────────────────────────────────────
   const createRoleMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/roles", data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/roles"] }); resetRoleForm(); toast({ title: "Cargo criado!" }); },
+    onSuccess: () => { refreshUsersAndSession(); resetRoleForm(); toast({ title: "Cargo criado!" }); },
     onError: (err: any) => toast({ title: err.message, variant: "destructive" }),
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/roles/${id}`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/roles"] }); resetRoleForm(); toast({ title: "Cargo atualizado!" }); },
+    onSuccess: () => { refreshUsersAndSession(); resetRoleForm(); toast({ title: "Cargo atualizado!" }); },
     onError: (err: any) => toast({ title: err.message, variant: "destructive" }),
   });
 
   const deleteRoleMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/roles/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/roles"] }); qc.invalidateQueries({ queryKey: ["/api/users"] }); toast({ title: "Cargo removido." }); },
+    onSuccess: () => { refreshUsersAndSession(); toast({ title: "Cargo removido." }); },
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -260,7 +293,33 @@ export default function Usuarios() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim()) return toast({ title: "Preencha todos os campos", variant: "destructive" });
-    createMutation.mutate({ username: newUsername.trim(), password: newPassword, role: newRole, roleId: newRoleId ? Number(newRoleId) : null, jobTitle: newJobTitle || null });
+    createMutation.mutate({ username: newUsername.trim(), password: newPassword, role: newRole, roleId: newRoleId && newRoleId !== "none" ? Number(newRoleId) : null, jobTitle: newJobTitle || null, fullName: newFullName || null, birthDate: newBirthDate || null, status: newStatus, mustChangePassword: newMustChangePassword });
+  };
+
+  const openEditUser = (user: UserItem) => {
+    setEditingUserId(user.id);
+    setUserDraft({
+      username: user.username,
+      fullName: user.fullName || "",
+      birthDate: user.birthDate || "",
+      status: user.status || "ativo",
+      role: user.role,
+      roleId: user.roleId ? String(user.roleId) : "none",
+      jobTitle: user.jobTitle || "",
+      mustChangePassword: !!user.mustChangePassword,
+      initialPassword: "",
+    });
+  };
+
+  const saveUser = (id: number) => {
+    updateUserMutation.mutate({
+      id,
+      data: {
+        ...userDraft,
+        roleId: userDraft.roleId === "none" ? null : Number(userDraft.roleId),
+        initialPassword: userDraft.initialPassword || undefined,
+      },
+    });
   };
 
   const togglePermission = (key: string) => {
@@ -319,6 +378,14 @@ export default function Usuarios() {
                       <Input value={newJobTitle} onChange={e => setNewJobTitle(e.target.value)} placeholder="Ex: Aplicador de impermeabilização" data-testid="input-job-title" />
                     </div>
                     <div className="space-y-1.5">
+                      <Label>Nome completo</Label>
+                      <Input value={newFullName} onChange={e => setNewFullName(e.target.value)} placeholder="Ex: João Silva" data-testid="input-novo-fullname" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Data de nascimento</Label>
+                      <Input value={newBirthDate} onChange={e => setNewBirthDate(e.target.value)} placeholder="DD/MM/AAAA" data-testid="input-novo-birthdate" />
+                    </div>
+                    <div className="space-y-1.5">
                       <Label>Cargo com permissões</Label>
                       <Select value={newRoleId} onValueChange={setNewRoleId}>
                         <SelectTrigger data-testid="select-role"><SelectValue placeholder="Selecionar cargo..." /></SelectTrigger>
@@ -327,6 +394,25 @@ export default function Usuarios() {
                           {roles.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Status</Label>
+                      <Select value={newStatus} onValueChange={setNewStatus}>
+                        <SelectTrigger data-testid="select-novo-status"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ativo">Ativo</SelectItem>
+                          <SelectItem value="inativo">Inativo</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                        <div>
+                          <Label>Exigir troca de senha no primeiro acesso</Label>
+                          <p className="text-xs text-slate-500">Use para funcionários criados com senha inicial baseada no nascimento.</p>
+                        </div>
+                        <Switch checked={newMustChangePassword} onCheckedChange={setNewMustChangePassword} data-testid="switch-novo-must-change-password" />
+                      </div>
                     </div>
                   </div>
 
@@ -414,6 +500,82 @@ export default function Usuarios() {
 
                         {expandedUser === u.id && (
                           <div className="mt-3 space-y-3 border-t pt-3">
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" variant="outline" onClick={() => openEditUser(u)} data-testid={`button-edit-user-${u.id}`}>
+                                <Edit3 className="w-3.5 h-3.5 mr-1" /> Editar usuário
+                              </Button>
+                            </div>
+
+                            {editingUserId === u.id && (
+                              <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3 space-y-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div className="space-y-1.5">
+                                    <Label>Login</Label>
+                                    <Input value={userDraft.username} onChange={e => setUserDraft(prev => ({ ...prev, username: e.target.value }))} data-testid={`input-edit-username-${u.id}`} />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label>Nome completo</Label>
+                                    <Input value={userDraft.fullName} onChange={e => setUserDraft(prev => ({ ...prev, fullName: e.target.value }))} data-testid={`input-edit-fullname-${u.id}`} />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label>Data de nascimento</Label>
+                                    <Input value={userDraft.birthDate} onChange={e => setUserDraft(prev => ({ ...prev, birthDate: e.target.value }))} placeholder="DD/MM/AAAA" data-testid={`input-edit-birthdate-${u.id}`} />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label>Status</Label>
+                                    <Select value={userDraft.status} onValueChange={value => setUserDraft(prev => ({ ...prev, status: value }))}>
+                                      <SelectTrigger data-testid={`select-edit-status-${u.id}`}><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="ativo">Ativo</SelectItem>
+                                        <SelectItem value="inativo">Inativo</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label>Nível de acesso</Label>
+                                    <Select value={userDraft.role} onValueChange={(value: "admin" | "funcionario") => setUserDraft(prev => ({ ...prev, role: value }))}>
+                                      <SelectTrigger data-testid={`select-edit-role-${u.id}`}><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="funcionario">Funcionário</SelectItem>
+                                        <SelectItem value="admin">Administrador</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label>Cargo com permissões</Label>
+                                    <Select value={userDraft.roleId} onValueChange={value => setUserDraft(prev => ({ ...prev, roleId: value }))}>
+                                      <SelectTrigger data-testid={`select-edit-role-id-${u.id}`}><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">Sem cargo específico</SelectItem>
+                                        {roles.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label>Título do cargo</Label>
+                                    <Input value={userDraft.jobTitle} onChange={e => setUserDraft(prev => ({ ...prev, jobTitle: e.target.value }))} data-testid={`input-edit-jobtitle-full-${u.id}`} />
+                                  </div>
+                                  <div className="space-y-1.5">
+                                    <Label>Senha inicial opcional</Label>
+                                    <Input value={userDraft.initialPassword} onChange={e => setUserDraft(prev => ({ ...prev, initialPassword: e.target.value }))} placeholder="DDMMAAAA" data-testid={`input-edit-initial-password-${u.id}`} />
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3">
+                                  <div>
+                                    <Label>Exigir troca de senha</Label>
+                                    <p className="text-xs text-slate-500">Ao informar senha inicial, esta opção será aplicada automaticamente.</p>
+                                  </div>
+                                  <Switch checked={userDraft.mustChangePassword} onCheckedChange={value => setUserDraft(prev => ({ ...prev, mustChangePassword: value }))} data-testid={`switch-edit-must-change-${u.id}`} />
+                                </div>
+                                <div className="flex justify-end gap-2">
+                                  <Button size="sm" variant="outline" onClick={() => setEditingUserId(null)}>Cancelar</Button>
+                                  <Button size="sm" onClick={() => saveUser(u.id)} disabled={updateUserMutation.isPending} data-testid={`button-save-user-${u.id}`}>
+                                    <Save className="w-3.5 h-3.5 mr-1" /> {updateUserMutation.isPending ? "Salvando..." : "Salvar usuário"}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Change role */}
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs text-slate-500 w-24">Nível de acesso:</span>

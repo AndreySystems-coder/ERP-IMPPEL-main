@@ -60,6 +60,49 @@ const DEFAULT_EMPLOYEE_PERMISSIONS = new Set([
   "registrarMaterials",
 ]);
 
+const DEFAULT_ROLE_PERMISSIONS: Array<{ name: string; label: string; permissions: Record<string, boolean> }> = [
+  {
+    name: "administrativo_financeiro",
+    label: "Administrativo / Financeiro",
+    permissions: {
+      viewDashboard: true, viewFinancials: true, viewPayments: true, viewCashFlow: true, viewFinancialSettings: true,
+      viewClients: true, viewQuotes: true, viewWorks: true, viewWorkOrders: true, viewBackups: true, viewExports: true,
+    },
+  },
+  {
+    name: "comercial_atendimento",
+    label: "Comercial / Atendimento",
+    permissions: {
+      viewCrm: true, viewLeads: true, viewCrmWhatsapp: true, viewClients: true,
+      viewQuotes: true, viewQuoteTemplates: true, viewQuoteRules: true, viewWorks: true, viewWorkOrders: true,
+    },
+  },
+  {
+    name: "marketing_redes_sociais",
+    label: "Marketing / Redes Sociais",
+    permissions: {
+      viewDashboard: true, viewCrm: true, viewLeads: true, viewCrmWhatsapp: true, viewClients: true, viewPostSale: true,
+    },
+  },
+  {
+    name: "equipe_tecnica",
+    label: "Equipe Técnica",
+    permissions: {
+      viewWorks: true, viewWorkOrders: true, viewObraRegistro: true,
+      viewTeam: true, registrarMaterials: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true,
+    },
+  },
+  {
+    name: "gestor_obras",
+    label: "Gestor de Obras",
+    permissions: {
+      viewDashboard: true, viewWorks: true, viewWorkOrders: true, viewAllWorkOrders: true, editWorkOrders: true,
+      viewObraRegistro: true, viewCalendar: true, viewTeam: true, viewProductivity: true, registrarMaterials: true,
+      viewAllMaterials: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true,
+    },
+  },
+];
+
 const COMPATIBLE_PERMISSIONS: Record<string, string[]> = {
   viewCrm: ["viewLeads", "viewCrmWhatsapp", "viewClients"],
   viewQuotes: ["viewQuoteTemplates", "viewQuoteRules"],
@@ -79,6 +122,17 @@ const COMPATIBLE_PERMISSIONS: Record<string, string[]> = {
 function permissionMatches(permissions: Record<string, boolean>, permission: string) {
   if (permissions[permission]) return true;
   return (COMPATIBLE_PERMISSIONS[permission] || []).some((key) => permissions[key]);
+}
+
+function normalizeRoleName(value: string) {
+  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+
+function parsePermissionPayload(value: unknown) {
+  if (typeof value === "string") {
+    try { return JSON.parse(value); } catch { return {}; }
+  }
+  return value && typeof value === "object" ? value as Record<string, boolean> : {};
 }
 
 async function getEffectiveUserPermissions(userId: number) {
@@ -154,6 +208,32 @@ export async function registerRoutes(
     });
   }
 
+  async function ensureDefaultRoles() {
+    await ensureTechnicalTeamRole();
+    const existingRoles = await storage.getRoles();
+    const byName = new Map(existingRoles.map(role => [role.name, role]));
+    const byLabel = new Map(existingRoles.map(role => [role.label.toLocaleLowerCase("pt-BR"), role]));
+    for (const def of DEFAULT_ROLE_PERMISSIONS) {
+      const existing = byName.get(def.name) || byLabel.get(def.label.toLocaleLowerCase("pt-BR"));
+      if (existing) {
+        const current = parsePermissionPayload(existing.permissions);
+        await storage.updateRole(existing.id, {
+          name: def.name,
+          label: def.label,
+          permissions: JSON.stringify({ ...def.permissions, ...current }),
+          isDefault: true,
+        });
+      } else {
+        await storage.createRole({
+          name: def.name,
+          label: def.label,
+          permissions: JSON.stringify(def.permissions),
+          isDefault: true,
+        });
+      }
+    }
+  }
+
   // Seed data function
   async function seedDatabase() {
     const defaultSettings = [
@@ -206,6 +286,8 @@ export async function registerRoutes(
         });
       }
     }
+
+    await ensureDefaultRoles();
 
     // Seed cost config defaults on startup
     const existingCostConfig = await storage.getCostConfig();
@@ -467,7 +549,7 @@ export async function registerRoutes(
     try {
       const { username, password, role, roleId, jobTitle, fullName, birthDate, status, mustChangePassword } = req.body;
       if (!username || !password) return res.status(400).json({ message: "Usuário e senha obrigatórios" });
-      const existing = await storage.getUserByUsername(username);
+      const existing = await findUserByUsername(username);
       if (existing) return res.status(400).json({ message: "Nome de usuário já existe" });
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
       const newUser = await storage.createUser({ username, password: hashedPassword, role: role || "funcionario", fullName: fullName || null, birthDate: birthDate || null, status: status || "ativo", mustChangePassword: !!mustChangePassword } as any);
@@ -481,12 +563,55 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getUser(id);
+      if (!existing) return res.status(404).json({ message: "Usuário não encontrado" });
+      const body = req.body || {};
+      const updates: any = {};
+      if (body.username !== undefined) {
+        const username = String(body.username || "").trim();
+        if (!username) return res.status(400).json({ message: "Usuário é obrigatório" });
+        const found = await findUserByUsername(username);
+        if (found && found.id !== id) return res.status(400).json({ message: "Nome de usuário já existe" });
+        updates.username = username;
+      }
+      if (body.role !== undefined) {
+        if (!["admin", "funcionario"].includes(body.role)) return res.status(400).json({ message: "Perfil inválido" });
+        updates.role = body.role;
+        if (body.role === "admin" && body.roleId === undefined) updates.roleId = null;
+      }
+      if (body.roleId !== undefined) updates.roleId = body.roleId ? Number(body.roleId) : null;
+      if (body.jobTitle !== undefined) updates.jobTitle = String(body.jobTitle || "").trim() || null;
+      if (body.fullName !== undefined) updates.fullName = String(body.fullName || "").trim() || null;
+      if (body.birthDate !== undefined) updates.birthDate = String(body.birthDate || "").trim() || null;
+      if (body.status !== undefined) updates.status = body.status === "inativo" || body.status === "Inativo" ? "inativo" : "ativo";
+      if (body.mustChangePassword !== undefined) updates.mustChangePassword = Boolean(body.mustChangePassword);
+      const initialPassword = String(body.initialPassword || body.senhaInicial || "").replace(/\D/g, "");
+      if (initialPassword) {
+        if (initialPassword.length !== 8) return res.status(400).json({ message: "Senha inicial deve estar no formato DDMMAAAA" });
+        updates.password = await bcrypt.hash(initialPassword, BCRYPT_ROUNDS);
+        updates.mustChangePassword = true;
+        if (!updates.birthDate && !(existing as any).birthDate) updates.birthDate = `${initialPassword.slice(0, 2)}/${initialPassword.slice(2, 4)}/${initialPassword.slice(4)}`;
+      }
+      const updated = await storage.updateUser(id, updates);
+      if (updated && req.session.userId === id) {
+        req.session.userRole = updated.role;
+      }
+      res.json(toPublicUser(updated));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message || "Internal Error" });
+    }
+  });
+
   app.patch("/api/users/:id/role", requireAdmin, async (req, res) => {
     try {
       const { role } = req.body;
       if (!["admin", "funcionario"].includes(role)) return res.status(400).json({ message: "Role inválida" });
       const updated = await storage.updateUserRole(Number(req.params.id), role);
       if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
+      if (req.session.userId === updated.id) req.session.userRole = updated.role;
       res.json({ id: updated.id, username: updated.username, role: updated.role });
     } catch {
       res.status(500).json({ message: "Internal Error" });
@@ -526,7 +651,7 @@ export async function registerRoutes(
 
   // ─── Roles / Cargos ───────────────────────────────────────────────────────
   app.get("/api/roles", requireAdmin, async (req, res) => {
-    try { res.json(await storage.getRoles()); }
+    try { await ensureDefaultRoles(); res.json(await storage.getRoles()); }
     catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -534,7 +659,7 @@ export async function registerRoutes(
     try {
       const { name, label, permissions, isDefault } = req.body;
       if (!name || !label) return res.status(400).json({ message: "name e label são obrigatórios" });
-      const role = await storage.createRole({ name, label, permissions: JSON.stringify(permissions || {}), isDefault: isDefault || false });
+      const role = await storage.createRole({ name: normalizeRoleName(String(name)), label, permissions: JSON.stringify(parsePermissionPayload(permissions)), isDefault: isDefault || false });
       res.status(201).json(role);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -543,9 +668,9 @@ export async function registerRoutes(
     try {
       const { name, label, permissions, isDefault } = req.body;
       const upd: any = {};
-      if (name !== undefined) upd.name = name;
+      if (name !== undefined) upd.name = normalizeRoleName(String(name));
       if (label !== undefined) upd.label = label;
-      if (permissions !== undefined) upd.permissions = JSON.stringify(permissions);
+      if (permissions !== undefined) upd.permissions = JSON.stringify(parsePermissionPayload(permissions));
       if (isDefault !== undefined) upd.isDefault = isDefault;
       const updated = await storage.updateRole(Number(req.params.id), upd);
       if (!updated) return res.status(404).json({ message: "Cargo não encontrado" });

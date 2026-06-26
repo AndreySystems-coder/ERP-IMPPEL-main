@@ -59,11 +59,9 @@ const ROLE_TECHNICAL_BY_LABEL: Record<string, string> = {
   "Administrativo / Financeiro": "administrativo_financeiro",
   "Comercial / Atendimento": "comercial_atendimento",
   "Marketing / Redes Sociais": "marketing_redes_sociais",
+  "Equipe Técnica": "equipe_tecnica",
   "Equipe Técnica (Obras / Serviços)": "equipe_tecnica",
-  "Gestão de EPIs, Uniformes e Botas": "gestao_epis",
-  "Materiais e Equipamentos": "materiais_equipamentos",
-  "Gestão de Funcionários": "gestao_funcionarios",
-  "Obras / Operações": "obras_operacoes",
+  "Gestor de Obras": "gestor_obras",
 };
 
 function normalizeText(value: string) {

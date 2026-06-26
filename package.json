@@ -8,6 +8,7 @@
     "build": "tsx script/build.ts",
     "start": "node dist/index.cjs",
     "check": "tsc",
+    "test": "npm run test:backup && npm run test:operational",
     "test:backup": "tsx script/test-complete-backup.ts",
     "test:operational": "tsx script/test-operational-flows.ts",
     "db:push": "drizzle-kit push"
