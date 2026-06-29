@@ -16,6 +16,7 @@ import { QuickCountPreview } from "@/features/inventory/components/QuickCountPre
 import type { BatchItem, InventoryItem, Movement, QuickCountRow as RapidaRow } from "@/features/inventory/types";
 import { useUser } from "@/hooks/use-auth";
 import { asArray } from "@/lib/safeData";
+import { getMaterialReturnPolicyLabel, isReturnableMaterialItem } from "@shared/materialReturnPolicy";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -250,6 +251,8 @@ function generateCurrentStockPDF(items: InventoryItem[], movements: Movement[]) 
 
   const lowStock = items.filter(item => item.quantity <= item.minStock).length;
   const emptyStock = items.filter(item => item.quantity <= 0).length;
+  const returnableCount = items.filter(item => isReturnableMaterialItem(item)).length;
+  const consumableCount = items.length - returnableCount;
 
   autoTable(doc, {
     startY: 34,
@@ -832,6 +835,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const currentEntries = movementsList.filter(m => m.type === "ENTRADA").reduce((sum, movement) => sum + movement.quantity, 0);
   const currentExits = movementsList.filter(m => m.type === "SAÍDA").reduce((sum, movement) => sum + movement.quantity, 0);
   const emptyStockCount = itemsList.filter(i => i.quantity <= 0).length;
+  const currentReturnPolicy = isReturnableMaterialItem({ name, type }) ? "retornavel" : "consumivel";
 
   return (
     <div className="space-y-6">
@@ -1022,7 +1026,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingItem ? "Editar Item" : "Adicionar Item"}>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <Input label="Nome do Produto *" required value={name} onChange={e => setName(e.target.value)} placeholder="Ex. Viaplus 1000" data-testid="input-item-name" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold text-slate-700">Categoria</label>
               <select value={type} onChange={e => setType(e.target.value)} className="px-4 py-2.5 rounded-xl bg-slate-50 border-2 border-border focus:outline-none focus:border-primary transition-all" data-testid="select-item-type">
@@ -1030,6 +1034,18 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
                 <option value="ferramenta">Ferramenta</option>
                 <option value="equipamento">Equipamento</option>
                 <option value="epi">EPI</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-slate-700">Politica de retorno</label>
+              <select
+                value={currentReturnPolicy}
+                onChange={e => setType(e.target.value === "retornavel" ? "ferramenta" : "material")}
+                className="px-4 py-2.5 rounded-xl bg-slate-50 border-2 border-border focus:outline-none focus:border-primary transition-all"
+                data-testid="select-item-return-policy"
+              >
+                <option value="retornavel">Retornavel</option>
+                <option value="consumivel">Consumivel</option>
               </select>
             </div>
             <div className="flex flex-col gap-1.5">

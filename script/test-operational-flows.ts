@@ -30,6 +30,10 @@ assert.equal((await storage.getInventoryMovements()).length, 1, "aprovação rep
 
 assert.equal(generateInitialPassword("24/12/1996"), "24121996", "senha fixa operacional deve usar DDMMAAAA");
 assert.equal(isConsumableMaterialItem({ productName: "Viaplus 1000" }), true, "Viaplus deve ser consumivel");
+const returnableToolNames = ["Aplicador de PU", "Marreta", "Talhadeira", "Lixadeira", "Furadeira", "Batedor para furadeira", "Mangueira", "Extensao", "Bomba de agua", "Soprador", "Vassoura"];
+for (const toolName of returnableToolNames) {
+  assert.equal(isReturnableMaterialItem({ productName: toolName, type: "ferramenta" }), true, `${toolName} deve ser retornavel`);
+}
 assert.equal(isReturnableMaterialItem({ productName: "Ferramenta marreta" }), true, "ferramenta deve ser retornavel");
 assert.equal(isMaterialWithdrawalPending({ status: "consumido", items: [{ productName: "Viaplus 1000" }] }), false, "consumivel nao deve ficar pendente");
 assert.equal(isMaterialWithdrawalPending({ status: "pendente", items: [{ productName: "Ferramenta marreta" }] }), true, "retornavel deve ficar pendente ate devolucao");

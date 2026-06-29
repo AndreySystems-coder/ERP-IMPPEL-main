@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { asArray } from "@/lib/safeData";
+import { getMaterialReturnPolicyLabel } from "@shared/materialReturnPolicy";
 import {
   Download, Upload, FileText, AlertTriangle, CheckCircle2, X,
   ShieldAlert,
@@ -273,8 +274,8 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
     const movements = asArray<any>(backup.data?.movements);
     autoTable(doc, {
       startY: 28,
-      head: [["Produto", "Tipo", "Unidade", "Qtd. Atual", "Mín.", "Preço Unit."]],
-      body: items.map((i: any) => [i.name, i.type || "—", i.unit || "un", i.quantity, i.minStock, i.pricePerUnit ? `R$ ${Number(i.pricePerUnit).toFixed(2)}` : "—"]),
+      head: [["Produto", "Categoria", "Politica", "Unidade", "Qtd. Atual", "Min.", "Preco Unit."]],
+      body: items.map((i: any) => [i.name, i.type || "-", i.returnPolicy || getMaterialReturnPolicyLabel(i), i.unit || "un", i.quantity, i.minStock, i.pricePerUnit ? `R$ ${Number(i.pricePerUnit).toFixed(2)}` : "-"]),
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
     if (movements.length > 0) {

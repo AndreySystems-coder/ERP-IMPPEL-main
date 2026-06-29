@@ -20,7 +20,7 @@ import {
   normalizeOperationalEmployee,
   type OperationalEmployeeInput,
 } from "@shared/operationalUsers";
-import { hasReturnableMaterialItems, isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
+import { getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
 import { previewErpPdfBuffer } from "./pdf-restore";
 
 const BCRYPT_ROUNDS = 10;
@@ -3248,7 +3248,7 @@ export async function registerRoutes(
 
   app.get("/api/backup/estoque", requireAdmin, async (req, res) => {
     try {
-      const items = await storage.getInventoryItems();
+      const items = (await storage.getInventoryItems()).map((item: any) => ({ ...item, returnPolicy: getMaterialReturnPolicyLabel(item) }));
       const movements = await storage.getInventoryMovements();
       res.json({ type: "estoque", version: "1.0", exportedAt: new Date().toISOString(), data: { items, movements } });
     } catch (err: any) { res.status(500).json({ message: err.message }); }

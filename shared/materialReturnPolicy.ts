@@ -20,10 +20,11 @@ const CONSUMABLE_PATTERNS = [
 ];
 
 const RETURNABLE_PATTERNS = [
+  /retornavel/i,
   /ferrament/i,
   /equipament/i,
-  /maquin|m�quin/i,
-  /extens[a�]o/i,
+  /maquina/i,
+  /extensao/i,
   /marreta/i,
   /talhadeira/i,
   /escada/i,
@@ -33,23 +34,45 @@ const RETURNABLE_PATTERNS = [
   /betoneira/i,
   /andaime/i,
   /compressor/i,
-  /ma[�c]arico/i,
+  /macarico/i,
+  /aplicador\s+de\s+pu/i,
+  /batedor/i,
+  /mangueira/i,
+  /bomba\s+de\s+agua/i,
+  /soprador/i,
+  /vassoura/i,
+];
+
+const EXPLICIT_CONSUMABLE_PATTERNS = [
+  /consumivel/i,
+  /consumo/i,
 ];
 
 function normalizeMaterialText(value: unknown) {
   return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-export function isReturnableMaterialItem(item: { productName?: unknown; name?: unknown; type?: unknown; category?: unknown }) {
+export type MaterialReturnPolicy = "retornavel" | "consumivel";
+
+export function getMaterialReturnPolicy(item: { productName?: unknown; name?: unknown; type?: unknown; category?: unknown }): MaterialReturnPolicy {
   const text = normalizeMaterialText([item.productName, item.name, item.type, item.category].filter(Boolean).join(" "));
-  if (!text) return true;
-  if (RETURNABLE_PATTERNS.some(pattern => pattern.test(text))) return true;
-  if (CONSUMABLE_PATTERNS.some(pattern => pattern.test(text))) return false;
-  return true;
+  if (!text) return "retornavel";
+  if (RETURNABLE_PATTERNS.some(pattern => pattern.test(text))) return "retornavel";
+  if (EXPLICIT_CONSUMABLE_PATTERNS.some(pattern => pattern.test(text))) return "consumivel";
+  if (CONSUMABLE_PATTERNS.some(pattern => pattern.test(text))) return "consumivel";
+  return "retornavel";
+}
+
+export function getMaterialReturnPolicyLabel(item: { productName?: unknown; name?: unknown; type?: unknown; category?: unknown }) {
+  return getMaterialReturnPolicy(item) === "retornavel" ? "Retornavel" : "Consumivel";
+}
+
+export function isReturnableMaterialItem(item: { productName?: unknown; name?: unknown; type?: unknown; category?: unknown }) {
+  return getMaterialReturnPolicy(item) === "retornavel";
 }
 
 export function isConsumableMaterialItem(item: { productName?: unknown; name?: unknown; type?: unknown; category?: unknown }) {
-  return !isReturnableMaterialItem(item);
+  return getMaterialReturnPolicy(item) === "consumivel";
 }
 
 export function hasReturnableMaterialItems(items: Array<{ productName?: unknown; name?: unknown; type?: unknown; category?: unknown }>) {
