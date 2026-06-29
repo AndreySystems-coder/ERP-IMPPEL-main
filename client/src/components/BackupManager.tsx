@@ -142,7 +142,7 @@ function getRecordCount(type: BackupType, backup: any): number {
 }
 
 function getOperationalInitialPassword(user: any): string {
-  if (user.mustChangePassword === false) return "Senha alterada";
+
   const source = user.senhaInicial || user.initialPassword || user.birthDate || user.birth_date || user.dataNascimento;
   const digits = source ? String(source).replace(/\D/g, "") : "";
   if (digits.length === 8) {
@@ -152,7 +152,7 @@ function getOperationalInitialPassword(user: any): string {
     return digits;
   }
   if (user.mustChangePassword === true) return "Não disponível";
-  return user.passwordChanged ? "Senha alterada" : "Não disponível";
+  return user.passwordChanged ? "Data de nascimento pendente" : "Não disponível";
 }
 
 function getOperationalBirthDate(user: any): string | null {

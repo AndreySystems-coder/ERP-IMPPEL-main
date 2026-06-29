@@ -132,7 +132,7 @@ export async function buildCompleteBackupPackage(
       fullName: user.fullName ?? null,
       birthDate: user.birthDate ?? null,
       status: user.status ?? "ativo",
-      mustChangePassword: !!user.mustChangePassword,
+      mustChangePassword: false,
       createdAt: user.createdAt,
       passwordHash,
       requiresPasswordReset: !passwordHash,

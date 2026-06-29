@@ -208,7 +208,7 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
     users.push({
       login,
       username: login,
-      senhaInicial: hasInitialPassword ? senhaInicial : "Senha alterada",
+      senhaInicial: hasInitialPassword ? senhaInicial : "Data de nascimento pendente",
       initialPassword: hasInitialPassword ? senhaInicial : undefined,
       resetInitialPassword: !isAdmin && hasInitialPassword,
       nomeCompleto: nomeCompleto || login,
@@ -222,11 +222,11 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
       roleName: cargo ? (ROLE_TECHNICAL_BY_LABEL[cargo] || normalizeKey(cargo)) : null,
       roleLabel: cargo || null,
       jobTitle: cargo || null,
-      mustChangePassword: !isAdmin && hasInitialPassword,
+      mustChangePassword: false,
     });
     preview.rows.push({
       name: login,
-      detail: `${nomeCompleto || "sem nome"} · ${cargo || "cargo pendente"} · ${hasInitialPassword ? `senha inicial aplicada: ${senhaInicial}` : "senha alterada"}`,
+      detail: `${nomeCompleto || "sem nome"} · ${cargo || "cargo pendente"} · ${hasInitialPassword ? `senha fixa aplicada: ${senhaInicial}` : "data de nascimento pendente"}`,
       status: isAdmin ? "ignorado" : cargo ? "novo" : "pendente",
     });
     if (isAdmin) {

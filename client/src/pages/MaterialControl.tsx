@@ -14,6 +14,7 @@ import { ReturnForm } from "@/features/materials/components/ReturnForm";
 import { WithdrawalForm } from "@/features/materials/components/WithdrawalForm";
 import { daysSince } from "@/features/materials/material-control-utils";
 import type { DiscountRule, InventoryItem, SalaryDiscount, UserItem, Withdrawal, WorkOrder } from "@/features/materials/types";
+import { isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
 import { useUser } from "@/hooks/use-auth";
 import { asArray } from "@/lib/safeData";
 
@@ -57,9 +58,10 @@ export default function MaterialControl() {
   const discountRules = asArray<DiscountRule>(discountRulesQuery.data);
   const salaryDiscounts = asArray<SalaryDiscount>(salaryDiscountsQuery.data);
 
-  const pendingWithdrawals = withdrawals.filter(withdrawal => withdrawal.status !== "retornado");
+  const pendingWithdrawals = withdrawals.filter(isMaterialWithdrawalPending);
   const pendingDiscounts = salaryDiscounts.filter(discount => discount.status === "pendente");
   const returnedCount = withdrawals.filter(withdrawal => withdrawal.status === "retornado").length;
+  const consumedCount = withdrawals.filter(withdrawal => withdrawal.status === "consumido").length;
   const overdueCount = pendingWithdrawals.filter(withdrawal => daysSince(withdrawal.createdAt) > 3).length;
 
   const isLoadingCore = inventoryQuery.isLoading || (isAdmin && usersQuery.isLoading) || workOrdersQuery.isLoading || withdrawalsQuery.isLoading;

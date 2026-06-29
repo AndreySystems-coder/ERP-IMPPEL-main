@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MovementTimelineCard } from "@/features/materials/components/MovementTimelineCard";
 import type { Withdrawal } from "@/features/materials/types";
+import { isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
 
-type StatusFilter = "todos" | "pendente" | "parcial" | "retornado";
+type StatusFilter = "todos" | "pendente" | "parcial" | "retornado" | "consumido";
 type GroupMode = "none" | "day" | "month" | "year" | "workOrder" | "employee";
 
 export function MovementHistoryPanel({
@@ -74,7 +75,7 @@ export function MovementHistoryPanel({
     return key;
   };
 
-  const pendingCount = withdrawals.filter(withdrawal => withdrawal.status !== "retornado").length;
+  const pendingCount = withdrawals.filter(isMaterialWithdrawalPending).length;
   const returnedCount = withdrawals.filter(withdrawal => withdrawal.status === "retornado").length;
 
   if (withdrawals.length === 0) {
@@ -123,6 +124,7 @@ export function MovementHistoryPanel({
             <SelectItem value="pendente">Em uso</SelectItem>
             <SelectItem value="parcial">Parcial</SelectItem>
             <SelectItem value="retornado">Devolvidos</SelectItem>
+            <SelectItem value="consumido">Consumidos</SelectItem>
           </SelectContent>
         </Select>
         <Select value={groupMode} onValueChange={value => { setGroupMode(value as GroupMode); setSelectedGroup(null); }}>

@@ -22,7 +22,7 @@ export type Withdrawal = {
   jobId: number | null;
   clientName: string | null;
   withdrawalDate: string | null;
-  status: "pendente" | "retornado" | "parcial";
+  status: "pendente" | "retornado" | "parcial" | "consumido";
   withdrawalPhoto: string | null;
   withdrawalSignature: string | null;
   returnPhoto: string | null;

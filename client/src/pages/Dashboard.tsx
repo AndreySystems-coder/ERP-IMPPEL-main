@@ -12,6 +12,7 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { asArray } from "@/lib/safeData";
+import { isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
 
 const apiGet = async (path: string) => {
   const response = await fetch(path, { credentials: "include" });
@@ -94,7 +95,7 @@ export default function Dashboard() {
   const runningWorks = workOrdersList.filter((w: any) => statusIncludes(w.status, ["andamento", "execução"]));
   const finishedWorks = workOrdersList.filter((w: any) => statusIncludes(w.status, ["concluída", "finalizada"]));
   const scheduledWorks = workOrdersList.filter((w: any) => statusIncludes(w.status, ["agendada", "planejada"]));
-  const openWithdrawals = withdrawalList.filter((w: any) => !statusIncludes(w.status, ["retornado", "devolvido", "concluído"]));
+  const openWithdrawals = withdrawalList.filter((w: any) => isMaterialWithdrawalPending(w));
   const pendingReturns = openWithdrawals.filter((w: any) => Number(w.returnedQuantity || 0) < Number(w.quantity || w.withdrawn || 0));
   const receivedPayments = paymentsList.filter((p: any) => statusIncludes(p.status, ["paid", "pago", "recebido"]));
   const pendingPayments = paymentsList.filter((p: any) => statusIncludes(p.status, ["pending", "pendente", "aberto"]));

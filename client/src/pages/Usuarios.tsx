@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   UserCog, Plus, Trash2, Shield, User, Key, Check, X, Eye, EyeOff,
@@ -293,7 +293,7 @@ export default function Usuarios() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim()) return toast({ title: "Preencha todos os campos", variant: "destructive" });
-    createMutation.mutate({ username: newUsername.trim(), password: newPassword, role: newRole, roleId: newRoleId && newRoleId !== "none" ? Number(newRoleId) : null, jobTitle: newJobTitle || null, fullName: newFullName || null, birthDate: newBirthDate || null, status: newStatus, mustChangePassword: newMustChangePassword });
+    createMutation.mutate({ username: newUsername.trim(), password: newPassword, role: newRole, roleId: newRoleId && newRoleId !== "none" ? Number(newRoleId) : null, jobTitle: newJobTitle || null, fullName: newFullName || null, birthDate: newBirthDate || null, status: newStatus, mustChangePassword: false });
   };
 
   const openEditUser = (user: UserItem) => {
@@ -405,15 +405,6 @@ export default function Usuarios() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1.5 sm:col-span-2">
-                      <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
-                        <div>
-                          <Label>Exigir troca de senha no primeiro acesso</Label>
-                          <p className="text-xs text-slate-500">Use para funcionários criados com senha inicial baseada no nascimento.</p>
-                        </div>
-                        <Switch checked={newMustChangePassword} onCheckedChange={setNewMustChangePassword} data-testid="switch-novo-must-change-password" />
-                      </div>
-                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -486,9 +477,6 @@ export default function Usuarios() {
                           <Badge variant="outline" className={u.status === "inativo" ? "border-red-200 bg-red-50 text-red-700 text-xs" : "border-emerald-200 bg-emerald-50 text-emerald-700 text-xs"}>
                             {u.status === "inativo" ? "Inativo" : "Ativo"}
                           </Badge>
-                          {u.mustChangePassword && (
-                            <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 text-xs">Troca de senha pendente</Badge>
-                          )}
                         </div>
 
                         {/* Expand/collapse controls */}
@@ -557,15 +545,8 @@ export default function Usuarios() {
                                   </div>
                                   <div className="space-y-1.5">
                                     <Label>Senha inicial opcional</Label>
-                                    <Input value={userDraft.initialPassword} onChange={e => setUserDraft(prev => ({ ...prev, initialPassword: e.target.value }))} placeholder="DDMMAAAA" data-testid={`input-edit-initial-password-${u.id}`} />
+                                    <Input value={userDraft.initialPassword} onChange={e => setUserDraft(prev => ({ ...prev, initialPassword: e.target.value }))} placeholder="DDMMAAAA (data de nascimento)" data-testid={`input-edit-initial-password-${u.id}`} />
                                   </div>
-                                </div>
-                                <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3">
-                                  <div>
-                                    <Label>Exigir troca de senha</Label>
-                                    <p className="text-xs text-slate-500">Ao informar senha inicial, esta opção será aplicada automaticamente.</p>
-                                  </div>
-                                  <Switch checked={userDraft.mustChangePassword} onCheckedChange={value => setUserDraft(prev => ({ ...prev, mustChangePassword: value }))} data-testid={`switch-edit-must-change-${u.id}`} />
                                 </div>
                                 <div className="flex justify-end gap-2">
                                   <Button size="sm" variant="outline" onClick={() => setEditingUserId(null)}>Cancelar</Button>

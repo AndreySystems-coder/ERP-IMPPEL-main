@@ -20,6 +20,7 @@ import {
   normalizeOperationalEmployee,
   type OperationalEmployeeInput,
 } from "@shared/operationalUsers";
+import { hasReturnableMaterialItems, isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
 import { previewErpPdfBuffer } from "./pdf-restore";
 
 const BCRYPT_ROUNDS = 10;
@@ -370,9 +371,12 @@ export async function registerRoutes(
       if (!isHashed) {
         await storage.updateUserPassword(user.id, await bcrypt.hash(input.password, BCRYPT_ROUNDS));
       }
+      if ((user as any).mustChangePassword) {
+        await storage.updateUser(user.id, { mustChangePassword: false } as any);
+      }
       req.session.userId = user.id;
       req.session.userRole = user.role;
-      res.status(200).json(toPublicUser(user));
+      res.status(200).json(toPublicUser({ ...user, mustChangePassword: false }));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(401).json({ message: err.errors[0].message });
@@ -402,7 +406,7 @@ export async function registerRoutes(
         roleLabel = customRole.label;
       }
     }
-    res.status(200).json(toPublicUser(user, { permissions, roleName, roleLabel }));
+    res.status(200).json(toPublicUser({ ...user, mustChangePassword: false }, { permissions, roleName, roleLabel }));
   });
 
   app.post(api.auth.logout.path, (req, res) => {
@@ -439,7 +443,7 @@ export async function registerRoutes(
           fullName: uAny.fullName || null,
           birthDate: uAny.birthDate || null,
           status: uAny.status || "ativo",
-          mustChangePassword: !!uAny.mustChangePassword,
+          mustChangePassword: false,
           roleName: customRole?.name || null,
           roleLabel: customRole?.label || null,
         };
@@ -496,7 +500,7 @@ export async function registerRoutes(
           if (existing) {
             if (!updateExisting) { result.existing++; continue; }
             const updates: any = { fullName: employee.nomeCompleto, birthDate: employee.dataNascimento, role: profile, roleId: assignedRole.id, jobTitle: assignedRole.label, status };
-            if (resetPasswords) { updates.password = await bcrypt.hash(employee.senhaInicial, BCRYPT_ROUNDS); updates.mustChangePassword = true; }
+            if (resetPasswords) { updates.password = await bcrypt.hash(employee.senhaInicial, BCRYPT_ROUNDS); updates.mustChangePassword = false; }
             await storage.updateUser(existing.id, updates);
             result.updated++;
             continue;
@@ -510,7 +514,7 @@ export async function registerRoutes(
             fullName: employee.nomeCompleto,
             birthDate: employee.dataNascimento,
             status,
-            mustChangePassword: true,
+            mustChangePassword: false,
           } as any);
           result.created++;
         } catch (err: any) {
@@ -531,12 +535,12 @@ export async function registerRoutes(
         const role = allRoles.find(entry => entry.id === item.roleId);
         return {
           login: user.username,
-          senhaInicial: item.mustChangePassword && item.birthDate ? generateInitialPassword(item.birthDate) : "",
+          senhaInicial: item.birthDate ? generateInitialPassword(item.birthDate) : "",
           nomeCompleto: item.fullName || user.username,
           cargo: role?.label || item.jobTitle || TECHNICAL_TEAM_ROLE.label,
           perfil: "Funcionário",
           status: item.status === "inativo" ? "Inativo" : "Ativo",
-          trocaPendente: !!item.mustChangePassword,
+          trocaPendente: false,
         };
       });
       res.json({ type: "usuarios-operacionais", version: "1.0", exportedAt: new Date().toISOString(), data: rows });
@@ -547,12 +551,12 @@ export async function registerRoutes(
 
   app.post("/api/users", requireAdmin, async (req, res) => {
     try {
-      const { username, password, role, roleId, jobTitle, fullName, birthDate, status, mustChangePassword } = req.body;
+      const { username, password, role, roleId, jobTitle, fullName, birthDate, status } = req.body;
       if (!username || !password) return res.status(400).json({ message: "Usuário e senha obrigatórios" });
       const existing = await findUserByUsername(username);
       if (existing) return res.status(400).json({ message: "Nome de usuário já existe" });
       const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
-      const newUser = await storage.createUser({ username, password: hashedPassword, role: role || "funcionario", fullName: fullName || null, birthDate: birthDate || null, status: status || "ativo", mustChangePassword: !!mustChangePassword } as any);
+      const newUser = await storage.createUser({ username, password: hashedPassword, role: role || "funcionario", fullName: fullName || null, birthDate: birthDate || null, status: status || "ativo", mustChangePassword: false } as any);
       if (roleId) await storage.updateUserRoleId(newUser.id, roleId);
       if (jobTitle) await storage.updateUserJobTitle(newUser.id, jobTitle);
       const updatedUser = await storage.getUser(newUser.id);
@@ -587,12 +591,12 @@ export async function registerRoutes(
       if (body.fullName !== undefined) updates.fullName = String(body.fullName || "").trim() || null;
       if (body.birthDate !== undefined) updates.birthDate = String(body.birthDate || "").trim() || null;
       if (body.status !== undefined) updates.status = body.status === "inativo" || body.status === "Inativo" ? "inativo" : "ativo";
-      if (body.mustChangePassword !== undefined) updates.mustChangePassword = Boolean(body.mustChangePassword);
+      updates.mustChangePassword = false;
       const initialPassword = String(body.initialPassword || body.senhaInicial || "").replace(/\D/g, "");
       if (initialPassword) {
         if (initialPassword.length !== 8) return res.status(400).json({ message: "Senha inicial deve estar no formato DDMMAAAA" });
         updates.password = await bcrypt.hash(initialPassword, BCRYPT_ROUNDS);
-        updates.mustChangePassword = true;
+        updates.mustChangePassword = false;
         if (!updates.birthDate && !(existing as any).birthDate) updates.birthDate = `${initialPassword.slice(0, 2)}/${initialPassword.slice(2, 4)}/${initialPassword.slice(4)}`;
       }
       const updated = await storage.updateUser(id, updates);
@@ -2511,6 +2515,7 @@ export async function registerRoutes(
             : null;
         }).filter(Boolean) as any[];
         if (!safeItems.length) continue;
+        const hasReturnableItems = hasReturnableMaterialItems(safeItems.map(item => ({ productName: item.productName, type: inventoryById.get(Number(item.inventoryId))?.type })));
 
         const withdrawal = await storage.createMaterialWithdrawal(
           {
@@ -2520,7 +2525,7 @@ export async function registerRoutes(
             jobId: null,
             clientName: entry.clientName || null,
             withdrawalDate: dateStr,
-            status: "pendente",
+            status: hasReturnableItems ? "pendente" : "consumido",
             withdrawalPhoto: null,
             withdrawalSignature: null,
             notes: `Origem: Registro rápido admin${entry.notes ? ` | ${String(entry.notes)}` : ""}`,
@@ -2569,11 +2574,16 @@ export async function registerRoutes(
       const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
       const month = months[now.getMonth()];
 
+      const inventoryItems = await storage.getInventoryItems();
+      const inventoryById = new Map(inventoryItems.map(item => [item.id, item]));
+      const withdrawalItems = items.map((i: any) => ({ withdrawalId: 0, inventoryId: i.inventoryId, productName: i.productName, unit: i.unit || "unid", quantity: i.quantity, type: inventoryById.get(Number(i.inventoryId))?.type }));
+      const hasReturnableItems = hasReturnableMaterialItems(withdrawalItems);
+
       const withdrawal = await storage.createMaterialWithdrawal(
         { userId: effectiveUserId, username: effectiveUsername, workOrderId: workOrderId || null, jobId: jobId || null, clientName: clientName || null, withdrawalDate: dateStr,
-          status: "pendente", withdrawalPhoto, withdrawalSignature, notes: notes || null,
+          status: hasReturnableItems ? "pendente" : "consumido", withdrawalPhoto, withdrawalSignature, notes: notes || null,
           returnPhoto: null, returnSignature: null, returnNotes: null },
-        items.map((i: any) => ({ withdrawalId: 0, inventoryId: i.inventoryId, productName: i.productName, unit: i.unit || "unid", quantity: i.quantity }))
+        withdrawalItems.map(({ type: _type, ...item }: any) => item)
       );
 
       // Register inventory SAÍDA movements
@@ -2600,7 +2610,7 @@ export async function registerRoutes(
       if (!existing) return res.status(404).json({ message: "Saída não encontrada" });
       const canReturnAll = await canManageAllMaterials(req);
       if (!canReturnAll && Number((existing as any).userId) !== Number(req.session.userId)) return res.status(403).json({ message: "Acesso negado" });
-      if (existing.status === "retornado") return res.status(400).json({ message: "Já retornado" });
+      if (existing.status === "retornado" || existing.status === "consumido") return res.status(400).json({ message: "Esta saída não possui retorno pendente" });
 
       const { returnPhoto, returnSignature, returnNotes, items } = req.body;
       if (!returnPhoto) return res.status(400).json({ message: "Foto do retorno é obrigatória" });
@@ -2616,9 +2626,10 @@ export async function registerRoutes(
       await storage.updateMaterialWithdrawalItems(id, items);
 
       // Determine new status
-      const allReturned = items.every((i: any) => {
-        const orig = existing.items.find((x: any) => x.id === i.id);
-        return orig ? i.returnedQuantity >= orig.quantity : true;
+      const allReturned = existing.items.every((orig: any) => {
+        if (!hasReturnableMaterialItems([{ productName: orig.productName }])) return true;
+        const returned = items.find((i: any) => i.id === orig.id);
+        return returned ? returned.returnedQuantity >= orig.quantity : false;
       });
       const newStatus = allReturned ? "retornado" : "parcial";
 
@@ -2745,7 +2756,7 @@ export async function registerRoutes(
     try {
       const woId = Number(req.params.id);
       const all = await storage.getMaterialWithdrawals();
-      const pending = all.filter((w: any) => w.workOrderId === woId && w.status !== "retornado");
+      const pending = all.filter((w: any) => w.workOrderId === woId && isMaterialWithdrawalPending(w));
       res.json(pending);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -2781,7 +2792,7 @@ export async function registerRoutes(
       fullName: user.fullName ?? null,
       birthDate: user.birthDate ?? null,
       status: user.status === "inativo" ? "inativo" : "ativo",
-      mustChangePassword: !!user.mustChangePassword,
+      mustChangePassword: false,
       createdAt: user.createdAt ?? null,
       password: /^\$2[aby]\$/.test(String(user.passwordHash || user.password || ""))
         ? String(user.passwordHash || user.password)
@@ -3095,7 +3106,7 @@ export async function registerRoutes(
         return {
           id: user.id,
           login: user.username,
-          senhaInicial: mustChangePassword ? (initialPassword ? String(initialPassword) : "Não disponível") : "Senha alterada",
+          senhaInicial: initialPassword ? String(initialPassword) : "Data de nascimento pendente",
           nomeCompleto: fullName,
           cargo,
           perfil: user.role,
@@ -3110,7 +3121,7 @@ export async function registerRoutes(
           birthDate,
           operationalStatus: userAny.status || "ativo",
           active: true,
-          mustChangePassword,
+          mustChangePassword: false,
         };
       });
       res.json({
@@ -3195,7 +3206,7 @@ export async function registerRoutes(
         const hasBcrypt = /^\$2[aby]\$/.test(passwordHash);
         const hasInitialPassword = Boolean(initialPassword);
         if (!existing && !hasBcrypt && !hasInitialPassword) { skipped++; continue; }
-        const shouldResetInitialPassword = hasInitialPassword && (user.resetInitialPassword === true || user.mustChangePassword === true || !existing);
+        const shouldResetInitialPassword = hasInitialPassword && (user.resetInitialPassword === true || !existing);
         const values: any = {
           username,
           role: user.role === "admin" || user.perfil === "admin" ? "admin" : "funcionario",
@@ -3204,7 +3215,7 @@ export async function registerRoutes(
           fullName: user.fullName || user.nomeCompleto || null,
           birthDate: restoreBirthDate(user, initialPassword),
           status: user.status === "Inativo" || user.status === "inativo" ? "inativo" : "ativo",
-          mustChangePassword: shouldResetInitialPassword || (!!user.mustChangePassword && hasInitialPassword),
+          mustChangePassword: false,
         };
         if (existing) {
           if (existing.role === "admin") { skipped++; continue; }

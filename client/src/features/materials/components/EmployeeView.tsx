@@ -9,6 +9,7 @@ import { ReturnForm } from "@/features/materials/components/ReturnForm";
 import { WithdrawalForm } from "@/features/materials/components/WithdrawalForm";
 import { daysSince, fmtDate } from "@/features/materials/material-control-utils";
 import type { InventoryItem, UserItem, Withdrawal, WorkOrder } from "@/features/materials/types";
+import { isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
 export function EmployeeView({
   inventory,
   users,
@@ -24,7 +25,7 @@ export function EmployeeView({
 }) {
   const [action, setAction] = useState<null | "saida" | "retorno" | "historico">(null);
   const [lastFeedback, setLastFeedback] = useState<null | "saida" | "retorno">(null);
-  const pendingWithdrawals = withdrawals.filter(w => w.status !== "retornado");
+  const pendingWithdrawals = withdrawals.filter(isMaterialWithdrawalPending);
   const myPending = pendingWithdrawals.filter(w => w.userId === currentUser?.id);
   const myHistory = withdrawals.filter(w => w.userId === currentUser?.id);
   const myReturnedCount = myHistory.filter(w => w.status === "retornado").length;
@@ -127,7 +128,7 @@ export function EmployeeView({
               <p className="text-sm font-bold">{lastFeedback === "saida" ? "Saída registrada com sucesso" : "Devolução registrada com sucesso"}</p>
               <p className="mt-0.5 text-xs opacity-80">
                 {lastFeedback === "saida"
-                  ? "O estoque foi atualizado e o material ficou vinculado à sua responsabilidade."
+                  ? "O estoque foi atualizado. Consum�veis n�o ficam pendentes de devolu��o."
                   : "O retorno foi registrado com foto, assinatura e condição do material."}
               </p>
             </div>
@@ -206,4 +207,3 @@ export function EmployeeView({
     </div>
   );
 }
-

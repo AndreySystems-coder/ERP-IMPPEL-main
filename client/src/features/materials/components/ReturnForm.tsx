@@ -14,6 +14,7 @@ import { PhotoCapture as MaterialPhotoCapture } from "@/features/materials/compo
 import { SignaturePad as MaterialSignaturePad } from "@/features/materials/components/SignaturePad";
 import { daysSince, fmtDate } from "@/features/materials/material-control-utils";
 import type { Withdrawal } from "@/features/materials/types";
+import { isReturnableMaterialItem } from "@shared/materialReturnPolicy";
 export function ReturnForm({
   pendingWithdrawals,
   currentUser,
@@ -38,7 +39,7 @@ export function ReturnForm({
 
   useEffect(() => {
     if (!selectedWithdrawal) { setRetornoItems([]); return; }
-    setRetornoItems(selectedWithdrawal.items.map(i => ({ id: i.id!, returnedQuantity: i.quantity, condition: "bom" })));
+    setRetornoItems(selectedWithdrawal.items.filter(isReturnableMaterialItem).map(i => ({ id: i.id!, returnedQuantity: i.quantity, condition: "bom" })));
   }, [retornoWithdrawalId]);
 
   const retornoMutation = useMutation({
@@ -110,7 +111,7 @@ export function ReturnForm({
           <Card>
             <CardHeader><CardTitle className="text-base">2. Conferir itens devolvidos</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {selectedWithdrawal.items.map((item, idx) => {
+              {selectedWithdrawal.items.filter(isReturnableMaterialItem).map((item, idx) => {
                 const retItem = retornoItems.find(r => r.id === item.id) || { id: item.id!, returnedQuantity: item.quantity, condition: "bom" };
                 const updateRetItem = (field: string, value: any) => setRetornoItems(prev => {
                   const ex = prev.find(r => r.id === item.id!);
