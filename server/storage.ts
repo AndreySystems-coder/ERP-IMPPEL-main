@@ -652,11 +652,15 @@ export class DatabaseStorage implements IStorage {
       if (!sale || sale.status !== "pendente") return sale;
       const items = JSON.parse(sale.items || "[]") as Array<{ inventoryId: number; name: string; quantity: number }>;
       const inventoryRows = await tx.select().from(inventory);
+      const availableByInventoryId = new Map(inventoryRows.map(row => [row.id, Number(row.quantity) || 0]));
       for (const item of items) {
         const inventoryItem = inventoryRows.find(row => row.id === Number(item.inventoryId));
-        if (!inventoryItem || Number(inventoryItem.quantity) < Number(item.quantity)) {
+        const available = availableByInventoryId.get(Number(item.inventoryId)) ?? 0;
+        const quantity = Number(item.quantity) || 0;
+        if (!inventoryItem || available < quantity) {
           throw new Error(`Estoque insuficiente para ${item.name}`);
         }
+        availableByInventoryId.set(Number(item.inventoryId), available - quantity);
       }
 
       const now = new Date();
@@ -1363,9 +1367,13 @@ export function createMemoryStorage(): IStorage {
       const sale = data.materialSales.find(row => row.id === id);
       if (!sale || sale.status !== "pendente") return sale;
       const items = JSON.parse(sale.items || "[]");
+      const availableByInventoryId = new Map(data.inventory.map(row => [row.id, Number(row.quantity) || 0]));
       for (const item of items) {
         const inventoryItem = data.inventory.find(row => row.id === Number(item.inventoryId));
-        if (!inventoryItem || Number(inventoryItem.quantity) < Number(item.quantity)) throw new Error(`Estoque insuficiente para ${item.name}`);
+        const available = availableByInventoryId.get(Number(item.inventoryId)) ?? 0;
+        const quantity = Number(item.quantity) || 0;
+        if (!inventoryItem || available < quantity) throw new Error(`Estoque insuficiente para ${item.name}`);
+        availableByInventoryId.set(Number(item.inventoryId), available - quantity);
       }
       for (const item of items) {
         const inventoryItem = data.inventory.find(row => row.id === Number(item.inventoryId));

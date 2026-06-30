@@ -9,7 +9,14 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { InventoryItem, UserItem } from "@/features/materials/types";
 
-type PreviewItem = { raw: string; inventoryId: number | null; quantity: number; confidence: number };
+type PreviewItem = {
+  raw: string;
+  inventoryId: number | null;
+  quantity: number;
+  confidence: number;
+  available: number | null;
+  blockedReason: string | null;
+};
 type PreviewEntry = { raw: string; date: string; userId: number | null; userConfidence: number; items: PreviewItem[] };
 
 function normalize(value: string) {
@@ -53,7 +60,27 @@ export function QuickMaterialRegistration({ inventory, users }: { inventory: Inv
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewEntry[]>([]);
 
-  const unresolved = useMemo(() => preview.reduce((total, entry) => total + (entry.userId ? 0 : 1) + entry.items.filter(item => !item.inventoryId).length, 0), [preview]);
+  const recalculateStockBlocks = (entries: PreviewEntry[]) => {
+    const availableById = new Map(inventory.map(item => [item.id, Math.max(0, Number(item.quantity) || 0)]));
+    return entries.map(entry => ({
+      ...entry,
+      items: entry.items.map(item => {
+        const inventoryId = item.inventoryId ? Number(item.inventoryId) : null;
+        const quantity = Math.max(1, Math.trunc(Number(item.quantity) || 1));
+        if (!inventoryId) return { ...item, quantity, available: null, blockedReason: null };
+        const material = inventory.find(candidate => candidate.id === inventoryId);
+        const available = availableById.get(inventoryId) ?? 0;
+        if (!material) return { ...item, inventoryId: null, quantity, available: null, blockedReason: null };
+        if (quantity > available) {
+          return { ...item, quantity, available, blockedReason: `Estoque insuficiente: disponível ${available} ${material.unit || "un"}` };
+        }
+        availableById.set(inventoryId, available - quantity);
+        return { ...item, quantity, available, blockedReason: null };
+      }),
+    }));
+  };
+
+  const unresolved = useMemo(() => preview.reduce((total, entry) => total + (entry.userId ? 0 : 1) + entry.items.filter(item => !item.inventoryId || item.blockedReason).length, 0), [preview]);
   const valid = preview.length > 0 && unresolved === 0 && preview.every(entry => entry.items.length > 0);
 
   const createMutation = useMutation({
@@ -89,15 +116,22 @@ export function QuickMaterialRegistration({ inventory, users }: { inventory: Inv
       const employee = bestMatch(employeeText, users.filter(user => user.role !== "admin"), userSearchLabel);
       const items = itemText.split(/[,;]/).map(parseItem).filter(item => item.name).map(item => {
         const material = bestMatch(item.name, inventory, value => value.name);
-        return { raw: item.name, inventoryId: material.score >= 70 ? material.value?.id || null : null, quantity: Math.max(1, item.quantity), confidence: material.score };
+        return {
+          raw: item.name,
+          inventoryId: material.score >= 70 ? material.value?.id || null : null,
+          quantity: Math.max(1, item.quantity),
+          confidence: material.score,
+          available: null,
+          blockedReason: null,
+        };
       });
       entries.push({ raw: line, date: currentDate, userId: employee.score >= 70 ? employee.value?.id || null : null, userConfidence: employee.score, items });
     }
-    setPreview(entries);
+    setPreview(recalculateStockBlocks(entries));
   };
 
-  const updateEntry = (entryIndex: number, patch: Partial<PreviewEntry>) => setPreview(current => current.map((entry, index) => index === entryIndex ? { ...entry, ...patch } : entry));
-  const updateItem = (entryIndex: number, itemIndex: number, patch: Partial<PreviewItem>) => setPreview(current => current.map((entry, index) => index === entryIndex ? { ...entry, items: entry.items.map((item, innerIndex) => innerIndex === itemIndex ? { ...item, ...patch } : item) } : entry));
+  const updateEntry = (entryIndex: number, patch: Partial<PreviewEntry>) => setPreview(current => recalculateStockBlocks(current.map((entry, index) => index === entryIndex ? { ...entry, ...patch } : entry)));
+  const updateItem = (entryIndex: number, itemIndex: number, patch: Partial<PreviewItem>) => setPreview(current => recalculateStockBlocks(current.map((entry, index) => index === entryIndex ? { ...entry, items: entry.items.map((item, innerIndex) => innerIndex === itemIndex ? { ...item, ...patch } : item) } : entry)));
 
   return (
     <div className="space-y-4">
@@ -112,7 +146,7 @@ export function QuickMaterialRegistration({ inventory, users }: { inventory: Inv
       {preview.length > 0 && (
         <div className="space-y-3">
           {preview.map((entry, entryIndex) => (
-            <Card key={`${entry.raw}-${entryIndex}`} className={entry.userId && entry.items.every(item => item.inventoryId) ? "border-emerald-200" : "border-amber-300"}>
+            <Card key={`${entry.raw}-${entryIndex}`} className={entry.userId && entry.items.every(item => item.inventoryId && !item.blockedReason) ? "border-emerald-200" : "border-amber-300"}>
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   {entry.userId ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
@@ -127,16 +161,19 @@ export function QuickMaterialRegistration({ inventory, users }: { inventory: Inv
                 </select>
                 <div className="space-y-2">
                   {entry.items.map((item, itemIndex) => (
-                    <div key={`${item.raw}-${itemIndex}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_90px_40px]">
-                      <select value={item.inventoryId || ""} onChange={event => updateItem(entryIndex, itemIndex, { inventoryId: Number(event.target.value) || null })} className="h-10 min-w-0 rounded-md border border-slate-200 bg-white px-3 text-sm">
-                        <option value="">{item.confidence >= 35 ? `Material duvidoso (${item.confidence}%): ${item.raw}` : `Não reconhecido: ${item.raw}`}</option>
-                        {inventory.map(material => <option key={material.id} value={material.id}>{material.name} ({material.quantity} {material.unit})</option>)}
-                      </select>
-                      <input type="number" min="1" value={item.quantity} onChange={event => updateItem(entryIndex, itemIndex, { quantity: Math.max(1, Number(event.target.value)) })} className="h-10 rounded-md border border-slate-200 px-3 text-sm" aria-label="Quantidade" />
-                      <Button variant="ghost" size="icon" onClick={() => updateEntry(entryIndex, { items: entry.items.filter((_, index) => index !== itemIndex) })} title="Remover item"><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                    <div key={`${item.raw}-${itemIndex}`} className="space-y-1">
+                      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_90px_40px]">
+                        <select value={item.inventoryId || ""} onChange={event => updateItem(entryIndex, itemIndex, { inventoryId: Number(event.target.value) || null })} className={`h-10 min-w-0 rounded-md border bg-white px-3 text-sm ${item.blockedReason ? "border-red-400" : "border-slate-200"}`}>
+                          <option value="">{item.confidence >= 35 ? `Material duvidoso (${item.confidence}%): ${item.raw}` : `Não reconhecido: ${item.raw}`}</option>
+                          {inventory.map(material => <option key={material.id} value={material.id}>{material.name} ({material.quantity} {material.unit})</option>)}
+                        </select>
+                        <input type="number" min="1" value={item.quantity} onChange={event => updateItem(entryIndex, itemIndex, { quantity: Math.max(1, Number(event.target.value)) })} className={`h-10 rounded-md border px-3 text-sm ${item.blockedReason ? "border-red-400" : "border-slate-200"}`} aria-label="Quantidade" />
+                        <Button variant="ghost" size="icon" onClick={() => updateEntry(entryIndex, { items: entry.items.filter((_, index) => index !== itemIndex) })} title="Remover item"><Trash2 className="h-4 w-4 text-red-500" /></Button>
+                      </div>
+                      {item.blockedReason && <p className="text-xs font-semibold text-red-700">Bloqueado: {item.blockedReason}. Ajuste a quantidade ou reponha o estoque antes de aplicar.</p>}
                     </div>
                   ))}
-                  <Button variant="outline" size="sm" onClick={() => updateEntry(entryIndex, { items: [...entry.items, { raw: "Novo item", inventoryId: null, quantity: 1, confidence: 0 }] })}><Plus className="mr-1 h-4 w-4" /> Adicionar item</Button>
+                  <Button variant="outline" size="sm" onClick={() => updateEntry(entryIndex, { items: [...entry.items, { raw: "Novo item", inventoryId: null, quantity: 1, confidence: 0, available: null, blockedReason: null }] })}><Plus className="mr-1 h-4 w-4" /> Adicionar item</Button>
                 </div>
               </CardContent>
             </Card>

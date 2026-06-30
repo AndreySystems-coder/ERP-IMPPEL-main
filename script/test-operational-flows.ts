@@ -6,6 +6,7 @@ const { createMemoryStorage } = await import("../server/storage");
 const { canAccess, getDefaultLandingPath } = await import("../client/src/lib/permissions");
 const { generateInitialPassword } = await import("../shared/operationalUsers");
 const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMaterialItem, shouldRestoreReturnedQuantityToStock } = await import("../shared/materialReturnPolicy");
+const { getEffectiveMaterialSaleDiscountLimit } = await import("../shared/materialSalesPolicy");
 const { buildReturnableToolSummary } = await import("../shared/returnableToolSummary");
 
 const storage = createMemoryStorage();
@@ -28,6 +29,50 @@ assert.equal((await storage.getInventoryItems())[0].quantity, 3);
 assert.equal((await storage.getInventoryMovements()).length, 1);
 await storage.approveMaterialSale(sale.id, { id: 1, username: "admin" });
 assert.equal((await storage.getInventoryMovements()).length, 1, "aprovação repetida duplicou a baixa");
+assert.equal(getEffectiveMaterialSaleDiscountLimit({ maxDiscount: 0 }, 10), 10, "produto sem limite proprio deve usar limite geral");
+assert.equal(getEffectiveMaterialSaleDiscountLimit({ maxDiscount: null }, 10), 10, "produto sem limite configurado deve usar limite geral");
+assert.equal(getEffectiveMaterialSaleDiscountLimit({ maxDiscount: 5 }, 10), 5, "limite proprio menor deve prevalecer");
+
+const lowStock = await storage.createInventoryItem({ name: "Produto sem estoque suficiente", type: "material", unit: "un", quantity: 1, minStock: 0, pricePerUnit: 5 });
+const lowStockProduct = await storage.createProduct({ name: "Produto sem estoque suficiente", inventoryId: lowStock.id, unit: "un", salePrice: 15, maxDiscount: 0, active: true });
+const blockedSale = await storage.createMaterialSale({
+  createdByUserId: 2,
+  createdByUsername: "aplicador",
+  buyerName: "Cliente bloqueio",
+  items: JSON.stringify([{ productId: lowStockProduct.id, inventoryId: lowStock.id, name: lowStockProduct.name, quantity: 2, unitPrice: 15, discountPercent: 0, total: 30 }]),
+  subtotal: 30,
+  discountAmount: 0,
+  total: 30,
+  status: "pendente",
+});
+await assert.rejects(
+  () => storage.approveMaterialSale(blockedSale.id, { id: 1, username: "admin" }),
+  /Estoque insuficiente/,
+  "venda acima do estoque nao pode baixar saldo",
+);
+assert.equal((await storage.getInventoryItems()).find(item => item.id === lowStock.id)?.quantity, 1, "saldo deve permanecer intacto quando venda e bloqueada");
+
+const duplicatedStock = await storage.createInventoryItem({ name: "Produto duplicado no carrinho", type: "material", unit: "un", quantity: 1, minStock: 0, pricePerUnit: 5 });
+const duplicatedProduct = await storage.createProduct({ name: "Produto duplicado no carrinho", inventoryId: duplicatedStock.id, unit: "un", salePrice: 15, maxDiscount: 0, active: true });
+const duplicatedSale = await storage.createMaterialSale({
+  createdByUserId: 2,
+  createdByUsername: "aplicador",
+  buyerName: "Cliente duplicado",
+  items: JSON.stringify([
+    { productId: duplicatedProduct.id, inventoryId: duplicatedStock.id, name: duplicatedProduct.name, quantity: 1, unitPrice: 15, discountPercent: 0, total: 15 },
+    { productId: duplicatedProduct.id, inventoryId: duplicatedStock.id, name: duplicatedProduct.name, quantity: 1, unitPrice: 15, discountPercent: 0, total: 15 },
+  ]),
+  subtotal: 30,
+  discountAmount: 0,
+  total: 30,
+  status: "pendente",
+});
+await assert.rejects(
+  () => storage.approveMaterialSale(duplicatedSale.id, { id: 1, username: "admin" }),
+  /Estoque insuficiente/,
+  "linhas duplicadas da mesma venda nao podem gerar estoque negativo",
+);
+assert.equal((await storage.getInventoryItems()).find(item => item.id === duplicatedStock.id)?.quantity, 1, "saldo deve permanecer intacto quando itens duplicados excedem estoque");
 
 assert.equal(generateInitialPassword("24/12/1996"), "24121996", "senha fixa operacional deve usar DDMMAAAA");
 assert.equal(isConsumableMaterialItem({ productName: "Viaplus 1000" }), true, "Viaplus deve ser consumivel");

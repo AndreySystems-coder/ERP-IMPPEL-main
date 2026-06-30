@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-auth";
 import { canAccess } from "@/lib/permissions";
+import { getEffectiveMaterialSaleDiscountLimit } from "@shared/materialSalesPolicy";
 
 type CatalogItem = {
   id: number;
@@ -18,6 +19,7 @@ type CatalogItem = {
   unit: string | null;
   salePrice: number;
   maxDiscount: number;
+  effectiveMaxDiscount?: number;
   stock: number;
 };
 
@@ -96,6 +98,11 @@ export default function MaterialSales() {
   const sales = data?.sales || [];
   const generalMaxDiscount = data?.generalMaxDiscount ?? 10;
   const canCreate = canAccess(user as any, "createMaterialSales");
+  const maxDiscountFor = (item: Pick<CatalogItem, "maxDiscount" | "effectiveMaxDiscount">) =>
+    getEffectiveMaterialSaleDiscountLimit(
+      { maxDiscount: item.effectiveMaxDiscount ?? item.maxDiscount },
+      item.effectiveMaxDiscount ?? generalMaxDiscount,
+    );
 
   const searchTerm = normalizeSearch(search);
   const filteredCatalog = catalog.filter(item => {
@@ -210,7 +217,7 @@ export default function MaterialSales() {
                   <h2 className="font-semibold text-slate-900">{product.name}</h2>
                   <p className="mt-1 text-sm text-slate-500">Estoque: {product.stock} {product.unit}</p>
                   <p className="mt-3 text-lg font-bold text-blue-800">{money(product.salePrice)}</p>
-                  <p className="text-xs text-slate-500">Desconto até {Math.min(generalMaxDiscount, Number(product.maxDiscount) || 0)}%</p>
+                  <p className="text-xs text-slate-500">Desconto até {maxDiscountFor(product)}%{Number(product.maxDiscount) > 0 ? "" : " (limite geral)"}</p>
                   <Button className="mt-4 w-full" onClick={() => addToCart(product)} disabled={product.stock <= 0}><Plus className="mr-2 h-4 w-4" />Adicionar</Button>
                 </article>
               ))}
@@ -221,7 +228,7 @@ export default function MaterialSales() {
             <h2 className="font-bold text-slate-900">Carrinho ({cart.length})</h2>
             <div className="mt-3 space-y-3">
               {cart.map(item => {
-                const maxDiscount = Math.min(generalMaxDiscount, Number(item.maxDiscount) || 0);
+                const maxDiscount = maxDiscountFor(item);
                 return (
                   <div key={item.id} className="border-b border-slate-200 pb-3">
                     <div className="flex justify-between gap-2"><strong className="text-sm">{item.name}</strong><button onClick={() => setCart(current => current.filter(row => row.id !== item.id))} aria-label="Remover"><X className="h-4 w-4" /></button></div>
@@ -242,7 +249,7 @@ export default function MaterialSales() {
               <input value={buyerName} onChange={event => setBuyerName(event.target.value)} placeholder="Nome do comprador" className="h-10 w-full rounded-md border px-3" />
               <input value={buyerPhone} onChange={event => setBuyerPhone(event.target.value)} placeholder="Telefone" className="h-10 w-full rounded-md border px-3" />
               <textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder="Observação" className="min-h-20 w-full rounded-md border p-3" />
-              <Button className="w-full" onClick={() => createSale.mutate()} disabled={!buyerName.trim() || cart.length === 0 || cart.some(item => item.discountPercent > Math.min(generalMaxDiscount, Number(item.maxDiscount) || 0))} isLoading={createSale.isPending}>Enviar para aprovação</Button>
+              <Button className="w-full" onClick={() => createSale.mutate()} disabled={!buyerName.trim() || cart.length === 0 || cart.some(item => item.discountPercent > maxDiscountFor(item))} isLoading={createSale.isPending}>Enviar para aprovação</Button>
             </div>
           </aside>
         </div>

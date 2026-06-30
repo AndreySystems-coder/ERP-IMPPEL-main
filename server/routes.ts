@@ -21,10 +21,24 @@ import {
   type OperationalEmployeeInput,
 } from "@shared/operationalUsers";
 import { getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWithdrawalPending, normalizeReturnCondition, shouldRestoreReturnedQuantityToStock } from "@shared/materialReturnPolicy";
+import { getEffectiveMaterialSaleDiscountLimit } from "@shared/materialSalesPolicy";
 import { previewErpPdfBuffer } from "./pdf-restore";
 
 const BCRYPT_ROUNDS = 10;
 const operationalResetTokens = new Map<string, number>();
+
+function assertMaterialStockAvailability(
+  items: Array<{ inventoryId: number; productName: string; quantity: number }>,
+  availableById: Map<number, number>,
+) {
+  for (const item of items) {
+    const available = availableById.get(Number(item.inventoryId)) ?? 0;
+    if (item.quantity > available) {
+      throw new Error(`Estoque insuficiente para ${item.productName}: solicitado ${item.quantity}, disponível ${available}.`);
+    }
+    availableById.set(Number(item.inventoryId), available - item.quantity);
+  }
+}
 
 const operationalEmployeeSchema = z.object({
   nomeCompleto: z.string().min(2),
@@ -425,7 +439,7 @@ export async function registerRoutes(
       const password = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
       await storage.updateUser(user.id, { password, mustChangePassword: false } as any);
       res.json({ message: "Senha alterada com sucesso." });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   // User management (admin only)
@@ -641,7 +655,7 @@ export async function registerRoutes(
       const updated = await storage.updateUserRoleId(Number(req.params.id), roleId ?? null);
       if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
       res.json({ message: "Cargo atualizado" });
-    } catch (err: any) { res.status(500).json({ message: err.message }); }
+    } catch (err: any) { res.status(400).json({ message: err.message }); }
   });
 
   app.patch("/api/users/:id/job-title", requireAdmin, async (req, res) => {
@@ -2496,9 +2510,11 @@ export async function registerRoutes(
 
       const inventoryItems = await storage.getInventoryItems();
       const inventoryById = new Map(inventoryItems.map(item => [item.id, item]));
+      const availableById = new Map(inventoryItems.map(item => [item.id, Math.max(0, Number(item.quantity) || 0)]));
       const users = await storage.getUsers();
       const usersById = new Map(users.map(user => [user.id, user]));
       const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+      const preparedEntries: any[] = [];
       const created: any[] = [];
 
       for (const entry of entries) {
@@ -2516,7 +2532,11 @@ export async function registerRoutes(
         }).filter(Boolean) as any[];
         if (!safeItems.length) continue;
         const hasReturnableItems = hasReturnableMaterialItems(safeItems.map(item => ({ productName: item.productName, type: inventoryById.get(Number(item.inventoryId))?.type })));
+        assertMaterialStockAvailability(safeItems, availableById);
+        preparedEntries.push({ entry, user, dateStr, entryDate, safeItems, hasReturnableItems });
+      }
 
+      for (const { entry, user, dateStr, entryDate, safeItems, hasReturnableItems } of preparedEntries) {
         const withdrawal = await storage.createMaterialWithdrawal(
           {
             userId: user.id,
@@ -2576,7 +2596,22 @@ export async function registerRoutes(
 
       const inventoryItems = await storage.getInventoryItems();
       const inventoryById = new Map(inventoryItems.map(item => [item.id, item]));
-      const withdrawalItems = items.map((i: any) => ({ withdrawalId: 0, inventoryId: i.inventoryId, productName: i.productName, unit: i.unit || "unid", quantity: i.quantity, type: inventoryById.get(Number(i.inventoryId))?.type }));
+      const withdrawalItems = items.map((i: any) => {
+        const inventoryItem = inventoryById.get(Number(i.inventoryId));
+        const quantity = Math.max(0, Math.trunc(Number(i.quantity)));
+        return inventoryItem && quantity > 0
+          ? { withdrawalId: 0, inventoryId: inventoryItem.id, productName: inventoryItem.name, unit: inventoryItem.unit || i.unit || "unid", quantity, type: inventoryItem.type }
+          : null;
+      }).filter(Boolean) as any[];
+      if (!withdrawalItems.length) return res.status(400).json({ message: "Nenhum item válido para retirada" });
+      const requestedById = new Map<number, any>();
+      for (const item of withdrawalItems) {
+        const current = requestedById.get(item.inventoryId);
+        requestedById.set(item.inventoryId, current
+          ? { ...current, quantity: current.quantity + item.quantity }
+          : { inventoryId: item.inventoryId, productName: item.productName, quantity: item.quantity });
+      }
+      assertMaterialStockAvailability(Array.from(requestedById.values()), new Map(inventoryItems.map(item => [item.id, Math.max(0, Number(item.quantity) || 0)])));
       const hasReturnableItems = hasReturnableMaterialItems(withdrawalItems);
 
       const withdrawal = await storage.createMaterialWithdrawal(
@@ -2899,13 +2934,15 @@ export async function registerRoutes(
         storage.getMaterialSales(), storage.getProducts(), storage.getInventoryItems(),
       ]);
       const setting = (await storage.getSettings()).find(item => item.key === "materialSalesMaxDiscount");
+      const generalMaxDiscount = Number(setting?.value ?? 10);
       res.json({
         sales: canApprove ? sales : sales.filter(sale => sale.createdByUserId === user.id),
-        generalMaxDiscount: Number(setting?.value ?? 10),
+        generalMaxDiscount,
         canApprove,
         catalog: products.filter(product => product.active && product.inventoryId).map(product => ({
           ...product,
           stock: Number(inventoryItems.find(item => item.id === product.inventoryId)?.quantity || 0),
+          effectiveMaxDiscount: getEffectiveMaterialSaleDiscountLimit(product, generalMaxDiscount),
         })),
       });
     } catch (err: any) {
@@ -2925,6 +2962,7 @@ export async function registerRoutes(
         storage.getProducts(), storage.getInventoryItems(), storage.getSettings(),
       ]);
       const generalMaxDiscount = Number(settings.find(item => item.key === "materialSalesMaxDiscount")?.value ?? 10);
+      const availableByInventoryId = new Map(inventoryItems.map(item => [item.id, Math.max(0, Number(item.quantity) || 0)]));
       let subtotal = 0;
       let total = 0;
       const items = requestedItems.map((requested: any) => {
@@ -2933,10 +2971,12 @@ export async function registerRoutes(
         const inventoryItem = inventoryItems.find(candidate => candidate.id === product.inventoryId);
         const quantity = Math.max(1, Math.floor(Number(requested.quantity) || 0));
         const discountPercent = Math.max(0, Number(requested.discountPercent) || 0);
-        const productLimit = Math.max(0, Number(product.maxDiscount) || 0);
-        const maxDiscount = Math.min(generalMaxDiscount, productLimit);
-        if (discountPercent > maxDiscount) throw new Error(`Desconto acima do limite para ${product.name}.`);
-        if (!inventoryItem || quantity > Number(inventoryItem.quantity)) throw new Error(`Estoque insuficiente para ${product.name}.`);
+        const maxDiscount = getEffectiveMaterialSaleDiscountLimit(product, generalMaxDiscount);
+        if (discountPercent > maxDiscount) throw new Error(`Desconto acima do limite para ${product.name}. Limite permitido: ${maxDiscount}%.`);
+        if (!inventoryItem) throw new Error(`Estoque insuficiente para ${product.name}.`);
+        const available = availableByInventoryId.get(inventoryItem.id) ?? 0;
+        if (quantity > available) throw new Error(`Estoque insuficiente para ${product.name}: solicitado ${quantity}, disponível ${available}.`);
+        availableByInventoryId.set(inventoryItem.id, available - quantity);
         const unitPrice = Number(product.salePrice) || 0;
         const originalTotal = unitPrice * quantity;
         const itemTotal = originalTotal * (1 - discountPercent / 100);
