@@ -33,6 +33,7 @@ import Settings from "@/pages/Settings";
 import { BackupsHub, CrmHub, FinancialHub, InventoryHub, QuotesHub, SettingsHub, TeamHub, WorksHub } from "@/pages/SectionHub";
 import StatusPersonalizados from "@/pages/StatusPersonalizados";
 import TeamProductivity from "@/pages/TeamProductivity";
+import ToolsAndEquipment from "@/pages/ToolsAndEquipment";
 import Usuarios from "@/pages/Usuarios";
 import Warranties from "@/pages/Warranties";
 import WorkOrders from "@/pages/WorkOrders";
@@ -87,6 +88,7 @@ export const adminRoutes: AppRoute[] = [
   { path: "/clients", component: Clients, access: "admin", withLayout: true },
   { path: "/calculator", component: PriceCalculator, access: "admin", withLayout: true },
   { path: "/estoque/atual", component: InventoryCurrentPage, access: "admin", withLayout: true },
+  { path: "/estoque/ferramentas", component: ToolsAndEquipment, access: "admin", withLayout: true },
   { path: "/estoque/contagem-rapida", component: InventoryQuickCountPage, access: "admin", withLayout: true },
   { path: "/estoque/movimentacoes", component: InventoryMovementsPage, access: "admin", withLayout: true },
   { path: "/inventory", component: Inventory, access: "admin", withLayout: true },

@@ -1,6 +1,8 @@
 import { jsPDF } from "jspdf";
 import { autoTable } from "jspdf-autotable";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { isReturnableMaterialItem, normalizeReturnCondition } from "@shared/materialReturnPolicy";
+import { buildReturnableToolSummaryMap } from "@shared/returnableToolSummary";
 
 export type CompleteBackupManifest = {
   format: string;
@@ -264,6 +266,16 @@ async function sha256Hex(value: Uint8Array | string) {
 
 function buildConferencePdf(backup: CompleteBackupPackage) {
   const doc = new jsPDF();
+  const inventory = array(backup.data.estoque?.inventory);
+  const movements = array(backup.data.estoque?.inventoryMovements);
+  const withdrawalItems = array(backup.data.controleMateriais?.materialWithdrawalItems);
+  const withdrawals = array(backup.data.controleMateriais?.materialWithdrawals).map(withdrawal => ({
+    ...withdrawal,
+    items: withdrawalItems.filter(item => Number(item.withdrawalId) === Number(withdrawal.id)),
+  }));
+  const tools = inventory.filter(item => isReturnableMaterialItem(item));
+  const toolSummaries = buildReturnableToolSummaryMap(tools, withdrawals);
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text("ERP IMPPEL - Conferência do Backup Completo", 14, 18);
@@ -278,7 +290,54 @@ function buildConferencePdf(backup: CompleteBackupPackage) {
     styles: { fontSize: 8 },
     headStyles: { fillColor: [30, 58, 138] },
   });
-  const y = Math.min(((doc as any).lastAutoTable?.finalY || 40) + 10, 260);
+
+  let y = ((doc as any).lastAutoTable?.finalY || 40) + 10;
+  if (tools.length > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Ferramentas e Equipamentos", 14, y);
+    y += 4;
+    autoTable(doc, {
+      startY: y,
+      head: [["Ferramenta", "Categoria", "Total", "Disp.", "Campo", "Danif.", "Perd.", "Manut.", "Responsável", "Última mov."]],
+      body: tools.map(tool => {
+        const summary = toolSummaries.get(Number(tool.id));
+        const pending = withdrawals.filter(withdrawal => withdrawal.items?.some((item: any) =>
+          Number(item.inventoryId) === Number(tool.id) &&
+          Number(item.quantity || 0) > Number(item.returnedQuantity || 0)
+        ));
+        const responsible = Array.from(new Set(pending.map(withdrawal => withdrawal.username).filter(Boolean))).join(", ") || "-";
+        const lastMovement = movements
+          .filter(movement => Number(movement.inventoryId) === Number(tool.id))
+          .sort((a, b) => String(b.createdAt || b.date || "").localeCompare(String(a.createdAt || a.date || "")))[0];
+        const relatedItems = withdrawals.flatMap(withdrawal => array(withdrawal.items).filter((item: any) => Number(item.inventoryId) === Number(tool.id)));
+        const hasTrackedCondition = relatedItems.some((item: any) => ["danificado", "perdido", "manutencao"].includes(normalizeReturnCondition(item.condition)));
+        return [
+          tool.name || "-",
+          tool.type || "ferramenta",
+          String(summary?.total ?? tool.quantity ?? 0),
+          String(summary?.available ?? tool.quantity ?? 0),
+          String(summary?.inField ?? 0),
+          String(summary?.damaged ?? 0),
+          String(summary?.lost ?? 0),
+          String(summary?.maintenance ?? 0),
+          responsible,
+          lastMovement ? `${lastMovement.type} ${lastMovement.quantity} ${lastMovement.date}` : hasTrackedCondition ? "Histórico de devolução" : "-",
+        ];
+      }),
+      styles: { fontSize: 6, cellPadding: 1.8 },
+      headStyles: { fillColor: [15, 23, 42] },
+      columnStyles: {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 20 },
+        8: { cellWidth: 28 },
+        9: { cellWidth: 28 },
+      },
+    });
+    y = ((doc as any).lastAutoTable?.finalY || y) + 10;
+  }
+
+  y = Math.min(y, 260);
   doc.setFont("helvetica", "bold");
   doc.text("Atenção", 14, y);
   doc.setFont("helvetica", "normal");

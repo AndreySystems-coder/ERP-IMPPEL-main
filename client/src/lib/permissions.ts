@@ -99,6 +99,7 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/calendar", permissions: ["viewCalendar"] },
   { path: "/registro-obra", permissions: ["viewObraRegistro"] },
   { path: "/estoque/atual", permissions: ["viewInventory", "viewInventoryCurrent"] },
+  { path: "/estoque/ferramentas", permissions: ["viewInventory", "viewInventoryCurrent"] },
   { path: "/estoque/contagem-rapida", permissions: ["viewInventory", "viewInventoryCount"] },
   { path: "/estoque/movimentacoes", permissions: ["viewInventory", "viewInventoryMovements"] },
   { path: "/estoque", permissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryCount", "viewInventoryMovements"] },

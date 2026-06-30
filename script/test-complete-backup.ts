@@ -29,13 +29,25 @@ const syntheticData: Record<string, any[]> = {
   jobTracking: [{ id: 1, workOrderId: 1, status: "Em Progresso" }],
   obraRegistros: [{ id: 1, workOrderId: 1, tipo: "antes", fotos: JSON.stringify([{ nome: "antes.png", data: png }]) }],
   productionLogs: [{ id: 1, workOrderId: 1, userId: 2, technicianName: "AplicadorTeste", date: "2026-06-23" }],
-  inventory: [{ id: 1, name: "Material Sintetico", quantity: 8, minStock: 2, unit: "unid" }],
-  inventoryMovements: [{ id: 1, inventoryId: 1, productName: "Material Sintetico", type: "SAÍDA", quantity: 2, date: "2026-06-23" }],
+  inventory: [
+    { id: 1, name: "Material Sintetico", type: "material", quantity: 8, minStock: 2, unit: "unid" },
+    { id: 2, name: "Furadeira Sintetica", type: "ferramenta", quantity: 1, minStock: 0, unit: "unid" },
+  ],
+  inventoryMovements: [
+    { id: 1, inventoryId: 1, productName: "Material Sintetico", type: "SAÍDA", quantity: 2, date: "2026-06-23" },
+    { id: 2, inventoryId: 2, productName: "Furadeira Sintetica", type: "ENTRADA", quantity: 2, date: "2026-06-23" },
+  ],
   products: [{ id: 1, name: "Produto Sintetico", price: 10 }],
   materialSales: [{ id: 1, createdByUserId: 2, createdByUsername: "AplicadorTeste", buyerName: "Comprador Teste", items: JSON.stringify([{ productId: 1, inventoryId: 1, name: "Produto Sintetico", quantity: 1, unitPrice: 10, discountPercent: 0, total: 10 }]), subtotal: 10, discountAmount: 0, total: 10, status: "pendente" }],
   services: [{ id: 1, name: "Servico Sintetico", pricePerUnit: 100 }],
-  materialWithdrawals: [{ id: 1, userId: 2, username: "AplicadorTeste", workOrderId: 1, status: "pendente", withdrawalPhoto: png, withdrawalSignature: png }],
-  materialWithdrawalItems: [{ id: 1, withdrawalId: 1, inventoryId: 1, productName: "Material Sintetico", quantity: 2 }],
+  materialWithdrawals: [
+    { id: 1, userId: 2, username: "AplicadorTeste", workOrderId: 1, status: "pendente", withdrawalPhoto: png, withdrawalSignature: png },
+    { id: 2, userId: 2, username: "AplicadorTeste", workOrderId: 1, status: "retornado", withdrawalPhoto: png, withdrawalSignature: png, returnPhoto: png, returnSignature: png },
+  ],
+  materialWithdrawalItems: [
+    { id: 1, withdrawalId: 1, inventoryId: 1, productName: "Material Sintetico", quantity: 2 },
+    { id: 2, withdrawalId: 2, inventoryId: 2, productName: "Furadeira Sintetica", quantity: 1, returnedQuantity: 1, condition: "manutencao" },
+  ],
   obraConsumoLogs: [{ id: 1, workOrderId: 1, inventoryId: 1, materialName: "Material Sintetico", quantity: 1 }],
   salaryDiscounts: [{ id: 1, userId: 2, withdrawalId: 1, amount: 1, status: "pendente" }],
   payments: [{ id: 1, jobId: 1, clientName: "Cliente Sintetico", amount: 100, status: "completed" }],
@@ -97,6 +109,9 @@ await assert.rejects(() => parseCompleteBackupFile(new File([new Uint8Array(file
 assert.ok(Object.keys(files).some(path => path.startsWith("photos/") && path.endsWith(".png")), "fotos não foram extraídas");
 assert.ok(Object.keys(files).some(path => path.startsWith("signatures/") && path.endsWith(".png")), "assinaturas não foram extraídas");
 assert.ok(Object.keys(files).some(path => path.startsWith("generated-pdfs/") && path.endsWith(".pdf")), "PDF armazenado não foi extraído");
+const conferenceText = new TextDecoder("latin1").decode(files["relatorios/relatorio-conferencia.pdf"]);
+assert.ok(conferenceText.includes("Ferramentas e Equipamentos"), "relatório do backup não inclui seção de ferramentas");
+assert.ok(conferenceText.includes("Furadeira Sintetica"), "relatório do backup não lista ferramenta retornável");
 
 const target = createMemoryStorage();
 const flatData = flattenCompleteBackupData(backup, modules);
@@ -113,6 +128,8 @@ assert.equal(restored.workOrders[0].jobId, 1);
 assert.equal(restored.materialWithdrawalItems[0].withdrawalId, 1);
 assert.equal(restored.inventoryMovements[0].inventoryId, 1);
 assert.equal(restored.materialSales[0].createdByUserId, 2);
+assert.equal(restored.inventory.find(row => row.id === 2)?.type, "ferramenta", "ferramenta não foi restaurada como retornável");
+assert.equal(restored.materialWithdrawalItems.find(row => row.id === 2)?.condition, "manutencao", "condição da ferramenta não foi restaurada");
 
 const partialTarget = createMemoryStorage();
 await partialTarget.restoreCompleteBackup({ settings: [{ id: 99, key: "preservar", value: "sim" }] }, ["configuracoes"], "replace");

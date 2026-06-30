@@ -30,6 +30,7 @@ import {
   TrendingDown,
   Users,
   UserCog,
+  Wrench,
   Zap,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -105,6 +106,7 @@ const ALL_SECTIONS: NavSection[] = [
     permission: "viewInventory",
     items: [
       { name: "Estoque Atual", path: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent" },
+      { name: "Ferramentas e Equipamentos", path: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent" },
       { name: "Movimentações", path: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements" },
       { name: "Contagem Rápida", path: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount" },
     ],
