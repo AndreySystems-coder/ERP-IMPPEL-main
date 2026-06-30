@@ -112,6 +112,7 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/equipe", permissions: ["viewTeam", "viewProductivity", "registrarMaterials", "viewMaterialSales", "viewWarranties", "viewPostSale"] },
   { path: "/equipe-produtividade", permissions: ["viewProductivity"] },
   { path: "/controle-materiais", permissions: ["registrarMaterials"] },
+  { path: "/vendas-materiais", permissions: ["viewMaterialSales", "createMaterialSales", "approveMaterialSales"] },
   { path: "/garantias", permissions: ["viewWarranties"] },
   { path: "/pos-venda", permissions: ["viewPostSale"] },
   { path: "/configuracoes", permissions: ["viewSettings", "viewCostSettings", "viewStatusSettings", "viewUsers", "viewPriorityRules"] },

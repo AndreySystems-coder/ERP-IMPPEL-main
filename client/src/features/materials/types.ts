@@ -1,6 +1,13 @@
 export type InventoryItem = { id: number; name: string; unit: string; quantity: number };
 
-export type UserItem = { id: number; username: string; role: string };
+export type UserItem = {
+  id: number;
+  username: string;
+  role: string;
+  fullName?: string | null;
+  jobTitle?: string | null;
+  roleLabel?: string | null;
+};
 
 export type WorkOrder = { id: number; clientName: string; serviceType: string; status: string };
 

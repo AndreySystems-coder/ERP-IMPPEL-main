@@ -34,6 +34,10 @@ function bestMatch<T>(query: string, values: T[], label: (value: T) => string) {
   }, { value: null, score: 0 });
 }
 
+function userSearchLabel(user: UserItem) {
+  return [user.username, user.fullName, user.jobTitle, user.roleLabel].filter(Boolean).join(" ");
+}
+
 function parseItem(raw: string) {
   const text = raw.trim();
   let match = text.match(/^(\d+)\s*x\s*(.+)$/i);
@@ -82,7 +86,7 @@ export function QuickMaterialRegistration({ inventory, users }: { inventory: Inv
       const separator = line.match(/^(.+?)\s*[-–:]\s*(.+)$/);
       const employeeText = separator?.[1]?.trim() || "";
       const itemText = separator?.[2]?.trim() || "";
-      const employee = bestMatch(employeeText, users.filter(user => user.role !== "admin"), user => user.username);
+      const employee = bestMatch(employeeText, users.filter(user => user.role !== "admin"), userSearchLabel);
       const items = itemText.split(/[,;]/).map(parseItem).filter(item => item.name).map(item => {
         const material = bestMatch(item.name, inventory, value => value.name);
         return { raw: item.name, inventoryId: material.score >= 70 ? material.value?.id || null : null, quantity: Math.max(1, item.quantity), confidence: material.score };
