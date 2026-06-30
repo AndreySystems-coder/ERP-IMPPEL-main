@@ -17,6 +17,7 @@ import type { BatchItem, InventoryItem, Movement, QuickCountRow as RapidaRow } f
 import { useUser } from "@/hooks/use-auth";
 import { asArray } from "@/lib/safeData";
 import { getMaterialReturnPolicyLabel, isReturnableMaterialItem } from "@shared/materialReturnPolicy";
+import { buildReturnableToolSummaryMap, type ReturnableWithdrawal } from "@shared/returnableToolSummary";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -354,6 +355,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const queryClient = useQueryClient();
   const { data: currentUser } = useUser();
   const { data: items = [], isLoading } = useInventory();
+  const { data: materialWithdrawals = [] } = useQuery<ReturnableWithdrawal[]>({ queryKey: ["/api/material-withdrawals"] });
   const createItem = useCreateInventory();
   const updateItem = useUpdateInventory();
   const deleteItem = useDeleteInventory();
@@ -821,6 +823,10 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const historyMovements = historyItem ? movementsList.filter(m => m.inventoryId === historyItem.id).sort((a, b) => b.date.localeCompare(a.date)) : [];
 
   const sortedInventory = [...itemsList].sort((a, b) => a.name.localeCompare(b.name));
+  const returnableToolSummaries = useMemo(
+    () => buildReturnableToolSummaryMap(itemsList, asArray<ReturnableWithdrawal>(materialWithdrawals)),
+    [itemsList, materialWithdrawals],
+  );
 
   // ---- Derived values for Contagem Física Completa preview ----
   const rapidaCountedRows  = rapidaPreview.filter(r => !r.isUncounted);
@@ -886,6 +892,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
             items={filteredItems}
             search={search}
             isLoading={isLoading}
+            returnableSummaries={returnableToolSummaries}
             onSearchChange={setSearch}
             onHistory={setHistoryItem}
             onEdit={openEdit}

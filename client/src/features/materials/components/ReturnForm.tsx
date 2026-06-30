@@ -138,13 +138,14 @@ export function ReturnForm({
                             <SelectItem value="bom">✅ Bom estado</SelectItem>
                             <SelectItem value="danificado">⚠️ Danificado</SelectItem>
                             <SelectItem value="perdido">❌ Perdido</SelectItem>
+                            <SelectItem value="manutencao">🔧 Manutenção</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
-                    {(retItem.condition === "perdido" || retItem.condition === "danificado") && (
+                    {(retItem.condition === "perdido" || retItem.condition === "danificado" || retItem.condition === "manutencao") && (
                       <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3 shrink-0" /> Um desconto será criado para aprovação do gestor.
+                        <AlertTriangle className="w-3 h-3 shrink-0" /> Este item não volta ao disponível. Perdidos e danificados geram desconto para aprovação do gestor.
                       </p>
                     )}
                   </div>

@@ -53,6 +53,7 @@ function normalizeMaterialText(value: unknown) {
 }
 
 export type MaterialReturnPolicy = "retornavel" | "consumivel";
+export type MaterialReturnCondition = "bom" | "danificado" | "perdido" | "manutencao";
 
 export function getMaterialReturnPolicy(item: { productName?: unknown; name?: unknown; type?: unknown; category?: unknown }): MaterialReturnPolicy {
   const text = normalizeMaterialText([item.productName, item.name, item.type, item.category].filter(Boolean).join(" "));
@@ -83,4 +84,16 @@ export function isMaterialWithdrawalPending(withdrawal: { status?: unknown; item
   const status = normalizeMaterialText(withdrawal.status);
   if (["retornado", "devolvido", "concluido", "concluida", "consumido", "consumida"].includes(status)) return false;
   return hasReturnableMaterialItems(Array.isArray(withdrawal.items) ? withdrawal.items : []);
+}
+
+export function normalizeReturnCondition(value: unknown): MaterialReturnCondition {
+  const condition = normalizeMaterialText(value);
+  if (["perdido", "perdida", "lost"].includes(condition)) return "perdido";
+  if (["danificado", "danificada", "avariado", "avariada", "damaged"].includes(condition)) return "danificado";
+  if (["manutencao", "manutencao preventiva", "manutencao corretiva", "maintenance"].includes(condition)) return "manutencao";
+  return "bom";
+}
+
+export function shouldRestoreReturnedQuantityToStock(condition: unknown) {
+  return normalizeReturnCondition(condition) === "bom";
 }

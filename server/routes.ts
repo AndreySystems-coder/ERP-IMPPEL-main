@@ -20,7 +20,7 @@ import {
   normalizeOperationalEmployee,
   type OperationalEmployeeInput,
 } from "@shared/operationalUsers";
-import { getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
+import { getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWithdrawalPending, normalizeReturnCondition, shouldRestoreReturnedQuantityToStock } from "@shared/materialReturnPolicy";
 import { previewErpPdfBuffer } from "./pdf-restore";
 
 const BCRYPT_ROUNDS = 10;
@@ -2622,13 +2622,19 @@ export async function registerRoutes(
       const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
       const month = months[now.getMonth()];
 
+      const normalizedReturnItems = items.map((item: any) => ({
+        ...item,
+        returnedQuantity: Math.max(0, Math.trunc(Number(item.returnedQuantity) || 0)),
+        condition: normalizeReturnCondition(item.condition),
+      }));
+
       // Update withdrawal items (returnedQuantity and condition)
-      await storage.updateMaterialWithdrawalItems(id, items);
+      await storage.updateMaterialWithdrawalItems(id, normalizedReturnItems);
 
       // Determine new status
       const allReturned = existing.items.every((orig: any) => {
         if (!hasReturnableMaterialItems([{ productName: orig.productName }])) return true;
-        const returned = items.find((i: any) => i.id === orig.id);
+        const returned = normalizedReturnItems.find((i: any) => i.id === orig.id);
         return returned ? returned.returnedQuantity >= orig.quantity : false;
       });
       const newStatus = allReturned ? "retornado" : "parcial";
@@ -2642,8 +2648,8 @@ export async function registerRoutes(
       } as any);
 
       // Register ENTRADA movements for returned (non-lost) items
-      for (const retItem of items) {
-        if (retItem.returnedQuantity > 0 && retItem.condition !== "perdido") {
+      for (const retItem of normalizedReturnItems) {
+        if (retItem.returnedQuantity > 0 && shouldRestoreReturnedQuantityToStock(retItem.condition)) {
           const original = existing.items.find((x: any) => x.id === retItem.id);
           if (!original) continue;
           await storage.createInventoryMovement({
@@ -2660,7 +2666,7 @@ export async function registerRoutes(
 
       // Auto-create pending salary discounts for lost/damaged items
       const rules = await storage.getSalaryDiscountRules();
-      for (const retItem of items) {
+      for (const retItem of normalizedReturnItems) {
         if (retItem.condition === "perdido" || retItem.condition === "danificado") {
           const original = existing.items.find((x: any) => x.id === retItem.id);
           if (!original) continue;

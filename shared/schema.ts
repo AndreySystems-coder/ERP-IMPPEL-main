@@ -526,7 +526,7 @@ export const materialWithdrawalItems = pgTable("material_withdrawal_items", {
   unit: text("unit").notNull().default("unid"),
   quantity: integer("quantity").notNull(),
   returnedQuantity: integer("returned_quantity"),
-  condition: text("condition"), // bom | danificado | perdido
+  condition: text("condition"), // bom | danificado | perdido | manutencao
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -21,12 +21,14 @@ import type { Withdrawal } from "@/features/materials/types";
 function conditionLabel(condition?: string) {
   if (condition === "perdido") return "Perdido";
   if (condition === "danificado") return "Danificado";
+  if (condition === "manutencao") return "Manutenção";
   return "Bom estado";
 }
 
 function conditionClass(condition?: string) {
   if (condition === "perdido") return "border-red-200 bg-red-50 text-red-700";
   if (condition === "danificado") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (condition === "manutencao") return "border-blue-200 bg-blue-50 text-blue-700";
   return "border-green-200 bg-green-50 text-green-700";
 }
 
@@ -64,7 +66,7 @@ export function MovementTimelineCard({ withdrawal }: { withdrawal: Withdrawal })
   const isPartial = withdrawal.status === "parcial";
   const withdrawalDate = withdrawal.withdrawalDate || withdrawal.createdAt;
   const days = daysSince(withdrawalDate);
-  const hasIssue = withdrawal.items.some(item => item.condition === "perdido" || item.condition === "danificado");
+  const hasIssue = withdrawal.items.some(item => item.condition === "perdido" || item.condition === "danificado" || item.condition === "manutencao");
 
   return (
     <Card className={`overflow-hidden border-slate-200 ${days > 3 && !isReturned ? "border-red-200" : ""}`} data-testid={`card-history-${withdrawal.id}`}>

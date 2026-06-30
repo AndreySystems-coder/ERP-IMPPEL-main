@@ -3,6 +3,7 @@ import { AlertTriangle, Edit2, History, Package, Search, Trash2 } from "lucide-r
 import { Card } from "@/components/Card";
 import type { InventoryItem } from "@/features/inventory/types";
 import { isReturnableMaterialItem } from "@shared/materialReturnPolicy";
+import type { ReturnableToolSummary } from "@shared/returnableToolSummary";
 
 function ReturnPolicyBadge({ item }: { item: InventoryItem }) {
   const isReturnable = isReturnableMaterialItem(item);
@@ -21,6 +22,7 @@ export function InventoryProductList({
   onHistory,
   onEdit,
   onDelete,
+  returnableSummaries,
 }: {
   items: InventoryItem[];
   search: string;
@@ -29,7 +31,10 @@ export function InventoryProductList({
   onHistory: (item: InventoryItem) => void;
   onEdit: (item: InventoryItem) => void;
   onDelete: (item: InventoryItem) => void;
+  returnableSummaries?: Map<number, ReturnableToolSummary>;
 }) {
+  const getSummary = (item: InventoryItem) => returnableSummaries?.get(item.id);
+
   return (
     <>
       <div className="flex items-center bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm max-w-md focus-within:border-primary transition-all">
@@ -56,6 +61,8 @@ export function InventoryProductList({
           {items.map(item => {
             const isLow = item.quantity <= item.minStock;
             const isEmpty = item.quantity <= 0;
+            const summary = getSummary(item);
+            const isReturnable = isReturnableMaterialItem(item);
 
             return (
               <div key={item.id} className="space-y-3 p-4" data-testid={`card-inventory-mobile-${item.id}`}>
@@ -78,7 +85,7 @@ export function InventoryProductList({
 
                 <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3">
                   <div>
-                    <p className="text-xs text-slate-500">Estoque atual</p>
+                    <p className="text-xs text-slate-500">{isReturnable ? "Disponível" : "Estoque atual"}</p>
                     <p className={`text-2xl font-bold ${isEmpty ? "text-red-600" : isLow ? "text-amber-600" : "text-slate-800"}`}>{item.quantity}</p>
                   </div>
                   <div>
@@ -86,6 +93,16 @@ export function InventoryProductList({
                     <p className="text-2xl font-bold text-slate-700">{item.minStock}</p>
                   </div>
                 </div>
+                {summary && isReturnable && (
+                  <div className="grid grid-cols-3 gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3 text-center">
+                    <div><p className="text-[11px] text-blue-600">Total</p><p className="font-bold text-blue-950">{summary.total}</p></div>
+                    <div><p className="text-[11px] text-blue-600">Em campo</p><p className="font-bold text-orange-700">{summary.inField}</p></div>
+                    <div><p className="text-[11px] text-blue-600">Danif.</p><p className="font-bold text-amber-700">{summary.damaged}</p></div>
+                    <div><p className="text-[11px] text-blue-600">Perdido</p><p className="font-bold text-red-700">{summary.lost}</p></div>
+                    <div><p className="text-[11px] text-blue-600">Manut.</p><p className="font-bold text-slate-700">{summary.maintenance}</p></div>
+                    <div><p className="text-[11px] text-blue-600">Disp.</p><p className="font-bold text-emerald-700">{summary.available}</p></div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-3 gap-2">
                   <button onClick={() => onHistory(item)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600">Histórico</button>
@@ -104,7 +121,7 @@ export function InventoryProductList({
                 <th className="p-4 pl-6">Produto</th>
                 <th className="p-4">Unidade</th>
                 <th className="p-4">Politica</th>
-                <th className="p-4">Estoque Atual</th>
+                <th className="p-4">Disponível / Resumo</th>
                 <th className="p-4">Mín.</th>
                 <th className="p-4">Status</th>
                 <th className="p-4 text-right pr-6">Ações</th>
@@ -123,6 +140,8 @@ export function InventoryProductList({
               {items.map(item => {
                 const isLow = item.quantity <= item.minStock;
                 const isEmpty = item.quantity <= 0;
+                const summary = getSummary(item);
+                const isReturnable = isReturnableMaterialItem(item);
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors" data-testid={`row-inventory-${item.id}`}>
@@ -132,7 +151,19 @@ export function InventoryProductList({
                     </td>
                     <td className="p-4"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-medium">{item.unit || "unid"}</span></td>
                     <td className="p-4"><ReturnPolicyBadge item={item} /></td>
-                    <td className="p-4"><span className={`text-2xl font-bold ${isEmpty ? "text-red-600" : isLow ? "text-amber-600" : "text-slate-800"}`}>{item.quantity}</span></td>
+                    <td className="p-4">
+                      <span className={`text-2xl font-bold ${isEmpty ? "text-red-600" : isLow ? "text-amber-600" : "text-slate-800"}`}>{item.quantity}</span>
+                      {summary && isReturnable && (
+                        <div className="mt-2 grid max-w-sm grid-cols-3 gap-1 text-[11px]">
+                          <span className="rounded bg-slate-100 px-2 py-1 text-slate-700">Total {summary.total}</span>
+                          <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">Disponível {summary.available}</span>
+                          <span className="rounded bg-orange-50 px-2 py-1 text-orange-700">Em campo {summary.inField}</span>
+                          <span className="rounded bg-amber-50 px-2 py-1 text-amber-700">Danificado {summary.damaged}</span>
+                          <span className="rounded bg-red-50 px-2 py-1 text-red-700">Perdido {summary.lost}</span>
+                          <span className="rounded bg-blue-50 px-2 py-1 text-blue-700">Manutenção {summary.maintenance}</span>
+                        </div>
+                      )}
+                    </td>
                     <td className="p-4 text-slate-500">{item.minStock}</td>
                     <td className="p-4">
                       {isEmpty ? (
