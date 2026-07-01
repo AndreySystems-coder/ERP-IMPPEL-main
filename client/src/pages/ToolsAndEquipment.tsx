@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownCircle, ArrowUpCircle, Camera, Edit2, Eye, History, PackagePlus, PenLine, Search, Wrench, X } from "lucide-react";
+import { Camera, Edit2, History, PackagePlus, PenLine, Search, Wrench, X } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -11,7 +11,7 @@ import { useCreateInventory, useInventory, useUpdateInventory } from "@/hooks/us
 import { asArray } from "@/lib/safeData";
 import type { InventoryItem, Movement } from "@/features/inventory/types";
 import type { Withdrawal } from "@/features/materials/types";
-import { getMaterialReturnPolicyLabel, isMaterialWithdrawalPending, isReturnableMaterialItem, normalizeReturnCondition } from "@shared/materialReturnPolicy";
+import { getMaterialReturnPolicyLabel, isReturnableMaterialItem, normalizeReturnCondition } from "@shared/materialReturnPolicy";
 import { buildReturnableToolSummaryMap, type ReturnableWithdrawal } from "@shared/returnableToolSummary";
 
 type ToolFormState = {
@@ -27,7 +27,7 @@ const initialForm: ToolFormState = {
   name: "",
   type: "ferramenta",
   unit: "unid",
-  quantity: "1",
+  quantity: "0",
   minStock: "0",
   pricePerUnit: "",
 };
@@ -40,10 +40,6 @@ function formatDate(value?: string | null) {
   } catch {
     return value;
   }
-}
-
-function latestByDate<T>(items: T[], getDate: (item: T) => string | null | undefined) {
-  return [...items].sort((a, b) => String(getDate(b) || "").localeCompare(String(getDate(a) || "")))[0] || null;
 }
 
 function attachmentPreview(value: string | null | undefined, label: string) {
@@ -193,7 +189,7 @@ export default function ToolsAndEquipment() {
 
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] text-left text-sm">
+          <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="p-4">Ferramenta</th>
@@ -204,28 +200,14 @@ export default function ToolsAndEquipment() {
                 <th className="p-4 text-center">Danificado</th>
                 <th className="p-4 text-center">Perdido</th>
                 <th className="p-4 text-center">Manutenção</th>
-                <th className="p-4">Responsável atual</th>
-                <th className="p-4">Última movimentação</th>
-                <th className="p-4 text-right">Ações</th>
+                <th className="p-4 text-right">Detalhes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {isLoading && <tr><td colSpan={11} className="p-10 text-center text-slate-400">Carregando ferramentas...</td></tr>}
-              {!isLoading && tools.length === 0 && <tr><td colSpan={11} className="p-10 text-center text-slate-400">Nenhuma ferramenta retornável encontrada.</td></tr>}
+              {isLoading && <tr><td colSpan={9} className="p-10 text-center text-slate-400">Carregando ferramentas...</td></tr>}
+              {!isLoading && tools.length === 0 && <tr><td colSpan={9} className="p-10 text-center text-slate-400">Nenhuma ferramenta retornável encontrada.</td></tr>}
               {tools.map(item => {
                 const summary = toolSummaries.get(item.id);
-                const pending = withdrawals.filter(withdrawal =>
-                  isMaterialWithdrawalPending(withdrawal) &&
-                  withdrawal.items?.some(withdrawalItem => Number(withdrawalItem.inventoryId) === Number(item.id) && Number(withdrawalItem.quantity || 0) > Number(withdrawalItem.returnedQuantity || 0)),
-                );
-                const responsible = pending.map(withdrawal => withdrawal.username).filter(Boolean);
-                const lastMovement = latestByDate(movements.filter(movement => Number(movement.inventoryId) === Number(item.id)), movement => movement.createdAt || movement.date);
-                const lastWithdrawal = latestByDate(withdrawals.filter(withdrawal => withdrawal.items?.some(withdrawalItem => Number(withdrawalItem.inventoryId) === Number(item.id))), withdrawal => withdrawal.returnedAt || withdrawal.createdAt || withdrawal.withdrawalDate);
-                const lastLabel = lastMovement
-                  ? `${lastMovement.type} ${lastMovement.quantity} em ${formatDate(lastMovement.date)}`
-                  : lastWithdrawal
-                    ? `Retirada #${lastWithdrawal.id} em ${formatDate(lastWithdrawal.withdrawalDate || lastWithdrawal.createdAt)}`
-                    : "-";
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50" data-testid={`row-tool-${item.id}`}>
@@ -240,14 +222,9 @@ export default function ToolsAndEquipment() {
                     <td className="p-4 text-center font-bold text-amber-700">{summary?.damaged ?? 0}</td>
                     <td className="p-4 text-center font-bold text-red-700">{summary?.lost ?? 0}</td>
                     <td className="p-4 text-center font-bold text-blue-700">{summary?.maintenance ?? 0}</td>
-                    <td className="p-4 text-slate-600">{responsible.length ? Array.from(new Set(responsible)).join(", ") : "-"}</td>
-                    <td className="p-4 text-slate-600">{lastLabel}</td>
                     <td className="p-4">
                       <div className="flex justify-end gap-1">
-                        <button onClick={() => setHistoryItem(item)} title="Ver histórico" className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><History className="h-4 w-4" /></button>
-                        <button onClick={() => openEdit(item)} title="Editar ferramenta" className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><Edit2 className="h-4 w-4" /></button>
-                        <Link href="/controle-materiais" title="Registrar retirada" className="rounded-md p-2 text-orange-600 hover:bg-orange-50"><ArrowDownCircle className="h-4 w-4" /></Link>
-                        <Link href="/controle-materiais" title="Registrar devolução" className="rounded-md p-2 text-emerald-700 hover:bg-emerald-50"><ArrowUpCircle className="h-4 w-4" /></Link>
+                        <button onClick={() => setHistoryItem(item)} title="Ver detalhes" className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><History className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -292,7 +269,10 @@ export default function ToolsAndEquipment() {
                 <h2 className="text-lg font-bold text-slate-900">Histórico e anexos</h2>
                 <p className="text-sm text-slate-500">{historyItem.name}</p>
               </div>
-              <button onClick={() => setHistoryItem(null)} className="rounded-md p-2 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              <div className="flex gap-2">
+                <button onClick={() => openEdit(historyItem)} title="Editar ferramenta" className="rounded-md p-2 text-slate-600 hover:bg-slate-100"><Edit2 className="h-5 w-5" /></button>
+                <button onClick={() => setHistoryItem(null)} className="rounded-md p-2 hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              </div>
             </div>
             <div className="space-y-6 overflow-y-auto p-5">
               <section>

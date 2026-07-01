@@ -14,6 +14,8 @@ import { fmtDate } from "@/features/materials/material-control-utils";
 import type { DiscountRule, SalaryDiscount } from "@/features/materials/types";
 
 function conditionText(condition: string) {
+  if (condition === "bom") return "Bom";
+  if (condition === "manutencao") return "Manutenção";
   return condition === "perdido" ? "Perdido" : "Danificado";
 }
 
@@ -91,6 +93,25 @@ export function DiscountsPanel({
 
     if (editingRule.id) updateRuleMutation.mutate({ id: editingRule.id, data: editingRule });
     else createRuleMutation.mutate(editingRule);
+  };
+
+  const createDefaultRules = async () => {
+    const existingConditions = new Set(discountRules.map(rule => rule.condition));
+    const defaults = [
+      { name: "Ferramenta danificada - revisar valor", condition: "danificado", discountType: "percentual", discountValue: 50, active: true },
+      { name: "Ferramenta perdida - revisar valor", condition: "perdido", discountType: "percentual", discountValue: 100, active: true },
+    ].filter(rule => !existingConditions.has(rule.condition));
+    if (defaults.length === 0) {
+      toast({ title: "Regras padrão já existem", description: "Danificado e perdido já possuem regras configuradas." });
+      return;
+    }
+    try {
+      await Promise.all(defaults.map(rule => apiRequest("POST", "/api/salary-discount-rules", rule)));
+      queryClient.invalidateQueries({ queryKey: ["/api/salary-discount-rules"] });
+      toast({ title: "Regras padrão criadas", description: "As sugestões iniciais foram salvas para revisão do Admin." });
+    } catch (err: any) {
+      toast({ title: "Erro ao criar regras padrão", description: err.message, variant: "destructive" });
+    }
   };
 
   return (
@@ -225,6 +246,9 @@ export function DiscountsPanel({
           >
             <Plus className="mr-1 h-3 w-3" /> Nova regra
           </Button>
+          <Button size="sm" variant="outline" onClick={createDefaultRules} data-testid="button-create-default-discount-rules">
+            Regras padrão
+          </Button>
         </div>
 
         {loadingRules ? (
@@ -262,6 +286,22 @@ export function DiscountsPanel({
         )}
       </section>
 
+      <section className="grid gap-3 md:grid-cols-4">
+        {[
+          ["Bom", "Sem desconto. Volta para disponivel.", "border-green-200 bg-green-50 text-green-800"],
+          ["Manutencao", "Sem desconto automatico. Admin decide depois.", "border-blue-200 bg-blue-50 text-blue-800"],
+          ["Danificado", "Gera responsabilidade pendente se houver regra ativa.", "border-amber-200 bg-amber-50 text-amber-800"],
+          ["Perdido", "Gera responsabilidade pendente se houver regra ativa.", "border-red-200 bg-red-50 text-red-800"],
+        ].map(([title, description, classes]) => (
+          <Card key={title} className={classes}>
+            <CardContent className="p-3">
+              <p className="text-sm font-bold">{title}</p>
+              <p className="mt-1 text-xs">{description}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
       {editingRule !== null && (
         <Card className="border-2 border-primary/30 bg-primary/5">
           <CardHeader>
@@ -279,6 +319,8 @@ export function DiscountsPanel({
                 <Select value={editingRule.condition || "perdido"} onValueChange={value => setEditingRule(rule => rule ? { ...rule, condition: value } : null)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="bom">Bom</SelectItem>
+                    <SelectItem value="manutencao">Manutenção</SelectItem>
                     <SelectItem value="perdido">Perdido</SelectItem>
                     <SelectItem value="danificado">Danificado</SelectItem>
                   </SelectContent>

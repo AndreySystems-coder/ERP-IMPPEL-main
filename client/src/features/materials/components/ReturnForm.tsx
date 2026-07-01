@@ -15,6 +15,15 @@ import { SignaturePad as MaterialSignaturePad } from "@/features/materials/compo
 import { daysSince, fmtDate } from "@/features/materials/material-control-utils";
 import type { Withdrawal } from "@/features/materials/types";
 import { isReturnableMaterialItem } from "@shared/materialReturnPolicy";
+
+function withdrawalOptionLabel(withdrawal: Withdrawal) {
+  const date = fmtDate(withdrawal.withdrawalDate || withdrawal.createdAt).split(" ")[0];
+  const items = withdrawal.items.filter(isReturnableMaterialItem);
+  const itemNames = items.slice(0, 3).map(item => item.productName).join(", ");
+  const suffix = items.length > 3 ? ` +${items.length - 3}` : "";
+  return `${date} — ${withdrawal.username} — ${items.length} item(ns) — ${itemNames}${suffix}`;
+}
+
 export function ReturnForm({
   pendingWithdrawals,
   currentUser,
@@ -82,10 +91,11 @@ export function ReturnForm({
             <SelectTrigger data-testid="select-trigger-withdrawal"><SelectValue placeholder="Escolher material em uso..." /></SelectTrigger>
             <SelectContent>
               {myPending.map(w => {
-                const dias = daysSince(w.createdAt);
+                const withdrawalDate = w.withdrawalDate || w.createdAt;
+                const dias = daysSince(withdrawalDate);
                 return (
                   <SelectItem key={w.id} value={String(w.id)} data-testid={`option-withdrawal-${w.id}`}>
-                    #{w.id} — {w.username} · {w.items.length} item(ns) {w.clientName ? `— ${w.clientName}` : ""} {dias > 3 ? `⚠️ ${dias}d` : ""}
+                    {withdrawalOptionLabel(w)} {dias > 3 ? `— ${dias}d` : ""}
                   </SelectItem>
                 );
               })}
@@ -95,11 +105,11 @@ export function ReturnForm({
           {selectedWithdrawal && (
             <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-sm space-y-1">
               <p className="font-semibold text-orange-800">Saída #{selectedWithdrawal.id} — {selectedWithdrawal.username}</p>
-              <p className="text-orange-700">Retirada em: {fmtDate(selectedWithdrawal.createdAt)}</p>
+              <p className="text-orange-700">Retirada em: {fmtDate(selectedWithdrawal.withdrawalDate || selectedWithdrawal.createdAt)}</p>
               {selectedWithdrawal.clientName && <p className="text-orange-700">Cliente: {selectedWithdrawal.clientName}</p>}
               {selectedWithdrawal.workOrderId && <p className="text-orange-700">OS: #{selectedWithdrawal.workOrderId}</p>}
-              {daysSince(selectedWithdrawal.createdAt) > 3 && (
-                <p className="text-red-600 font-semibold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {daysSince(selectedWithdrawal.createdAt)} dias sem retorno!</p>
+              {daysSince(selectedWithdrawal.withdrawalDate || selectedWithdrawal.createdAt) > 3 && (
+                <p className="text-red-600 font-semibold flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> {daysSince(selectedWithdrawal.withdrawalDate || selectedWithdrawal.createdAt)} dias sem retorno!</p>
               )}
             </div>
           )}
