@@ -8,6 +8,7 @@ const { generateInitialPassword } = await import("../shared/operationalUsers");
 const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMaterialItem, shouldRestoreReturnedQuantityToStock } = await import("../shared/materialReturnPolicy");
 const { getEffectiveMaterialSaleDiscountLimit } = await import("../shared/materialSalesPolicy");
 const { buildReturnableToolSummary } = await import("../shared/returnableToolSummary");
+const { buildMobileNotesPreview } = await import("../shared/mobileNotesImport");
 
 const storage = createMemoryStorage();
 const inventory = await storage.createInventoryItem({ name: "Primer teste", type: "material", unit: "un", quantity: 5, minStock: 1, pricePerUnit: 10 });
@@ -137,6 +138,58 @@ assert.deepEqual(
   { total: 8, available: 8, inField: 0 },
   "viaplus consumivel nao deve criar pendencia de devolucao",
 );
+
+const mobileInventory = [
+  "barra de asfalto", "drykomanta pp 4mm", "Viaplus 1000", "Viabit", "raspador", "Extensao", "soprador", "pincel", "suporte", "rolo de la",
+  "Viaplus 7000", "Viafix", "Torodin 3mm", "cabo", "escada de montar", "Furadeira", "Batedor", "Marreta", "Talhadeira", "Vassoura", "colher de pedreiro", "broxa", "Torodin 4mm",
+].map((name, index) => ({
+  id: 300 + index,
+  name,
+  type: /furadeira|batedor|marreta|talhadeira|vassoura|extensao|soprador|raspador|escada|cabo/i.test(name) ? "ferramenta" : "material",
+  unit: "un",
+  quantity: 250,
+}));
+const mobilePreview = buildMobileNotesPreview({
+  fallbackMonth: "2026-06",
+  inventory: mobileInventory,
+  users: [
+    { id: 501, username: "leandro", fullName: "Leandro Aplicador", role: "funcionario" },
+    { id: 502, username: "paulo", fullName: "Paulo Aplicador", role: "funcionario" },
+    { id: 503, username: "jhones", fullName: "Jhones Aplicador", role: "funcionario" },
+    { id: 504, username: "bruno", fullName: "Bruno Santos", role: "funcionario" },
+  ],
+  aliases: [{ alias: "Lequinho", userId: 501, username: "leandro" }],
+  text: `30/06
+10x barra de asfalto
+2x drykomanta pp 4mm
+3x 1000
+1x viabit
+Lequinho - raspador, extensão, soprador
+1x pincel
+1x suporte
+1x rolo de lã
+
+24/06
++ 192x 1000
++ 128x 7000
++ 10x viafix
++ 30x torodin 3mm
+
+23/06
+Paulo - cabo, escada de montar
+Jhones - furadeira, batedor, 2x extensão, marreta, talhadeira, vassoura
+Bruno - colher de pedreiro
+3x broxa
+2x torodin 4mm
+2x 1000`,
+});
+assert.equal(mobilePreview.summary.canApply, true, "preview de anotacao do celular deve ficar apto com dados sinteticos");
+assert.equal(mobilePreview.summary.entradas, 4, "linhas com + devem virar entradas");
+assert.equal(mobilePreview.summary.saidas, 10, "linhas sem + devem virar saidas");
+assert.equal(mobilePreview.summary.retiradas, 12, "linhas funcionario - itens devem virar retiradas individuais");
+assert.equal(mobilePreview.rows.find(row => row.rawItem === "1000")?.itemName, "Viaplus 1000", "alias 1000 deve reconhecer Viaplus 1000");
+assert.equal(mobilePreview.rows.find(row => row.rawEmployee === "Lequinho")?.userId, 501, "alias persistente de funcionario deve ser aplicado");
+assert.equal(mobilePreview.rows.find(row => row.rawText.includes("barra de asfalto"))?.date, "2026-06-30", "data 30/06 deve aplicar nas linhas seguintes");
 
 const applicator = { role: "funcionario", permissions: { registrarMaterials: true } };
 assert.equal(canAccess(applicator, "viewDashboard"), false);

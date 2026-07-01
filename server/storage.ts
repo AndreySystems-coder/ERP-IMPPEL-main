@@ -3,7 +3,7 @@ import {
   users, clients, services, leads, jobs, workOrders, inventory, inventoryMovements, payments, products, materialSales, jobTracking, priorityRules, transactions, settings, costConfig, obraRegistros, jobStatuses, paymentMethods, paymentConditions, obraConsumoLogs,
   contracts, warranties, warrantyIncidents, productionLogs, npsResponses, maintenanceReminders,
   whatsappFlows, whatsappSendLogs, whatsappTemplates, quoteTemplates,
-  materialWithdrawals, materialWithdrawalItems,
+  materialWithdrawals, materialWithdrawalItems, mobileImportAliases, mobileImportHistory,
   salaryDiscountRules, salaryDiscounts,
   roles,
   type Role, type InsertRole,
@@ -25,6 +25,8 @@ import {
   type QuoteTemplate, type InsertQuoteTemplate,
   type MaterialWithdrawal, type MaterialWithdrawalItem,
   type InsertMaterialWithdrawal, type InsertMaterialWithdrawalItem,
+  type MobileImportAlias, type InsertMobileImportAlias,
+  type MobileImportHistory, type InsertMobileImportHistory,
   type SalaryDiscountRule, type SalaryDiscount,
   type InsertSalaryDiscountRule, type InsertSalaryDiscount,
   type MaterialSale, type InsertMaterialSale,
@@ -39,6 +41,7 @@ export const COMPLETE_BACKUP_MODULE_TABLES = {
   ordensServico: ["workOrders", "jobTracking"],
   registrosObra: ["obraRegistros", "productionLogs"],
   controleMateriais: ["materialWithdrawals", "materialWithdrawalItems", "obraConsumoLogs", "salaryDiscounts"],
+  importacoesRapidas: ["mobileImportAliases", "mobileImportHistory"],
   estoque: ["inventory", "inventoryMovements"],
   catalogoMateriais: ["products"],
   vendasMateriais: ["materialSales"],
@@ -90,6 +93,8 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   quoteTemplates: { table: quoteTemplates, dbName: "quote_templates" },
   materialWithdrawals: { table: materialWithdrawals, dbName: "material_withdrawals" },
   materialWithdrawalItems: { table: materialWithdrawalItems, dbName: "material_withdrawal_items" },
+  mobileImportAliases: { table: mobileImportAliases, dbName: "mobile_import_aliases" },
+  mobileImportHistory: { table: mobileImportHistory, dbName: "mobile_import_history" },
   salaryDiscountRules: { table: salaryDiscountRules, dbName: "salary_discount_rules" },
   salaryDiscounts: { table: salaryDiscounts, dbName: "salary_discounts" },
 };
@@ -319,6 +324,14 @@ export interface IStorage {
   createMaterialWithdrawal(data: InsertMaterialWithdrawal, items: InsertMaterialWithdrawalItem[]): Promise<MaterialWithdrawal & { items: MaterialWithdrawalItem[] }>;
   updateMaterialWithdrawal(id: number, data: Partial<InsertMaterialWithdrawal>): Promise<MaterialWithdrawal | undefined>;
   updateMaterialWithdrawalItems(withdrawalId: number, items: { id: number; returnedQuantity: number; condition: string }[]): Promise<void>;
+
+  // Mobile Notes Import
+  getMobileImportAliases(): Promise<MobileImportAlias[]>;
+  createMobileImportAlias(data: InsertMobileImportAlias): Promise<MobileImportAlias>;
+  updateMobileImportAlias(id: number, data: Partial<InsertMobileImportAlias>): Promise<MobileImportAlias | undefined>;
+  getMobileImportHistory(): Promise<MobileImportHistory[]>;
+  getMobileImportHistoryByHash(hash: string): Promise<MobileImportHistory | undefined>;
+  createMobileImportHistory(data: InsertMobileImportHistory): Promise<MobileImportHistory>;
 
   // Salary Discount Rules
   getSalaryDiscountRules(): Promise<SalaryDiscountRule[]>;
@@ -1087,6 +1100,35 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // ─── Mobile Notes Import ───────────────────────────────────────────────────
+  async getMobileImportAliases(): Promise<MobileImportAlias[]> {
+    return db.select().from(mobileImportAliases).orderBy(mobileImportAliases.alias);
+  }
+
+  async createMobileImportAlias(data: InsertMobileImportAlias): Promise<MobileImportAlias> {
+    const [alias] = await db.insert(mobileImportAliases).values(data).returning();
+    return alias;
+  }
+
+  async updateMobileImportAlias(id: number, data: Partial<InsertMobileImportAlias>): Promise<MobileImportAlias | undefined> {
+    const [updated] = await db.update(mobileImportAliases).set(data).where(eq(mobileImportAliases.id, id)).returning();
+    return updated;
+  }
+
+  async getMobileImportHistory(): Promise<MobileImportHistory[]> {
+    return db.select().from(mobileImportHistory).orderBy(desc(mobileImportHistory.createdAt));
+  }
+
+  async getMobileImportHistoryByHash(hash: string): Promise<MobileImportHistory | undefined> {
+    const [history] = await db.select().from(mobileImportHistory).where(eq(mobileImportHistory.hash, hash));
+    return history;
+  }
+
+  async createMobileImportHistory(data: InsertMobileImportHistory): Promise<MobileImportHistory> {
+    const [history] = await db.insert(mobileImportHistory).values(data).returning();
+    return history;
+  }
+
   // ─── Salary Discount Rules ──────────────────────────────────────────────────
   async getSalaryDiscountRules(): Promise<SalaryDiscountRule[]> {
     return db.select().from(salaryDiscountRules).orderBy(salaryDiscountRules.id);
@@ -1228,6 +1270,8 @@ export function createMemoryStorage(): IStorage {
     quoteTemplates: [],
     materialWithdrawals: [],
     materialWithdrawalItems: [],
+    mobileImportAliases: [],
+    mobileImportHistory: [],
     salaryDiscountRules: [],
     salaryDiscounts: [],
   };
@@ -1313,6 +1357,9 @@ export function createMemoryStorage(): IStorage {
     MaintenanceReminders: "maintenanceReminders",
     MaterialWithdrawal: "materialWithdrawals",
     MaterialWithdrawals: "materialWithdrawals",
+    MobileImportAlias: "mobileImportAliases",
+    MobileImportAliases: "mobileImportAliases",
+    MobileImportHistory: "mobileImportHistory",
     SalaryDiscountRule: "salaryDiscountRules",
     SalaryDiscountRules: "salaryDiscountRules",
     SalaryDiscount: "salaryDiscounts",
@@ -1448,6 +1495,7 @@ export function createMemoryStorage(): IStorage {
     updateMaterialWithdrawalItems: async (_withdrawalId: number, items: { id: number; returnedQuantity: number; condition: string }[]) => {
       items.forEach(item => updateById("materialWithdrawalItems", item.id, item));
     },
+    getMobileImportHistoryByHash: async (hash: string) => data.mobileImportHistory.find(row => row.hash === hash),
   };
 
   return new Proxy(storageTarget, {

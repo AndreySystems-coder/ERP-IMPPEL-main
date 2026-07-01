@@ -48,6 +48,8 @@ const syntheticData: Record<string, any[]> = {
     { id: 1, withdrawalId: 1, inventoryId: 1, productName: "Material Sintetico", quantity: 2 },
     { id: 2, withdrawalId: 2, inventoryId: 2, productName: "Furadeira Sintetica", quantity: 1, returnedQuantity: 1, condition: "manutencao" },
   ],
+  mobileImportAliases: [{ id: 1, alias: "Lequinho", userId: 2, username: "AplicadorTeste" }],
+  mobileImportHistory: [{ id: 1, hash: "hash-sintetico", importedByUserId: 1, importedByUsername: "AdminTeste", sourceText: "30/06\n+ 1x Material Sintetico", summary: JSON.stringify({ movimentosCriados: 1 }), status: "aplicado" }],
   obraConsumoLogs: [{ id: 1, workOrderId: 1, inventoryId: 1, materialName: "Material Sintetico", quantity: 1 }],
   salaryDiscounts: [{ id: 1, userId: 2, withdrawalId: 1, amount: 1, status: "pendente" }],
   payments: [{ id: 1, jobId: 1, clientName: "Cliente Sintetico", amount: 100, status: "completed" }],
@@ -97,7 +99,7 @@ assert.equal(parsedArchive.manifest.checksum.value, backup.manifest.checksum.val
 const requiredFiles = [
   "manifest.json", "usuarios.json", "cargos.json", "clientes.json", "leads.json", "orcamentos.json",
   "ordensServico.json", "registrosObra.json", "materiais.json", "estoque.json", "movimentacoes.json",
-  "produtos.json", "vendasMateriais.json", "servicos.json", "financeiro.json", "garantias.json",
+  "produtos.json", "vendasMateriais.json", "servicos.json", "financeiro.json", "garantias.json", "importacoesRapidas.json",
   "posVenda.json", "configuracoes.json", "formasPagamento.json", "condicoesPagamento.json",
   "attachments/index.json", "relatorios/relatorio-conferencia.pdf", "ERP-IMPPEL-backup-completo.json",
 ];
@@ -130,6 +132,8 @@ assert.equal(restored.inventoryMovements[0].inventoryId, 1);
 assert.equal(restored.materialSales[0].createdByUserId, 2);
 assert.equal(restored.inventory.find(row => row.id === 2)?.type, "ferramenta", "ferramenta não foi restaurada como retornável");
 assert.equal(restored.materialWithdrawalItems.find(row => row.id === 2)?.condition, "manutencao", "condição da ferramenta não foi restaurada");
+assert.equal(restored.mobileImportAliases[0].alias, "Lequinho", "alias da importação rápida não foi restaurado");
+assert.equal(restored.mobileImportHistory[0].hash, "hash-sintetico", "histórico da importação rápida não foi restaurado");
 
 const partialTarget = createMemoryStorage();
 await partialTarget.restoreCompleteBackup({ settings: [{ id: 99, key: "preservar", value: "sim" }] }, ["configuracoes"], "replace");

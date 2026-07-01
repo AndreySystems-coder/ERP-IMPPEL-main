@@ -94,6 +94,7 @@ export const TECHNICAL_BACKUP_TYPES: Record<string, { module: CompleteBackupModu
   garantias: { module: "garantias", tables: ["warranties", "warrantyIncidents", "contracts"], label: "Garantias" },
   financeiro: { module: "financeiro", tables: ["payments", "transactions"], label: "Financeiro" },
   materiais: { module: "controleMateriais", tables: ["materialWithdrawals", "materialWithdrawalItems", "obraConsumoLogs", "salaryDiscounts"], label: "Materiais" },
+  importacoesRapidas: { module: "importacoesRapidas", tables: ["mobileImportAliases", "mobileImportHistory"], label: "Importações Rápidas" },
   configuracoes: { module: "configuracoes", tables: ["settings", "costConfig", "priorityRules", "jobStatuses", "whatsappFlows", "whatsappSendLogs", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"], label: "Configurações" },
   registrosObra: { module: "registrosObra", tables: ["obraRegistros", "productionLogs"], label: "Registros de Obra" },
   vendasMateriais: { module: "vendasMateriais", tables: ["materialSales"], label: "Vendas de Materiais" },

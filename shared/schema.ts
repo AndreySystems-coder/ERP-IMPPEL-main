@@ -533,10 +533,38 @@ export const materialWithdrawalItems = pgTable("material_withdrawal_items", {
 export const insertMaterialWithdrawalSchema = createInsertSchema(materialWithdrawals).omit({ id: true, createdAt: true, returnedAt: true });
 export const insertMaterialWithdrawalItemSchema = createInsertSchema(materialWithdrawalItems).omit({ id: true, createdAt: true });
 
+export const mobileImportAliases = pgTable("mobile_import_aliases", {
+  id: serial("id").primaryKey(),
+  alias: text("alias").notNull().unique(),
+  userId: integer("user_id").notNull(),
+  username: text("username").notNull(),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const mobileImportHistory = pgTable("mobile_import_history", {
+  id: serial("id").primaryKey(),
+  hash: text("hash").notNull().unique(),
+  importedByUserId: integer("imported_by_user_id").notNull(),
+  importedByUsername: text("imported_by_username").notNull(),
+  sourceText: text("source_text").notNull(),
+  summary: text("summary").notNull(),
+  status: text("status").notNull().default("aplicado"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertMobileImportAliasSchema = createInsertSchema(mobileImportAliases).omit({ id: true, createdAt: true });
+export const insertMobileImportHistorySchema = createInsertSchema(mobileImportHistory).omit({ id: true, createdAt: true });
+
 export type MaterialWithdrawal = typeof materialWithdrawals.$inferSelect;
 export type MaterialWithdrawalItem = typeof materialWithdrawalItems.$inferSelect;
 export type InsertMaterialWithdrawal = typeof insertMaterialWithdrawalSchema._type;
 export type InsertMaterialWithdrawalItem = typeof insertMaterialWithdrawalItemSchema._type;
+export type MobileImportAlias = typeof mobileImportAliases.$inferSelect;
+export type InsertMobileImportAlias = typeof insertMobileImportAliasSchema._type;
+export type MobileImportHistory = typeof mobileImportHistory.$inferSelect;
+export type InsertMobileImportHistory = typeof insertMobileImportHistorySchema._type;
 
 // ─── Regras de Desconto Salarial ──────────────────────────────────────────────
 export const salaryDiscountRules = pgTable("salary_discount_rules", {

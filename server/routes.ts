@@ -13,7 +13,7 @@ import { api } from "@shared/routes";
 import { insertCostConfigSchema } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   TECHNICAL_TEAM_ROLE,
   generateInitialPassword,
@@ -22,10 +22,12 @@ import {
 } from "@shared/operationalUsers";
 import { getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWithdrawalPending, normalizeReturnCondition, shouldRestoreReturnedQuantityToStock } from "@shared/materialReturnPolicy";
 import { getEffectiveMaterialSaleDiscountLimit } from "@shared/materialSalesPolicy";
+import { buildMobileNotesPreview, summarizeMobileRows, type MobileImportPreviewRow } from "@shared/mobileNotesImport";
 import { previewErpPdfBuffer } from "./pdf-restore";
 
 const BCRYPT_ROUNDS = 10;
 const operationalResetTokens = new Map<string, number>();
+const MONTHS_PT_BR = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 function assertMaterialStockAvailability(
   items: Array<{ inventoryId: number; productName: string; quantity: number }>,
@@ -37,6 +39,63 @@ function assertMaterialStockAvailability(
       throw new Error(`Estoque insuficiente para ${item.productName}: solicitado ${item.quantity}, disponível ${available}.`);
     }
     availableById.set(Number(item.inventoryId), available - item.quantity);
+  }
+}
+
+function mobileImportHash(text: string) {
+  return createHash("sha256").update(text.trim()).digest("hex");
+}
+
+function normalizeMobileImportRows(rows: unknown): MobileImportPreviewRow[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row: any, index) => ({
+    id: String(row.id || `manual-${index}`),
+    order: Number.isFinite(Number(row.order)) ? Number(row.order) : index,
+    date: /^\d{4}-\d{2}-\d{2}$/.test(String(row.date || "")) ? String(row.date) : new Date().toISOString().slice(0, 10),
+    type: row.type === "entrada" || row.type === "retirada" ? row.type : "saida",
+    quantity: Math.max(1, Math.trunc(Number(row.quantity) || 1)),
+    rawText: String(row.rawText || row.rawItem || ""),
+    rawItem: String(row.rawItem || row.itemName || ""),
+    inventoryId: row.inventoryId ? Number(row.inventoryId) : null,
+    itemName: row.itemName ? String(row.itemName) : null,
+    itemConfidence: Math.max(0, Math.min(100, Number(row.itemConfidence) || 0)),
+    rawEmployee: row.rawEmployee ? String(row.rawEmployee) : null,
+    userId: row.userId ? Number(row.userId) : null,
+    username: row.username ? String(row.username) : null,
+    userConfidence: row.userConfidence == null ? undefined : Math.max(0, Math.min(100, Number(row.userConfidence) || 0)),
+    status: row.status === "ok" || row.status === "duvidoso" || row.status === "bloqueado" ? row.status : "duvidoso",
+    warnings: Array.isArray(row.warnings) ? row.warnings.map(String) : [],
+    ignored: Boolean(row.ignored),
+  })).sort((a, b) => a.order - b.order);
+}
+
+function assertMobileImportRowsReady(rows: MobileImportPreviewRow[]) {
+  const pending = rows.filter(row => !row.ignored && (
+    row.status !== "ok" ||
+    !row.inventoryId ||
+    row.quantity <= 0 ||
+    (row.type === "retirada" && !row.userId)
+  ));
+  if (pending.length) {
+    throw new Error(`Existem ${pending.length} item(ns) pendente(s) no preview. Corrija ou ignore antes de confirmar.`);
+  }
+}
+
+function assertMobileImportStock(rows: MobileImportPreviewRow[], inventoryItems: any[]) {
+  const inventoryById = new Map(inventoryItems.map(item => [Number(item.id), item]));
+  const availableById = new Map(inventoryItems.map(item => [Number(item.id), Math.max(0, Number(item.quantity) || 0)]));
+  for (const row of rows.filter(item => !item.ignored).sort((a, b) => a.order - b.order)) {
+    const item = row.inventoryId ? inventoryById.get(Number(row.inventoryId)) : null;
+    if (!item) throw new Error(`Material não encontrado no preview: ${row.rawItem}`);
+    const available = availableById.get(Number(row.inventoryId)) ?? 0;
+    if (row.type === "entrada") {
+      availableById.set(Number(row.inventoryId), available + row.quantity);
+      continue;
+    }
+    if (row.quantity > available) {
+      throw new Error(`Estoque insuficiente para ${item.name}: solicitado ${row.quantity}, disponível ${available}.`);
+    }
+    availableById.set(Number(row.inventoryId), available - row.quantity);
   }
 }
 
@@ -732,6 +791,7 @@ export async function registerRoutes(
     { prefix: "/api/priority-rules", permissions: ["viewPriorityRules"] },
     { prefix: "/api/dashboard", permissions: ["viewDashboard"] },
     { prefix: "/api/catalog", permissions: ["viewInventory", "viewInventoryCurrent"] },
+    { prefix: "/api/mobile-import", permissions: ["viewInventory", "viewInventoryCurrent", "editInventory"] },
     { prefix: "/api/job-tracking", permissions: ["viewWorkOrders", "viewAllWorkOrders"] },
     { prefix: "/api/scheduling", permissions: ["viewCalendar"] },
     { prefix: "/api/obra-registros", permissions: ["viewObraRegistro"] },
@@ -1482,6 +1542,216 @@ export async function registerRoutes(
         results.push(mov);
       }
       res.status(201).json(results);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Importação Rápida de anotações do celular
+  app.get("/api/mobile-import/aliases", requireAuth, async (_req, res) => {
+    try {
+      res.json(await storage.getMobileImportAliases());
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/mobile-import/history", requireAuth, async (_req, res) => {
+    try {
+      res.json(await storage.getMobileImportHistory());
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/mobile-import/preview", requireAuth, async (req, res) => {
+    try {
+      const text = String(req.body?.text || "");
+      if (!text.trim()) return res.status(400).json({ message: "Cole as anotações antes de interpretar." });
+      const [inventoryItems, users, aliases] = await Promise.all([
+        storage.getInventoryItems(),
+        storage.getUsers(),
+        storage.getMobileImportAliases(),
+      ]);
+      const hash = mobileImportHash(text);
+      const duplicate = await storage.getMobileImportHistoryByHash(hash);
+      const preview = buildMobileNotesPreview({
+        text,
+        fallbackMonth: req.body?.fallbackMonth,
+        inventory: inventoryItems.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          unit: item.unit,
+          quantity: item.quantity,
+        })),
+        users: users.map((user: any) => ({
+          id: user.id,
+          username: user.username,
+          fullName: user.fullName || user.name,
+          jobTitle: user.jobTitle,
+          role: user.role,
+        })),
+        aliases,
+      });
+      res.json({ ...preview, hash, duplicate: Boolean(duplicate), duplicateRecord: duplicate || null });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post("/api/mobile-import/apply", requireAuth, async (req, res) => {
+    try {
+      const sessionUser = await storage.getUser(Number(req.session.userId));
+      if (!sessionUser) return res.status(401).json({ message: "Não autenticado" });
+      const text = String(req.body?.text || "");
+      if (!text.trim()) return res.status(400).json({ message: "Texto original obrigatório para confirmar a importação." });
+      const hash = mobileImportHash(text);
+      const existingHistory = await storage.getMobileImportHistoryByHash(hash);
+      if (existingHistory) return res.status(409).json({ message: "Esta anotação já foi importada.", history: existingHistory });
+
+      const rows = normalizeMobileImportRows(req.body?.rows);
+      assertMobileImportRowsReady(rows);
+      const activeRows = rows.filter(row => !row.ignored);
+      if (!activeRows.length) return res.status(400).json({ message: "Nenhum item confirmado para importar." });
+
+      const [inventoryItems, users, existingAliases] = await Promise.all([
+        storage.getInventoryItems(),
+        storage.getUsers(),
+        storage.getMobileImportAliases(),
+      ]);
+      const inventoryById = new Map(inventoryItems.map((item: any) => [Number(item.id), item]));
+      const usersById = new Map(users.map((user: any) => [Number(user.id), user]));
+
+      assertMobileImportStock(activeRows, inventoryItems);
+
+      const movements: any[] = [];
+      const withdrawals: any[] = [];
+      const withdrawalGroups = new Map<string, {
+        user: any;
+        date: string;
+        items: Array<{ withdrawalId: number; inventoryId: number; productName: string; unit: string; quantity: number }>;
+        rawTexts: string[];
+      }>();
+
+      for (const row of activeRows) {
+        const inventoryItem = inventoryById.get(Number(row.inventoryId));
+        if (!inventoryItem) continue;
+        const movementDate = `${row.date}T12:00:00`;
+        const month = MONTHS_PT_BR[new Date(movementDate).getMonth()];
+        if (row.type === "entrada" || row.type === "saida") {
+          const movement = await storage.createInventoryMovement({
+            inventoryId: Number(inventoryItem.id),
+            productName: inventoryItem.name,
+            type: row.type === "entrada" ? "ENTRADA" : "SAÍDA",
+            quantity: row.quantity,
+            date: row.date,
+            month,
+            notes: `Origem: Anotação do celular | Hash: ${hash} | Texto: ${row.rawText}`,
+          });
+          movements.push(movement);
+          continue;
+        }
+
+        const responsible = usersById.get(Number(row.userId));
+        if (!responsible) throw new Error(`Funcionário não encontrado para ${row.rawEmployee || row.rawText}`);
+        const key = `${row.date}:${responsible.id}`;
+        const group = withdrawalGroups.get(key) || {
+          user: responsible,
+          date: row.date,
+          items: [],
+          rawTexts: [],
+        };
+        group.items.push({
+          withdrawalId: 0,
+          inventoryId: Number(inventoryItem.id),
+          productName: inventoryItem.name,
+          unit: inventoryItem.unit || "unid",
+          quantity: row.quantity,
+        });
+        group.rawTexts.push(row.rawText);
+        withdrawalGroups.set(key, group);
+      }
+
+      for (const group of withdrawalGroups.values()) {
+        const hasReturnables = hasReturnableMaterialItems(group.items.map(item => ({
+          productName: item.productName,
+          type: inventoryById.get(Number(item.inventoryId))?.type,
+        })));
+        const withdrawal = await storage.createMaterialWithdrawal({
+          userId: Number(group.user.id),
+          username: group.user.username,
+          workOrderId: null,
+          jobId: null,
+          clientName: null,
+          withdrawalDate: group.date,
+          status: hasReturnables ? "pendente" : "consumido",
+          withdrawalPhoto: null,
+          withdrawalSignature: null,
+          notes: `Origem: Anotação do celular | Hash: ${hash} | Linhas: ${group.rawTexts.join(" ; ")}`,
+          returnPhoto: null,
+          returnSignature: null,
+          returnNotes: null,
+        }, group.items);
+        withdrawals.push(withdrawal);
+
+        const month = MONTHS_PT_BR[new Date(`${group.date}T12:00:00`).getMonth()];
+        for (const item of withdrawal.items) {
+          const movement = await storage.createInventoryMovement({
+            inventoryId: item.inventoryId,
+            productName: item.productName,
+            type: "SAÍDA",
+            quantity: item.quantity,
+            date: group.date,
+            month,
+            notes: `Origem: ANOTACAO_CELULAR | Retirada #${withdrawal.id} | Responsavel: ${group.user.username} | Hash: ${hash}`,
+          });
+          movements.push(movement);
+        }
+      }
+
+      const aliasesToSave = Array.isArray(req.body?.aliasesToSave) ? req.body.aliasesToSave : [];
+      const savedAliases = [];
+      for (const aliasInput of aliasesToSave) {
+        const alias = String(aliasInput?.alias || "").trim();
+        const user = usersById.get(Number(aliasInput?.userId));
+        if (!alias || !user) continue;
+        const existing = existingAliases.find((item: any) => String(item.alias || "").trim().toLowerCase() === alias.toLowerCase());
+        if (existing) {
+          savedAliases.push(await storage.updateMobileImportAlias(Number(existing.id), {
+            alias,
+            userId: Number(user.id),
+            username: user.username,
+            createdByUserId: Number(sessionUser.id),
+            createdByUsername: sessionUser.username,
+          }));
+        } else {
+          savedAliases.push(await storage.createMobileImportAlias({
+            alias,
+            userId: Number(user.id),
+            username: user.username,
+            createdByUserId: Number(sessionUser.id),
+            createdByUsername: sessionUser.username,
+          }));
+        }
+      }
+
+      const summary = {
+        ...summarizeMobileRows(rows),
+        movimentosCriados: movements.length,
+        retiradasCriadas: withdrawals.length,
+        aliasesSalvos: savedAliases.filter(Boolean).length,
+      };
+      const history = await storage.createMobileImportHistory({
+        hash,
+        importedByUserId: Number(sessionUser.id),
+        importedByUsername: sessionUser.username,
+        sourceText: text,
+        summary: JSON.stringify(summary),
+        status: "aplicado",
+      });
+
+      res.status(201).json({ hash, summary, movements, withdrawals, savedAliases: savedAliases.filter(Boolean), history });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
