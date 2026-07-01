@@ -190,13 +190,14 @@ function applyStockStatus(rows: MobileImportPreviewRow[], inventory: MobileImpor
 
 export function buildMobileNotesPreview(input: {
   text: string;
+  importYear?: number;
   fallbackMonth?: string;
   inventory: MobileImportInventoryItem[];
   users: MobileImportUser[];
   aliases?: MobileImportAlias[];
 }): MobileImportPreview {
   const now = new Date();
-  const fallbackYear = input.fallbackMonth ? Number(input.fallbackMonth.slice(0, 4)) : now.getFullYear();
+  const fallbackYear = Number.isFinite(Number(input.importYear)) ? Number(input.importYear) : (input.fallbackMonth ? Number(input.fallbackMonth.slice(0, 4)) : now.getFullYear());
   const fallbackMonth = input.fallbackMonth && /^\d{4}-\d{2}$/.test(input.fallbackMonth) ? input.fallbackMonth : `${fallbackYear}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   let currentDate = `${fallbackMonth}-01`;
   const rows: MobileImportPreviewRow[] = [];

@@ -5,7 +5,6 @@ import {
   Building2,
   Calendar,
   Clipboard,
-  ClipboardPaste,
   ClipboardList,
   CreditCard,
   DollarSign,
@@ -168,7 +167,6 @@ export function InventoryHub() {
           { title: "Ferramentas e Equipamentos", description: "Visualize retornáveis, responsáveis, danos, perdas e manutenção.", href: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent", accent: accents.slate },
           { title: "Movimentações", description: "Audite entradas, saídas, ajustes, datas e origens.", href: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements", accent: accents.orange },
           { title: "Contagem Rápida", description: "Auditoria física com processamento de lista e ajustes automáticos.", href: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
-          { title: "Importação Rápida", description: "Transforme anotações do celular em entradas, saídas e retiradas com preview.", href: "/estoque/importacao-rapida", icon: ClipboardPaste, permission: "viewInventoryCurrent", accent: accents.violet },
         ],
       }}
     />

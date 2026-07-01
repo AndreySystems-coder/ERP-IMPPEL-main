@@ -150,7 +150,7 @@ const mobileInventory = [
   quantity: 250,
 }));
 const mobilePreview = buildMobileNotesPreview({
-  fallbackMonth: "2026-06",
+  importYear: 2026,
   inventory: mobileInventory,
   users: [
     { id: 501, username: "leandro", fullName: "Leandro Aplicador", role: "funcionario" },
@@ -190,6 +190,7 @@ assert.equal(mobilePreview.summary.retiradas, 12, "linhas funcionario - itens de
 assert.equal(mobilePreview.rows.find(row => row.rawItem === "1000")?.itemName, "Viaplus 1000", "alias 1000 deve reconhecer Viaplus 1000");
 assert.equal(mobilePreview.rows.find(row => row.rawEmployee === "Lequinho")?.userId, 501, "alias persistente de funcionario deve ser aplicado");
 assert.equal(mobilePreview.rows.find(row => row.rawText.includes("barra de asfalto"))?.date, "2026-06-30", "data 30/06 deve aplicar nas linhas seguintes");
+assert.equal(mobilePreview.rows.some(row => row.date.startsWith("2025-")), false, "anotacoes sem ano nao devem assumir 2025 automaticamente");
 
 const applicator = { role: "funcionario", permissions: { registrarMaterials: true } };
 assert.equal(canAccess(applicator, "viewDashboard"), false);

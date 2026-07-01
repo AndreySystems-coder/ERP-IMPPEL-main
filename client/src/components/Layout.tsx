@@ -6,7 +6,6 @@ import {
   Building2,
   Calendar as CalendarIcon,
   Clipboard,
-  ClipboardPaste,
   ClipboardList,
   CreditCard,
   DollarSign,
@@ -110,7 +109,6 @@ const ALL_SECTIONS: NavSection[] = [
       { name: "Ferramentas e Equipamentos", path: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent" },
       { name: "Movimentações", path: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements" },
       { name: "Contagem Rápida", path: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount" },
-      { name: "Importação Rápida", path: "/estoque/importacao-rapida", icon: ClipboardPaste, permission: "viewInventoryCurrent" },
     ],
   },
   {

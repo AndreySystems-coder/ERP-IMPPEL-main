@@ -7,11 +7,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiscountsPanel } from "@/features/materials/components/DiscountsPanel";
 import { EmployeeView } from "@/features/materials/components/EmployeeView";
 import { MaterialFlowStepper } from "@/features/materials/components/MaterialFlowStepper";
-import { QuickMaterialRegistration } from "@/features/materials/components/QuickMaterialRegistration";
 import { MovementHistoryPanel } from "@/features/materials/components/MovementHistoryPanel";
 import { ResponsibilityPanel } from "@/features/materials/components/ResponsibilityPanel";
 import { ReturnForm } from "@/features/materials/components/ReturnForm";
 import { WithdrawalForm } from "@/features/materials/components/WithdrawalForm";
+import MobileNotesImport from "@/pages/MobileNotesImport";
 import { daysSince } from "@/features/materials/material-control-utils";
 import type { DiscountRule, InventoryItem, SalaryDiscount, UserItem, Withdrawal, WorkOrder } from "@/features/materials/types";
 import { isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
@@ -62,7 +62,7 @@ export default function MaterialControl() {
   const pendingDiscounts = salaryDiscounts.filter(discount => discount.status === "pendente");
   const returnedCount = withdrawals.filter(withdrawal => withdrawal.status === "retornado").length;
   const consumedCount = withdrawals.filter(withdrawal => withdrawal.status === "consumido").length;
-  const overdueCount = pendingWithdrawals.filter(withdrawal => daysSince(withdrawal.createdAt) > 3).length;
+  const overdueCount = pendingWithdrawals.filter(withdrawal => daysSince(withdrawal.withdrawalDate || withdrawal.createdAt) > 3).length;
 
   const isLoadingCore = inventoryQuery.isLoading || (isAdmin && usersQuery.isLoading) || workOrdersQuery.isLoading || withdrawalsQuery.isLoading;
   const hasCoreError = inventoryQuery.isError || (isAdmin && usersQuery.isError) || workOrdersQuery.isError || withdrawalsQuery.isError;
@@ -160,7 +160,7 @@ export default function MaterialControl() {
             </TabsContent>
 
             <TabsContent value="rapido" className="mt-4">
-              <QuickMaterialRegistration inventory={inventory} users={users} />
+              <MobileNotesImport embedded />
             </TabsContent>
 
             <TabsContent value="retorno" className="mt-4">

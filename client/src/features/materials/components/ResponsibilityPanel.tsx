@@ -34,16 +34,17 @@ function buildEmployeeKits(withdrawals: Withdrawal[]) {
     for (const item of withdrawal.items) {
       const returned = item.returnedQuantity ?? 0;
       const inHand = item.quantity - returned;
+      const responsibilityDate = withdrawal.withdrawalDate || withdrawal.createdAt;
       if (inHand > 0) {
         kit.items.push({
           productName: item.productName,
           unit: item.unit,
           qtyInHand: inHand,
-          days: daysSince(withdrawal.createdAt),
+          days: daysSince(responsibilityDate),
           withdrawalId: withdrawal.id,
           clientName: withdrawal.clientName,
           workOrderId: withdrawal.workOrderId,
-          createdAt: withdrawal.createdAt,
+          createdAt: responsibilityDate,
           notes: withdrawal.notes,
         });
       }

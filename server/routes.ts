@@ -42,8 +42,16 @@ function assertMaterialStockAvailability(
   }
 }
 
-function mobileImportHash(text: string) {
-  return createHash("sha256").update(text.trim()).digest("hex");
+function mobileImportHash(text: string, importYear: number) {
+  return createHash("sha256").update(`${importYear}\n${text.trim()}`).digest("hex");
+}
+
+function parseMobileImportYear(value: unknown) {
+  const year = Number(value);
+  if (!Number.isInteger(year) || year < 2020 || year > 2100) {
+    throw new Error("Ano da importação é obrigatório e deve estar entre 2020 e 2100.");
+  }
+  return year;
 }
 
 function normalizeMobileImportRows(rows: unknown): MobileImportPreviewRow[] {
@@ -1547,7 +1555,7 @@ export async function registerRoutes(
     }
   });
 
-  // Importação Rápida de anotações do celular
+  // Registro rápido de materiais a partir de anotações do celular
   app.get("/api/mobile-import/aliases", requireAuth, async (_req, res) => {
     try {
       res.json(await storage.getMobileImportAliases());
@@ -1568,16 +1576,17 @@ export async function registerRoutes(
     try {
       const text = String(req.body?.text || "");
       if (!text.trim()) return res.status(400).json({ message: "Cole as anotações antes de interpretar." });
+      const importYear = parseMobileImportYear(req.body?.importYear);
       const [inventoryItems, users, aliases] = await Promise.all([
         storage.getInventoryItems(),
         storage.getUsers(),
         storage.getMobileImportAliases(),
       ]);
-      const hash = mobileImportHash(text);
+      const hash = mobileImportHash(text, importYear);
       const duplicate = await storage.getMobileImportHistoryByHash(hash);
       const preview = buildMobileNotesPreview({
         text,
-        fallbackMonth: req.body?.fallbackMonth,
+        importYear,
         inventory: inventoryItems.map((item: any) => ({
           id: item.id,
           name: item.name,
@@ -1606,7 +1615,8 @@ export async function registerRoutes(
       if (!sessionUser) return res.status(401).json({ message: "Não autenticado" });
       const text = String(req.body?.text || "");
       if (!text.trim()) return res.status(400).json({ message: "Texto original obrigatório para confirmar a importação." });
-      const hash = mobileImportHash(text);
+      const importYear = parseMobileImportYear(req.body?.importYear);
+      const hash = mobileImportHash(text, importYear);
       const existingHistory = await storage.getMobileImportHistoryByHash(hash);
       if (existingHistory) return res.status(409).json({ message: "Esta anotação já foi importada.", history: existingHistory });
 
@@ -1647,7 +1657,7 @@ export async function registerRoutes(
             quantity: row.quantity,
             date: row.date,
             month,
-            notes: `Origem: Anotação do celular | Hash: ${hash} | Texto: ${row.rawText}`,
+            notes: `Registro Rapido #${hash.slice(0, 12)} | ${row.rawText}`,
           });
           movements.push(movement);
           continue;
@@ -1688,7 +1698,7 @@ export async function registerRoutes(
           status: hasReturnables ? "pendente" : "consumido",
           withdrawalPhoto: null,
           withdrawalSignature: null,
-          notes: `Origem: Anotação do celular | Hash: ${hash} | Linhas: ${group.rawTexts.join(" ; ")}`,
+          notes: `Importado via Registro Rapido #${hash.slice(0, 12)}`,
           returnPhoto: null,
           returnSignature: null,
           returnNotes: null,
@@ -1704,7 +1714,7 @@ export async function registerRoutes(
             quantity: item.quantity,
             date: group.date,
             month,
-            notes: `Origem: ANOTACAO_CELULAR | Retirada #${withdrawal.id} | Responsavel: ${group.user.username} | Hash: ${hash}`,
+            notes: `Registro Rapido #${hash.slice(0, 12)} | Retirada #${withdrawal.id} | Responsavel: ${group.user.username}`,
           });
           movements.push(movement);
         }
@@ -1738,6 +1748,7 @@ export async function registerRoutes(
 
       const summary = {
         ...summarizeMobileRows(rows),
+        importYear,
         movimentosCriados: movements.length,
         retiradasCriadas: withdrawals.length,
         aliasesSalvos: savedAliases.filter(Boolean).length,

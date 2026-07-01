@@ -18,16 +18,15 @@ type ImportPreview = {
 };
 
 const exampleText = `30/06
- 20x broxa
- 5x primer
- 1x furadeira
-Elias - raspador, extensão
-1x rolo de lã`;
+Lequinho - raspador, extensao, soprador
+Jhones - furadeira, batedor, extensao
+Paulo - cabo, escada
 
-const todayMonth = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-};
+29/06
+Bruno - vassoura
++ 20x broxa`;
+
+const currentYear = () => String(new Date().getFullYear());
 
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -52,16 +51,18 @@ function typeLabel(type: MobileImportPreviewRow["type"]) {
   return "Saída";
 }
 
-export default function MobileNotesImport() {
+export default function MobileNotesImport({ embedded = false }: { embedded?: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
-  const [fallbackMonth, setFallbackMonth] = useState(todayMonth());
+  const [importYear, setImportYear] = useState(currentYear());
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [rows, setRows] = useState<MobileImportPreviewRow[]>([]);
   const [activeTab, setActiveTab] = useState<"entrada" | "saida" | "retirada" | "pendentes" | "ignorados">("entrada");
   const [aliasRows, setAliasRows] = useState<Record<string, boolean>>({});
   const [report, setReport] = useState<any>(null);
+  const parsedImportYear = Number(importYear);
+  const isImportYearValid = Number.isInteger(parsedImportYear) && parsedImportYear >= 2020 && parsedImportYear <= 2100;
 
   const { data: inventory = [] } = useQuery<InventoryItem[]>({
     queryKey: ["/api/inventory"],
@@ -79,13 +80,13 @@ export default function MobileNotesImport() {
   const previewMutation = useMutation({
     mutationFn: () => apiRequest<ImportPreview>("/api/mobile-import/preview", {
       method: "POST",
-      body: JSON.stringify({ text, fallbackMonth }),
+      body: JSON.stringify({ text, importYear: parsedImportYear }),
     }),
     onSuccess: (data) => {
       setPreview(data);
       setRows(data.rows);
       setReport(null);
-      setActiveTab(data.summary.duvidosos || data.summary.bloqueados ? "pendentes" : "entrada");
+      setActiveTab(data.summary.duvidosos || data.summary.bloqueados ? "pendentes" : "retirada");
       toast({ title: "Preview gerado", description: `${data.rows.length} linha(s) interpretada(s).` });
     },
     onError: (error: Error) => toast({ title: "Não foi possível interpretar", description: error.message, variant: "destructive" }),
@@ -98,7 +99,7 @@ export default function MobileNotesImport() {
         .map(row => ({ alias: row.rawEmployee, userId: row.userId }));
       return apiRequest("/api/mobile-import/apply", {
         method: "POST",
-        body: JSON.stringify({ text, rows, aliasesToSave }),
+        body: JSON.stringify({ text, importYear: parsedImportYear, rows, aliasesToSave }),
       });
     },
     onSuccess: (data) => {
@@ -107,7 +108,7 @@ export default function MobileNotesImport() {
       queryClient.invalidateQueries({ queryKey: ["/api/inventory-movements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/material-withdrawals"] });
       queryClient.invalidateQueries({ queryKey: ["/api/mobile-import/history"] });
-      toast({ title: "Importação aplicada", description: "Movimentações e retiradas foram registradas em modo merge." });
+      toast({ title: "Registro rapido aplicado", description: "Movimentacoes e retiradas foram registradas em modo merge." });
     },
     onError: (error: Error) => toast({ title: "Importação bloqueada", description: error.message, variant: "destructive" }),
   });
@@ -119,6 +120,19 @@ export default function MobileNotesImport() {
     pendentes: rows.filter(row => row.status !== "ok" && !row.ignored),
     ignorados: rows.filter(row => row.ignored),
   }), [rows]);
+
+  const withdrawalGroups = useMemo(() => {
+    const groups = new Map<string, MobileImportPreviewRow[]>();
+    for (const row of groupedRows.retirada) {
+      const employee = row.username || row.rawEmployee || "Funcionario pendente";
+      const key = `${row.date}|${employee}`;
+      groups.set(key, [...(groups.get(key) || []), row]);
+    }
+    return Array.from(groups.entries()).map(([key, groupRows]) => {
+      const [date, employee] = key.split("|");
+      return { key, date, employee, rows: groupRows };
+    });
+  }, [groupedRows.retirada]);
 
   const canApply = rows.some(row => !row.ignored) &&
     !preview?.duplicate &&
@@ -154,15 +168,17 @@ export default function MobileNotesImport() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-display font-bold text-slate-950">Importação Rápida</h1>
-        <p className="text-sm text-slate-600">Cole anotações do celular, confira o preview e confirme somente o que estiver correto.</p>
-      </div>
+      {!embedded && (
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-display font-bold text-slate-950">Registro Rapido de Materiais</h1>
+          <p className="text-sm text-slate-600">Cole anotacoes do celular, confira o preview e confirme somente o que estiver correto.</p>
+        </div>
+      )}
 
       <Card className="p-5">
         <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-slate-700">Anotações</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Anotacoes do celular</label>
             <textarea
               value={text}
               onChange={(event) => setText(event.target.value)}
@@ -172,12 +188,16 @@ export default function MobileNotesImport() {
           </div>
           <div className="flex flex-col gap-3">
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Mês base</label>
-              <Input type="month" value={fallbackMonth} onChange={(event) => setFallbackMonth(event.target.value)} />
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Ano da importacao</label>
+              <Input type="number" min="2020" max="2100" value={importYear} onChange={(event) => setImportYear(event.target.value)} />
+              {!isImportYearValid && <p className="mt-1 text-xs font-semibold text-red-600">Informe um ano valido antes de interpretar.</p>}
             </div>
-            <Button onClick={() => previewMutation.mutate()} disabled={previewMutation.isPending || !text.trim()} className="mt-auto gap-2">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Datas sem ano usam o ano selecionado. Nada e aplicado sem confirmacao.
+            </div>
+            <Button onClick={() => previewMutation.mutate()} disabled={previewMutation.isPending || !text.trim() || !isImportYearValid} className="mt-auto gap-2">
               {previewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardPaste className="h-4 w-4" />}
-              Interpretar anotações
+              Gerar preview
             </Button>
           </div>
         </div>
@@ -188,7 +208,7 @@ export default function MobileNotesImport() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h2 className="text-xl font-bold text-slate-900">Preview</h2>
-              <p className="text-sm text-slate-500">Hash {preview.hash.slice(0, 12)} · {rows.length} linha(s) lida(s)</p>
+              <p className="text-sm text-slate-500">Ano {importYear} · Hash {preview.hash.slice(0, 12)} · {rows.length} linha(s) lida(s)</p>
               {preview.duplicate && (
                 <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
                   <AlertTriangle className="h-4 w-4" /> Esta anotação já foi importada.
@@ -230,7 +250,45 @@ export default function MobileNotesImport() {
             ))}
           </div>
 
-          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
+          {activeTab === "retirada" && (
+            <div className="mt-4 space-y-3">
+              {withdrawalGroups.map(group => (
+                <details key={group.key} open className="rounded-lg border border-slate-200 bg-white">
+                  <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
+                    <div>
+                      <div className="font-bold text-slate-900">{group.employee}</div>
+                      <div className="text-xs text-slate-500">Registro Rapido - {new Date(`${group.date}T12:00:00`).toLocaleDateString("pt-BR")}</div>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{group.rows.length} item(ns)</span>
+                  </summary>
+                  <div className="border-t border-slate-100 p-3">
+                    <div className="space-y-2">
+                      {group.rows.map(row => (
+                        <div key={row.id} className="grid gap-2 rounded-lg bg-slate-50 p-3 md:grid-cols-[1fr_110px_220px_120px] md:items-center">
+                          <div>
+                            <div className="font-semibold text-slate-800">{row.itemName || row.rawItem}</div>
+                            <div className="text-xs text-slate-500">Texto: {row.rawText}</div>
+                            {row.warnings.length > 0 && <div className="mt-1 text-xs font-semibold text-amber-700">{row.warnings.join(" · ")}</div>}
+                          </div>
+                          <Input type="number" min={1} value={row.quantity} onChange={(event) => updateRow(row.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} />
+                          <select className="w-full rounded-md border border-slate-300 px-2 py-2 text-sm" value={row.inventoryId || ""} onChange={(event) => selectInventory(row, Number(event.target.value))}>
+                            <option value="">Selecionar material</option>
+                            {inventory.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                          </select>
+                          <Button variant="outline" size="sm" onClick={() => updateRow(row.id, { ignored: !row.ignored, status: row.ignored ? "duvidoso" : "ignorado" as any })}>
+                            {row.ignored ? "Reativar" : "Ignorar"}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </details>
+              ))}
+              {withdrawalGroups.length === 0 && <div className="rounded-lg border border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Nenhuma retirada encontrada.</div>}
+            </div>
+          )}
+
+          <div className={activeTab === "retirada" ? "hidden" : "mt-4 overflow-x-auto rounded-lg border border-slate-200"}>
             <table className="min-w-[1080px] w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
@@ -305,7 +363,7 @@ export default function MobileNotesImport() {
             </Button>
             <Button onClick={() => applyMutation.mutate()} disabled={!canApply || applyMutation.isPending} className="gap-2">
               {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Confirmar importação
+              Confirmar registro
             </Button>
           </div>
         </Card>
@@ -316,7 +374,7 @@ export default function MobileNotesImport() {
           <div className="flex items-start gap-3">
             <Save className="mt-1 h-5 w-5 text-emerald-700" />
             <div>
-              <h2 className="font-bold text-emerald-900">Importação registrada no histórico</h2>
+              <h2 className="font-bold text-emerald-900">Registro rapido salvo no historico</h2>
               <p className="mt-1 text-sm text-emerald-800">
                 {report.summary?.movimentosCriados || 0} movimentação(ões), {report.summary?.retiradasCriadas || 0} retirada(s) e {report.summary?.aliasesSalvos || 0} alias salvo(s).
               </p>
@@ -328,7 +386,7 @@ export default function MobileNotesImport() {
       <Card className="p-5">
         <div className="mb-4 flex items-center gap-2">
           <History className="h-5 w-5 text-slate-500" />
-          <h2 className="text-xl font-bold text-slate-900">Histórico</h2>
+          <h2 className="text-xl font-bold text-slate-900">Historico de registros rapidos</h2>
         </div>
         <div className="space-y-2">
           {history.slice(0, 12).map((item) => {
@@ -345,7 +403,7 @@ export default function MobileNotesImport() {
               </div>
             );
           })}
-          {history.length === 0 && <p className="text-sm text-slate-500">Nenhuma importação registrada ainda.</p>}
+          {history.length === 0 && <p className="text-sm text-slate-500">Nenhum registro rapido aplicado ainda.</p>}
         </div>
       </Card>
     </div>
