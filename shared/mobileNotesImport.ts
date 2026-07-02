@@ -45,6 +45,7 @@ export type MobileImportPreviewRow = {
   userConfidence?: number;
   status: MobileImportStatus;
   warnings: string[];
+  stockWarning?: string | null;
   ignored?: boolean;
 };
 
@@ -195,10 +196,11 @@ function applyStockStatus(rows: MobileImportPreviewRow[], inventory: MobileImpor
       return row;
     }
     if (row.quantity > current) {
+      const warning = `Estoque insuficiente: disponível ${current} ${item?.unit || "un"}. O registro poderá deixar saldo negativo temporariamente.`;
       return {
         ...row,
-        status: "bloqueado" as MobileImportStatus,
-        warnings: [...row.warnings, `Estoque insuficiente: disponível ${current} ${item?.unit || "un"}`],
+        stockWarning: warning,
+        warnings: row.warnings.includes(warning) ? row.warnings : [...row.warnings, warning],
       };
     }
     available.set(row.inventoryId, current - row.quantity);
@@ -291,13 +293,13 @@ export function buildMobileNotesPreview(input: {
   const allIgnored = [...ignored, ...checkedRows.filter(row => row.ignored)];
   const activeRows = checkedRows.filter(row => !row.ignored);
   const summary = {
-    entradas: activeRows.filter(row => row.type === "entrada" && row.status !== "bloqueado").length,
-    saidas: activeRows.filter(row => row.type === "saida" && row.status !== "bloqueado").length,
-    retiradas: activeRows.filter(row => row.type === "retirada" && row.status !== "bloqueado").length,
+    entradas: activeRows.filter(row => row.type === "entrada").length,
+    saidas: activeRows.filter(row => row.type === "saida").length,
+    retiradas: activeRows.filter(row => row.type === "retirada").length,
     duvidosos: activeRows.filter(row => row.status === "duvidoso").length,
     bloqueados: activeRows.filter(row => row.status === "bloqueado").length,
     ignorados: allIgnored.length,
-    canApply: activeRows.length > 0 && activeRows.every(row => row.status === "ok" && row.inventoryId && (row.type !== "retirada" || row.userId)),
+    canApply: activeRows.length > 0 && activeRows.every(row => row.status === "ok" && row.inventoryId && row.quantity > 0 && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && (row.type !== "retirada" || row.userId)),
   };
   return { rows: checkedRows, ignored: allIgnored, summary };
 }

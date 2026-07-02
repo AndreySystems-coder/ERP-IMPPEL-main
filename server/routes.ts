@@ -143,22 +143,32 @@ function buildMaterialControlExportPayload(params: {
   const withdrawals = params.withdrawals.filter(withdrawal =>
     isMaterialPeriodMatch(operationalDate(withdrawal.withdrawalDate || withdrawal.createdAt), period, year, month)
   );
+  const entries = params.movements.filter(movement => {
+    const type = String(movement.type || "").toUpperCase();
+    return type === "ENTRADA" && isMaterialPeriodMatch(operationalDate(movement.date), period, year, month);
+  });
   const consumption = params.movements.filter(movement => {
     const type = String(movement.type || "").toUpperCase();
     const isConsumption = type === "SAÍDA" || type === "SAIDA";
     const fromWithdrawal = String(movement.notes || "").toLowerCase().includes("retirada #");
     return isConsumption && !fromWithdrawal && isMaterialPeriodMatch(operationalDate(movement.date), period, year, month);
   });
-  const days = new Map<string, { withdrawals: any[]; consumption: any[] }>();
+  const days = new Map<string, { withdrawals: any[]; entries: any[]; consumption: any[] }>();
   for (const withdrawal of withdrawals) {
     const date = operationalDate(withdrawal.withdrawalDate || withdrawal.createdAt);
-    const group = days.get(date) || { withdrawals: [], consumption: [] };
+    const group = days.get(date) || { withdrawals: [], entries: [], consumption: [] };
     group.withdrawals.push(withdrawal);
+    days.set(date, group);
+  }
+  for (const movement of entries) {
+    const date = operationalDate(movement.date);
+    const group = days.get(date) || { withdrawals: [], entries: [], consumption: [] };
+    group.entries.push(movement);
     days.set(date, group);
   }
   for (const movement of consumption) {
     const date = operationalDate(movement.date);
-    const group = days.get(date) || { withdrawals: [], consumption: [] };
+    const group = days.get(date) || { withdrawals: [], entries: [], consumption: [] };
     group.consumption.push(movement);
     days.set(date, group);
   }
@@ -170,6 +180,7 @@ function buildMaterialControlExportPayload(params: {
     filters: { period, year: year || null, month: month || null, label },
     data: {
       withdrawals,
+      entries,
       consumption,
       days: Array.from(days.entries())
         .sort(([a], [b]) => a.localeCompare(b))
@@ -1845,8 +1856,6 @@ export async function registerRoutes(
       const inventoryById = new Map(inventoryItems.map((item: any) => [Number(item.id), item]));
       const usersById = new Map(users.map((user: any) => [Number(user.id), user]));
 
-      assertMobileImportStock(activeRows, inventoryItems);
-
       const movements: any[] = [];
       const withdrawals: any[] = [];
       const withdrawalGroups = new Map<string, {
@@ -1861,6 +1870,10 @@ export async function registerRoutes(
         if (!inventoryItem) continue;
         const movementDate = `${row.date}T12:00:00`;
         const month = MONTHS_PT_BR[new Date(movementDate).getMonth()];
+        const currentStock = Math.max(0, Number(inventoryItem.quantity) || 0);
+        const stockWarning = row.type !== "entrada" && row.quantity > currentStock
+          ? ` | ALERTA: estoque insuficiente no momento do registro; disponível ${currentStock}, registrado ${row.quantity}`
+          : "";
         if (row.type === "entrada" || row.type === "saida") {
           const movement = await storage.createInventoryMovement({
             inventoryId: Number(inventoryItem.id),
@@ -1869,7 +1882,7 @@ export async function registerRoutes(
             quantity: row.quantity,
             date: row.date,
             month,
-            notes: `Registro Rapido #${hash.slice(0, 12)} | ${row.rawText}`,
+            notes: `Registro Rapido #${hash.slice(0, 12)} | ${row.rawText}${stockWarning}`,
           });
           movements.push(movement);
           continue;
@@ -1877,7 +1890,7 @@ export async function registerRoutes(
 
         const responsible = usersById.get(Number(row.userId));
         if (!responsible) throw new Error(`Funcionário não encontrado para ${row.rawEmployee || row.rawText}`);
-        const key = `${row.date}:${responsible.id}`;
+        const key = `${row.date}:${responsible.id}:${row.rawText}`;
         const group = withdrawalGroups.get(key) || {
           user: responsible,
           date: row.date,
@@ -1891,7 +1904,7 @@ export async function registerRoutes(
           unit: inventoryItem.unit || "unid",
           quantity: row.quantity,
         });
-        group.rawTexts.push(row.rawText);
+        if (!group.rawTexts.includes(row.rawText)) group.rawTexts.push(row.rawText);
         withdrawalGroups.set(key, group);
       }
 
@@ -1910,7 +1923,7 @@ export async function registerRoutes(
           status: hasReturnables ? "pendente" : "consumido",
           withdrawalPhoto: null,
           withdrawalSignature: null,
-          notes: `Importado via Registro Rapido #${hash.slice(0, 12)}`,
+          notes: `Importado via Registro Rapido #${hash.slice(0, 12)} | ${group.rawTexts.join(" | ")}`,
           returnPhoto: null,
           returnSignature: null,
           returnNotes: null,
@@ -1926,7 +1939,7 @@ export async function registerRoutes(
             quantity: item.quantity,
             date: group.date,
             month,
-            notes: `Registro Rapido #${hash.slice(0, 12)} | Retirada #${withdrawal.id} | Responsavel: ${group.user.username}`,
+            notes: `Registro Rapido #${hash.slice(0, 12)} | Retirada #${withdrawal.id} | Responsavel: ${group.user.username}${Number(inventoryById.get(Number(item.inventoryId))?.quantity || 0) < Number(item.quantity || 0) ? " | ALERTA: estoque insuficiente no momento do registro" : ""}`,
           });
           movements.push(movement);
         }
@@ -1964,6 +1977,7 @@ export async function registerRoutes(
         movimentosCriados: movements.length,
         retiradasCriadas: withdrawals.length,
         aliasesSalvos: savedAliases.filter(Boolean).length,
+        alertasEstoqueInsuficiente: activeRows.filter(row => row.warnings.some(warning => warning.toLowerCase().includes("estoque insuficiente"))).length,
       };
       const history = await storage.createMobileImportHistory({
         hash,

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ClipboardPaste, History, Loader2, Save, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardPaste, History, Loader2, PackagePlus, Save, XCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
@@ -9,6 +9,7 @@ import type { MobileImportPreviewRow } from "@shared/mobileNotesImport";
 
 type InventoryItem = { id: number; name: string; unit?: string; quantity?: number; type?: string };
 type UserItem = { id: number; username: string; fullName?: string; name?: string; role?: string };
+type NewInventoryForm = { rowId: string; name: string; type: string; unit: string; returnable: boolean } | null;
 type ImportPreview = {
   rows: MobileImportPreviewRow[];
   ignored: MobileImportPreviewRow[];
@@ -60,6 +61,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
   const [rows, setRows] = useState<MobileImportPreviewRow[]>([]);
   const [activeTab, setActiveTab] = useState<"entrada" | "saida" | "retirada" | "pendentes" | "ignorados">("entrada");
   const [aliasRows, setAliasRows] = useState<Record<string, boolean>>({});
+  const [newInventoryForm, setNewInventoryForm] = useState<NewInventoryForm>(null);
   const [report, setReport] = useState<any>(null);
   const parsedImportYear = Number(importYear);
   const isImportYearValid = Number.isInteger(parsedImportYear) && parsedImportYear >= 2020 && parsedImportYear <= 2100;
@@ -113,6 +115,39 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
     onError: (error: Error) => toast({ title: "Importação bloqueada", description: error.message, variant: "destructive" }),
   });
 
+  const createInventoryMutation = useMutation({
+    mutationFn: (form: Exclude<NewInventoryForm, null>) => apiRequest<InventoryItem>("/api/inventory", {
+      method: "POST",
+      body: JSON.stringify({
+        name: form.name.trim(),
+        type: form.returnable ? form.type : "material",
+        unit: form.unit.trim() || "unid",
+        quantity: 0,
+        minStock: 0,
+        pricePerUnit: 0,
+      }),
+    }),
+    onSuccess: (item, form) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
+      const target = rows.find(row => row.id === form.rowId);
+      setRows(current => current.map(row => {
+        const sameRaw = target && row.rawItem.trim().toLowerCase() === target.rawItem.trim().toLowerCase();
+        if (!sameRaw) return row;
+        return {
+          ...row,
+          inventoryId: item.id,
+          itemName: item.name,
+          itemConfidence: 100,
+          status: row.type === "retirada" && !row.userId ? "duvidoso" : "ok",
+          warnings: row.type === "retirada" && !row.userId ? ["Funcionário pendente"] : [],
+        };
+      }));
+      setNewInventoryForm(null);
+      toast({ title: "Item cadastrado", description: `${item.name} foi selecionado no preview.` });
+    },
+    onError: (error: Error) => toast({ title: "Não foi possível cadastrar", description: error.message, variant: "destructive" }),
+  });
+
   const groupedRows = useMemo(() => ({
     entrada: rows.filter(row => row.type === "entrada" && !row.ignored),
     saida: rows.filter(row => row.type === "saida" && !row.ignored),
@@ -125,18 +160,18 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
     const groups = new Map<string, MobileImportPreviewRow[]>();
     for (const row of groupedRows.retirada) {
       const employee = row.username || row.rawEmployee || "Funcionario pendente";
-      const key = `${row.date}|${employee}`;
+      const key = `${row.date}|${employee}|${row.rawText}`;
       groups.set(key, [...(groups.get(key) || []), row]);
     }
     return Array.from(groups.entries()).map(([key, groupRows]) => {
-      const [date, employee] = key.split("|");
-      return { key, date, employee, rows: groupRows };
+      const [date, employee, ...rawParts] = key.split("|");
+      return { key, date, employee, rawText: rawParts.join("|"), rows: groupRows };
     });
   }, [groupedRows.retirada]);
 
   const canApply = rows.some(row => !row.ignored) &&
     !preview?.duplicate &&
-    rows.every(row => row.ignored || (row.status === "ok" && row.inventoryId && (row.type !== "retirada" || row.userId)));
+    rows.every(row => row.ignored || (row.status === "ok" && row.inventoryId && row.quantity > 0 && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && (row.type !== "retirada" || row.userId)));
 
   const updateRow = (id: string, updates: Partial<MobileImportPreviewRow>) => {
     setRows(current => current.map(row => row.id === id ? { ...row, ...updates } : row));
@@ -149,18 +184,33 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
       itemName: item?.name || row.itemName,
       itemConfidence: 100,
       status: row.type === "retirada" && !row.userId ? "duvidoso" : "ok",
-      warnings: row.type === "retirada" && !row.userId ? ["Funcionário pendente"] : [],
+      warnings: row.type === "retirada" && !row.userId ? ["Funcionário pendente"] : row.warnings.filter(warning => warning.toLowerCase().includes("estoque insuficiente")),
     });
   };
 
   const selectUser = (row: MobileImportPreviewRow, userId: number) => {
     const user = users.find(candidate => Number(candidate.id) === Number(userId));
-    updateRow(row.id, {
-      userId,
-      username: user?.username || row.username,
-      userConfidence: 100,
-      status: row.inventoryId ? "ok" : "duvidoso",
-      warnings: row.inventoryId ? [] : ["Material duvidoso"],
+    setRows(current => current.map(candidate => {
+      const sameEmployeeLine = candidate.type === "retirada" && candidate.rawEmployee === row.rawEmployee && candidate.rawText === row.rawText && candidate.date === row.date;
+      if (!sameEmployeeLine) return candidate;
+      return {
+        ...candidate,
+        userId,
+        username: user?.username || candidate.username,
+        userConfidence: 100,
+        status: candidate.inventoryId ? "ok" : "duvidoso",
+        warnings: candidate.inventoryId ? candidate.warnings.filter(warning => warning.toLowerCase().includes("estoque insuficiente")) : ["Item ainda não cadastrado."],
+      };
+    }));
+  };
+
+  const openCreateInventory = (row: MobileImportPreviewRow) => {
+    setNewInventoryForm({
+      rowId: row.id,
+      name: row.rawItem || row.itemName || "",
+      type: "ferramenta",
+      unit: "unid",
+      returnable: row.type === "retirada",
     });
   };
 
@@ -258,6 +308,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                     <div>
                       <div className="font-bold text-slate-900">{group.employee}</div>
                       <div className="text-xs text-slate-500">Registro Rapido - {new Date(`${group.date}T12:00:00`).toLocaleDateString("pt-BR")}</div>
+                      <div className="mt-1 text-xs text-slate-600">Texto original: {group.rawText}</div>
                     </div>
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{group.rows.length} item(ns)</span>
                   </summary>
@@ -275,9 +326,12 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                             <option value="">Selecionar material</option>
                             {inventory.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                           </select>
-                          <Button variant="outline" size="sm" onClick={() => updateRow(row.id, { ignored: !row.ignored, status: row.ignored ? "duvidoso" : "ignorado" as any })}>
-                            {row.ignored ? "Reativar" : "Ignorar"}
-                          </Button>
+                          <div className="flex flex-col gap-2">
+                            {!row.inventoryId && <Button variant="outline" size="sm" onClick={() => openCreateInventory(row)}><PackagePlus className="mr-1 h-3 w-3" />Cadastrar</Button>}
+                            <Button variant="outline" size="sm" onClick={() => updateRow(row.id, { ignored: !row.ignored, status: row.ignored ? "duvidoso" : "ignorado" as any })}>
+                              {row.ignored ? "Reativar" : "Ignorar"}
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -321,6 +375,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                         <option value="">Selecionar material</option>
                         {inventory.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                       </select>
+                      {!row.inventoryId && <Button variant="outline" size="sm" className="mt-2" onClick={() => openCreateInventory(row)}><PackagePlus className="mr-1 h-3 w-3" />Cadastrar item</Button>}
                     </td>
                     <td className="px-3 py-2">
                       {row.type === "retirada" ? (
@@ -365,6 +420,37 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
               {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Confirmar registro
             </Button>
+          </div>
+        </Card>
+      )}
+
+      {newInventoryForm && (
+        <Card className="border-blue-200 bg-blue-50 p-5">
+          <h2 className="text-lg font-bold text-slate-900">Cadastrar item pendente</h2>
+          <p className="mt-1 text-sm text-slate-600">O item será criado com estoque 0 e selecionado automaticamente neste preview.</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <label className="text-xs font-semibold text-slate-700">Nome
+              <input value={newInventoryForm.name} onChange={event => setNewInventoryForm(form => form ? { ...form, name: event.target.value } : null)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm" />
+            </label>
+            <label className="text-xs font-semibold text-slate-700">Unidade
+              <input value={newInventoryForm.unit} onChange={event => setNewInventoryForm(form => form ? { ...form, unit: event.target.value } : null)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm" />
+            </label>
+            <label className="text-xs font-semibold text-slate-700">Uso
+              <select value={newInventoryForm.returnable ? "retornavel" : "consumivel"} onChange={event => setNewInventoryForm(form => form ? { ...form, returnable: event.target.value === "retornavel" } : null)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm">
+                <option value="retornavel">Retornável</option>
+                <option value="consumivel">Consumível</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-700">Categoria
+              <select value={newInventoryForm.type} onChange={event => setNewInventoryForm(form => form ? { ...form, type: event.target.value } : null)} disabled={!newInventoryForm.returnable} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm disabled:bg-slate-100">
+                <option value="ferramenta">Ferramenta</option>
+                <option value="equipamento">Equipamento</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setNewInventoryForm(null)}>Cancelar</Button>
+            <Button onClick={() => createInventoryMutation.mutate(newInventoryForm)} disabled={!newInventoryForm.name.trim() || createInventoryMutation.isPending} isLoading={createInventoryMutation.isPending}>Salvar item</Button>
           </div>
         </Card>
       )}

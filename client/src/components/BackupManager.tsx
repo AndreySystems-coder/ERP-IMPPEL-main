@@ -140,7 +140,7 @@ function getRecordCount(type: BackupType, backup: any): number {
   if (type === "estoque") return asArray(d.items).length;
   if (type === "produtos") return asArray(d.products).length;
   if (type === "servicos") return asArray(d.services).length;
-  if (type === "materiais") return asArray(d.withdrawals).length + asArray(d.consumption).length;
+  if (type === "materiais") return asArray(d.withdrawals).length + asArray(d.entries).length + asArray(d.consumption).length;
   if (type === "clientes") return asArray(d.clients).length;
   if (type === "orcamentos") return asArray(d.jobs).length;
   if (type === "ordens-servico") return asArray(d.workOrders).length;
@@ -315,13 +315,14 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
     });
   } else if (type === "materiais") {
     const withdrawals = asArray<any>(backup.data?.withdrawals);
+    const entries = asArray<any>(backup.data?.entries);
     const consumption = asArray<any>(backup.data?.consumption);
     const days = asArray<any>(backup.data?.days);
     const periodLabel = backup.filters?.label ? `Período: ${backup.filters.label}` : "Período: Todos os meses";
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.text(periodLabel, 14, 32);
-    if (!withdrawals.length && !consumption.length) {
+    if (!withdrawals.length && !entries.length && !consumption.length) {
       doc.setFontSize(12);
       doc.text("Nenhum registro encontrado para este período.", 14, 44);
     } else if (days.length) {
@@ -335,33 +336,40 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
         const rows: string[][] = [];
         for (const withdrawal of asArray<any>(day.withdrawals)) {
           const items = asArray<any>(withdrawal.items);
-          const returned = items.filter(item => Number(item.returnedQuantity || 0) > 0).map(item => `${item.returnedQuantity}x ${item.productName}`).join(", ");
-          const open = items.filter(item => Number(item.returnedQuantity || 0) < Number(item.quantity || 0)).map(item => `${Number(item.quantity || 0) - Number(item.returnedQuantity || 0)}x ${item.productName}`).join(", ");
           rows.push([
             withdrawal.username || "—",
             items.map(item => `${item.quantity}x ${item.productName}`).join(", ") || "—",
-            returned || "—",
-            open || "—",
+            "Retirada",
+            withdrawal.notes || "—",
             withdrawal.status || "—",
+          ]);
+        }
+        if (asArray<any>(day.entries).length) {
+          rows.push([
+            "Entradas",
+            asArray<any>(day.entries).map(item => `${item.quantity}x ${item.productName}`).join(", "),
+            "Entrada",
+            "Registro rápido/estoque",
+            "registrado",
           ]);
         }
         if (asArray<any>(day.consumption).length) {
           rows.push([
-            "Entradas/Saídas de consumo",
+            "Saídas/Consumo",
             asArray<any>(day.consumption).map(item => `${item.quantity}x ${item.productName}`).join(", "),
-            "—",
-            "—",
+            "Saída",
+            "Registro rápido/estoque",
             "consumo",
           ]);
         }
         autoTable(doc, {
           startY: y,
-          head: [["Funcionário", "Itens retirados/consumidos", "Devolvidos", "Em aberto", "Status"]],
+          head: [["Responsável", "Itens", "Tipo", "Origem/Observação", "Status"]],
           body: rows,
           styles: { fontSize: 7, cellPadding: 2 },
           headStyles: headStyle,
           alternateRowStyles: altRow,
-          columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 88 }, 2: { cellWidth: 56 }, 3: { cellWidth: 56 }, 4: { cellWidth: 28 } },
+          columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 88 }, 2: { cellWidth: 30 }, 3: { cellWidth: 72 }, 4: { cellWidth: 28 } },
         });
         y = ((doc as any).lastAutoTable?.finalY || y) + 8;
       }
@@ -667,7 +675,7 @@ export default function BackupManager({
         generatedBy,
       });
 
-      if (!isExport || type === "usuarios" || type === "materiais") {
+      if (!isExport || type === "usuarios") {
         const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -692,7 +700,7 @@ export default function BackupManager({
 
       toast({
         title: isExport ? "Relatório exportado com sucesso!" : "Backup gerado com sucesso!",
-        description: isExport && type !== "usuarios" && type !== "materiais"
+        description: isExport && type !== "usuarios"
           ? `${baseName}.pdf baixado para conferência segura.`
           : `${baseName}.json restaurável e PDF de conferência baixados.`,
       });
