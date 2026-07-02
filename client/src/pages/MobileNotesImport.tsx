@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ClipboardPaste, History, Loader2, PackagePlus, Save, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardPaste, History, Loader2, Save, XCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
@@ -9,7 +9,6 @@ import type { MobileImportPreviewRow } from "@shared/mobileNotesImport";
 
 type InventoryItem = { id: number; name: string; unit?: string; quantity?: number; type?: string };
 type UserItem = { id: number; username: string; fullName?: string; name?: string; role?: string };
-type NewInventoryForm = { rowId: string; name: string; type: string; unit: string; returnable: boolean } | null;
 type ImportPreview = {
   rows: MobileImportPreviewRow[];
   ignored: MobileImportPreviewRow[];
@@ -52,6 +51,24 @@ function typeLabel(type: MobileImportPreviewRow["type"]) {
   return "Saída";
 }
 
+function hasStockWarning(row: MobileImportPreviewRow) {
+  return row.warnings.some(warning => warning.toLowerCase().includes("estoque insuficiente"));
+}
+
+function isRowReady(row: MobileImportPreviewRow) {
+  return row.status === "ok" &&
+    Boolean(row.inventoryId) &&
+    row.quantity > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(row.date) &&
+    (row.type !== "retirada" || Boolean(row.userId));
+}
+
+function withdrawalGroupStatus(rows: MobileImportPreviewRow[]) {
+  if (!rows.every(isRowReady)) return { label: "pendente", className: "bg-red-50 text-red-700" };
+  if (rows.some(hasStockWarning)) return { label: "alerta de estoque", className: "bg-amber-50 text-amber-700" };
+  return { label: "valido", className: "bg-emerald-50 text-emerald-700" };
+}
+
 export default function MobileNotesImport({ embedded = false }: { embedded?: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -61,7 +78,6 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
   const [rows, setRows] = useState<MobileImportPreviewRow[]>([]);
   const [activeTab, setActiveTab] = useState<"entrada" | "saida" | "retirada" | "pendentes" | "ignorados">("entrada");
   const [aliasRows, setAliasRows] = useState<Record<string, boolean>>({});
-  const [newInventoryForm, setNewInventoryForm] = useState<NewInventoryForm>(null);
   const [report, setReport] = useState<any>(null);
   const parsedImportYear = Number(importYear);
   const isImportYearValid = Number.isInteger(parsedImportYear) && parsedImportYear >= 2020 && parsedImportYear <= 2100;
@@ -88,7 +104,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
       setPreview(data);
       setRows(data.rows);
       setReport(null);
-      setActiveTab(data.summary.duvidosos || data.summary.bloqueados ? "pendentes" : "retirada");
+      setActiveTab(data.rows.some(row => row.type === "retirada" && !row.ignored) ? "retirada" : (data.summary.duvidosos || data.summary.bloqueados ? "pendentes" : "entrada"));
       toast({ title: "Preview gerado", description: `${data.rows.length} linha(s) interpretada(s).` });
     },
     onError: (error: Error) => toast({ title: "Não foi possível interpretar", description: error.message, variant: "destructive" }),
@@ -96,9 +112,13 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
 
   const applyMutation = useMutation({
     mutationFn: () => {
-      const aliasesToSave = rows
-        .filter(row => row.type === "retirada" && row.rawEmployee && row.userId && aliasRows[row.id])
-        .map(row => ({ alias: row.rawEmployee, userId: row.userId }));
+      const aliasMap = new Map<string, { alias: string; userId: number }>();
+      rows.forEach(row => {
+        if (row.type === "retirada" && row.rawEmployee && row.userId && aliasRows[row.id]) {
+          aliasMap.set(`${row.rawEmployee}:${row.userId}`, { alias: row.rawEmployee, userId: row.userId });
+        }
+      });
+      const aliasesToSave = Array.from(aliasMap.values());
       return apiRequest("/api/mobile-import/apply", {
         method: "POST",
         body: JSON.stringify({ text, importYear: parsedImportYear, rows, aliasesToSave }),
@@ -113,39 +133,6 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
       toast({ title: "Registro rapido aplicado", description: "Movimentacoes e retiradas foram registradas em modo merge." });
     },
     onError: (error: Error) => toast({ title: "Importação bloqueada", description: error.message, variant: "destructive" }),
-  });
-
-  const createInventoryMutation = useMutation({
-    mutationFn: (form: Exclude<NewInventoryForm, null>) => apiRequest<InventoryItem>("/api/inventory", {
-      method: "POST",
-      body: JSON.stringify({
-        name: form.name.trim(),
-        type: form.returnable ? form.type : "material",
-        unit: form.unit.trim() || "unid",
-        quantity: 0,
-        minStock: 0,
-        pricePerUnit: 0,
-      }),
-    }),
-    onSuccess: (item, form) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/inventory"] });
-      const target = rows.find(row => row.id === form.rowId);
-      setRows(current => current.map(row => {
-        const sameRaw = target && row.rawItem.trim().toLowerCase() === target.rawItem.trim().toLowerCase();
-        if (!sameRaw) return row;
-        return {
-          ...row,
-          inventoryId: item.id,
-          itemName: item.name,
-          itemConfidence: 100,
-          status: row.type === "retirada" && !row.userId ? "duvidoso" : "ok",
-          warnings: row.type === "retirada" && !row.userId ? ["Funcionário pendente"] : [],
-        };
-      }));
-      setNewInventoryForm(null);
-      toast({ title: "Item cadastrado", description: `${item.name} foi selecionado no preview.` });
-    },
-    onError: (error: Error) => toast({ title: "Não foi possível cadastrar", description: error.message, variant: "destructive" }),
   });
 
   const groupedRows = useMemo(() => ({
@@ -171,7 +158,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
 
   const canApply = rows.some(row => !row.ignored) &&
     !preview?.duplicate &&
-    rows.every(row => row.ignored || (row.status === "ok" && row.inventoryId && row.quantity > 0 && /^\d{4}-\d{2}-\d{2}$/.test(row.date) && (row.type !== "retirada" || row.userId)));
+    rows.every(row => row.ignored || isRowReady(row));
 
   const updateRow = (id: string, updates: Partial<MobileImportPreviewRow>) => {
     setRows(current => current.map(row => row.id === id ? { ...row, ...updates } : row));
@@ -202,16 +189,6 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
         warnings: candidate.inventoryId ? candidate.warnings.filter(warning => warning.toLowerCase().includes("estoque insuficiente")) : ["Item ainda não cadastrado."],
       };
     }));
-  };
-
-  const openCreateInventory = (row: MobileImportPreviewRow) => {
-    setNewInventoryForm({
-      rowId: row.id,
-      name: row.rawItem || row.itemName || "",
-      type: "ferramenta",
-      unit: "unid",
-      returnable: row.type === "retirada",
-    });
   };
 
   const visibleRows = groupedRows[activeTab];
@@ -302,42 +279,70 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
 
           {activeTab === "retirada" && (
             <div className="mt-4 space-y-3">
-              {withdrawalGroups.map(group => (
-                <details key={group.key} open className="rounded-lg border border-slate-200 bg-white">
-                  <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
-                    <div>
-                      <div className="font-bold text-slate-900">{group.employee}</div>
-                      <div className="text-xs text-slate-500">Registro Rapido - {new Date(`${group.date}T12:00:00`).toLocaleDateString("pt-BR")}</div>
-                      <div className="mt-1 text-xs text-slate-600">Texto original: {group.rawText}</div>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{group.rows.length} item(ns)</span>
-                  </summary>
-                  <div className="border-t border-slate-100 p-3">
-                    <div className="space-y-2">
-                      {group.rows.map(row => (
-                        <div key={row.id} className="grid gap-2 rounded-lg bg-slate-50 p-3 md:grid-cols-[1fr_110px_220px_120px] md:items-center">
-                          <div>
-                            <div className="font-semibold text-slate-800">{row.itemName || row.rawItem}</div>
-                            <div className="text-xs text-slate-500">Texto: {row.rawText}</div>
-                            {row.warnings.length > 0 && <div className="mt-1 text-xs font-semibold text-amber-700">{row.warnings.join(" · ")}</div>}
-                          </div>
-                          <Input type="number" min={1} value={row.quantity} onChange={(event) => updateRow(row.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} />
-                          <select className="w-full rounded-md border border-slate-300 px-2 py-2 text-sm" value={row.inventoryId || ""} onChange={(event) => selectInventory(row, Number(event.target.value))}>
-                            <option value="">Selecionar material</option>
-                            {inventory.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-                          </select>
-                          <div className="flex flex-col gap-2">
-                            {!row.inventoryId && <Button variant="outline" size="sm" onClick={() => openCreateInventory(row)}><PackagePlus className="mr-1 h-3 w-3" />Cadastrar</Button>}
-                            <Button variant="outline" size="sm" onClick={() => updateRow(row.id, { ignored: !row.ignored, status: row.ignored ? "duvidoso" : "ignorado" as any })}>
-                              {row.ignored ? "Reativar" : "Ignorar"}
-                            </Button>
-                          </div>
+              {withdrawalGroups.map(group => {
+                const firstRow = group.rows[0];
+                const groupStatus = withdrawalGroupStatus(group.rows);
+                return (
+                  <details key={group.key} open className="rounded-lg border border-slate-200 bg-white">
+                    <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3">
+                      <div>
+                        <div className="font-bold text-slate-900">{group.employee}</div>
+                        <div className="text-xs text-slate-500">Registro Rapido - {new Date(`${group.date}T12:00:00`).toLocaleDateString("pt-BR")}</div>
+                        <div className="mt-1 text-xs text-slate-600">Texto original: {group.rawText}</div>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <span className={`rounded-full px-2 py-1 text-xs font-bold ${groupStatus.className}`}>{groupStatus.label}</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{group.rows.length} item(ns)</span>
+                      </div>
+                    </summary>
+                    <div className="space-y-3 border-t border-slate-100 p-3">
+                      <div className="grid gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 md:grid-cols-[180px_1fr] md:items-start">
+                        <div>
+                          <div className="text-xs font-semibold uppercase text-slate-400">Data</div>
+                          <Input type="date" value={firstRow.date} onChange={(event) => group.rows.forEach(row => updateRow(row.id, { date: event.target.value }))} />
                         </div>
-                      ))}
+                        <div>
+                          <div className="text-xs font-semibold uppercase text-slate-400">Funcionario</div>
+                          <select className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" value={firstRow.userId || ""} onChange={(event) => selectUser(firstRow, Number(event.target.value))}>
+                            <option value="">Selecionar funcionario existente</option>
+                            {users.filter(user => user.role !== "admin").map(user => <option key={user.id} value={user.id}>{user.fullName || user.name || user.username}</option>)}
+                          </select>
+                          {firstRow.rawEmployee && firstRow.userId && (
+                            <label className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+                              <input type="checkbox" checked={Boolean(aliasRows[firstRow.id])} onChange={(event) => setAliasRows(current => ({ ...current, [firstRow.id]: event.target.checked }))} />
+                              Salvar alias "{firstRow.rawEmployee}" para proximas importacoes
+                            </label>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {group.rows.map((row, index) => (
+                          <div key={row.id} className="grid gap-2 rounded-lg bg-slate-50 p-3 md:grid-cols-[32px_1fr_110px_260px_120px] md:items-center">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-500">{index + 1}</div>
+                            <div>
+                              <div className="font-semibold text-slate-800">{row.itemName || row.rawItem || "Material pendente"}</div>
+                              <div className="text-xs text-slate-500">Trecho: {row.rawItem || row.rawText}</div>
+                              {row.warnings.length > 0 && <div className="mt-1 text-xs font-semibold text-amber-700">{row.warnings.join(" · ")}</div>}
+                            </div>
+                            <Input type="number" min={1} value={row.quantity} onChange={(event) => updateRow(row.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} />
+                            <select className="w-full rounded-md border border-slate-300 px-2 py-2 text-sm" value={row.inventoryId || ""} onChange={(event) => selectInventory(row, Number(event.target.value))}>
+                              <option value="">Selecionar material existente</option>
+                              {inventory.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                            </select>
+                            <div className="flex flex-col gap-2">
+                              <span className={`inline-flex justify-center rounded-full px-2 py-1 text-xs font-bold ${rowStatusClass(row)}`}>{row.ignored ? "ignorado" : row.status}</span>
+                              <Button variant="outline" size="sm" onClick={() => updateRow(row.id, { ignored: !row.ignored, status: row.ignored ? "duvidoso" : "ignorado" as any })}>
+                                {row.ignored ? "Reativar" : "Ignorar"}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </details>
-              ))}
+                  </details>
+                );
+              })}
               {withdrawalGroups.length === 0 && <div className="rounded-lg border border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Nenhuma retirada encontrada.</div>}
             </div>
           )}
@@ -375,7 +380,6 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                         <option value="">Selecionar material</option>
                         {inventory.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                       </select>
-                      {!row.inventoryId && <Button variant="outline" size="sm" className="mt-2" onClick={() => openCreateInventory(row)}><PackagePlus className="mr-1 h-3 w-3" />Cadastrar item</Button>}
                     </td>
                     <td className="px-3 py-2">
                       {row.type === "retirada" ? (
@@ -420,37 +424,6 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
               {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Confirmar registro
             </Button>
-          </div>
-        </Card>
-      )}
-
-      {newInventoryForm && (
-        <Card className="border-blue-200 bg-blue-50 p-5">
-          <h2 className="text-lg font-bold text-slate-900">Cadastrar item pendente</h2>
-          <p className="mt-1 text-sm text-slate-600">O item será criado com estoque 0 e selecionado automaticamente neste preview.</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-4">
-            <label className="text-xs font-semibold text-slate-700">Nome
-              <input value={newInventoryForm.name} onChange={event => setNewInventoryForm(form => form ? { ...form, name: event.target.value } : null)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm" />
-            </label>
-            <label className="text-xs font-semibold text-slate-700">Unidade
-              <input value={newInventoryForm.unit} onChange={event => setNewInventoryForm(form => form ? { ...form, unit: event.target.value } : null)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm" />
-            </label>
-            <label className="text-xs font-semibold text-slate-700">Uso
-              <select value={newInventoryForm.returnable ? "retornavel" : "consumivel"} onChange={event => setNewInventoryForm(form => form ? { ...form, returnable: event.target.value === "retornavel" } : null)} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm">
-                <option value="retornavel">Retornável</option>
-                <option value="consumivel">Consumível</option>
-              </select>
-            </label>
-            <label className="text-xs font-semibold text-slate-700">Categoria
-              <select value={newInventoryForm.type} onChange={event => setNewInventoryForm(form => form ? { ...form, type: event.target.value } : null)} disabled={!newInventoryForm.returnable} className="mt-1 h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm disabled:bg-slate-100">
-                <option value="ferramenta">Ferramenta</option>
-                <option value="equipamento">Equipamento</option>
-              </select>
-            </label>
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setNewInventoryForm(null)}>Cancelar</Button>
-            <Button onClick={() => createInventoryMutation.mutate(newInventoryForm)} disabled={!newInventoryForm.name.trim() || createInventoryMutation.isPending} isLoading={createInventoryMutation.isPending}>Salvar item</Button>
           </div>
         </Card>
       )}
