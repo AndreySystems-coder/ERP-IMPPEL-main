@@ -54,6 +54,64 @@ function parseMobileImportYear(value: unknown) {
   return year;
 }
 
+function normalizeMoneyReais(value: unknown, options: { fallback?: number; field?: string } = {}) {
+  const fallback = options.fallback ?? 0;
+  if (value === null || value === undefined || value === "") return fallback;
+  let normalized: number;
+  if (typeof value === "string") {
+    const raw = value.trim();
+    if (!raw) return fallback;
+    const hasComma = raw.includes(",");
+    const cleaned = raw.replace(/[^\d,.-]/g, "");
+    const decimalNormalized = hasComma
+      ? cleaned.replace(/\./g, "").replace(",", ".")
+      : cleaned;
+    normalized = Number(decimalNormalized);
+  } else {
+    normalized = Number(value);
+  }
+  if (!Number.isFinite(normalized) || normalized < 0) return fallback;
+
+  // Defensive guard for values accidentally submitted in cents by masked inputs.
+  // ERP schemas store real/float monetary values in reais.
+  if (Number.isInteger(normalized) && normalized >= 10000) {
+    const centsCandidate = normalized / 100;
+    if (centsCandidate <= 5000) return Number(centsCandidate.toFixed(2));
+  }
+  return Number(normalized.toFixed(2));
+}
+
+function normalizePercent(value: unknown, fallback = 0) {
+  const numeric = Number(String(value ?? "").replace(",", "."));
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(0, Math.min(100, Number(numeric.toFixed(2))));
+}
+
+function normalizeProductPricingPayload<T extends Record<string, any>>(payload: T, fallback: Record<string, any> = {}) {
+  return {
+    ...payload,
+    salePrice: normalizeMoneyReais(payload.salePrice, { fallback: Number(fallback.salePrice) || 0, field: "salePrice" }),
+    commission: normalizeMoneyReais(payload.commission, { fallback: Number(fallback.commission) || 0, field: "commission" }),
+    maxDiscount: normalizePercent(payload.maxDiscount, Number(fallback.maxDiscount) || 0),
+  };
+}
+
+function normalizeInventoryPricingPayload<T extends Record<string, any>>(payload: T, fallback: Record<string, any> = {}) {
+  return {
+    ...payload,
+    pricePerUnit: normalizeMoneyReais(payload.pricePerUnit, { fallback: Number(fallback.pricePerUnit) || 0, field: "pricePerUnit" }),
+  };
+}
+
+function normalizeServicePricingPayload<T extends Record<string, any>>(payload: T, fallback: Record<string, any> = {}) {
+  return {
+    ...payload,
+    pricePerUnit: normalizeMoneyReais(payload.pricePerUnit, { fallback: Number(fallback.pricePerUnit) || 0, field: "pricePerUnit" }),
+    laborCostPerM2: normalizeMoneyReais(payload.laborCostPerM2, { fallback: Number(fallback.laborCostPerM2) || 0, field: "laborCostPerM2" }),
+    transportCostPerM2: normalizeMoneyReais(payload.transportCostPerM2, { fallback: Number(fallback.transportCostPerM2) || 0, field: "transportCostPerM2" }),
+  };
+}
+
 function normalizeMobileImportRows(rows: unknown): MobileImportPreviewRow[] {
   if (!Array.isArray(rows)) return [];
   return rows.map((row: any, index) => ({
@@ -1652,7 +1710,7 @@ export async function registerRoutes(
   });
   app.post(api.inventory.create.path, async (req, res) => {
     try {
-      const input = api.inventory.create.input.parse(req.body);
+      const input = normalizeInventoryPricingPayload(api.inventory.create.input.parse(req.body));
       const item = await storage.createInventoryItem(input);
       res.status(201).json(item);
     } catch (err) {
@@ -1662,7 +1720,8 @@ export async function registerRoutes(
   });
   app.put(api.inventory.update.path, async (req, res) => {
     try {
-      const input = api.inventory.update.input.parse(req.body);
+      const current = (await storage.getInventoryItems()).find(item => Number(item.id) === Number(req.params.id));
+      const input = normalizeInventoryPricingPayload(api.inventory.update.input.parse(req.body), current || {});
       const item = await storage.updateInventoryItem(Number(req.params.id), input);
       if (!item) return res.status(404).json({ message: "Not found" });
       res.json(item);
@@ -2197,7 +2256,7 @@ export async function registerRoutes(
 
   app.post("/api/products", async (req, res) => {
     try {
-      const product = await storage.createProduct(req.body);
+      const product = await storage.createProduct(normalizeProductPricingPayload(req.body));
       res.json(product);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -2207,7 +2266,8 @@ export async function registerRoutes(
 
   app.patch("/api/products/:id", async (req, res) => {
     try {
-      const product = await storage.updateProduct(parseInt(req.params.id), req.body);
+      const current = await storage.getProduct(parseInt(req.params.id));
+      const product = await storage.updateProduct(parseInt(req.params.id), normalizeProductPricingPayload(req.body, current || {}));
       res.json(product);
     } catch (err) {
       res.status(500).json({ message: "Internal Error" });
@@ -3500,8 +3560,8 @@ export async function registerRoutes(
         if (quantity > available) throw new Error(`Estoque insuficiente para ${product.name}: solicitado ${quantity}, disponível ${available}.`);
         availableByInventoryId.set(inventoryItem.id, available - quantity);
         const canOverridePrice = user.role === "admin" || user.role === "supervisor" || user.role === "financeiro";
-        const requestedUnitPrice = Number(requested.unitPrice);
-        const unitPrice = canOverridePrice && Number.isFinite(requestedUnitPrice) && requestedUnitPrice >= 0 ? requestedUnitPrice : Number(product.salePrice) || 0;
+        const requestedUnitPrice = normalizeMoneyReais(requested.unitPrice, { fallback: Number(product.salePrice) || 0, field: "unitPrice" });
+        const unitPrice = canOverridePrice ? requestedUnitPrice : normalizeMoneyReais(product.salePrice, { field: "salePrice" });
         const originalTotal = unitPrice * quantity;
         const itemTotal = originalTotal * (1 - discountPercent / 100);
         subtotal += originalTotal;
@@ -3896,7 +3956,7 @@ export async function registerRoutes(
         for (const item of data.items) {
           const newItem = await storage.createInventoryItem({
             name: item.name, type: item.type || "Geral", unit: item.unit || "un",
-            quantity: item.quantity ?? 0, minStock: item.minStock ?? 5, pricePerUnit: item.pricePerUnit ?? 0,
+            quantity: item.quantity ?? 0, minStock: item.minStock ?? 5, pricePerUnit: normalizeMoneyReais(item.pricePerUnit),
           });
           created++;
           nameToNewId.set(item.name.toLowerCase().trim(), newItem.id);
@@ -3912,14 +3972,14 @@ export async function registerRoutes(
             await storage.updateInventoryItem(found.id, {
               quantity: item.quantity ?? found.quantity,
               minStock: item.minStock ?? found.minStock,
-              pricePerUnit: item.pricePerUnit ?? found.pricePerUnit,
+              pricePerUnit: normalizeMoneyReais(item.pricePerUnit, { fallback: Number(found.pricePerUnit) || 0 }),
             });
             updated++;
             nameToNewId.set(key, found.id);
           } else {
             const newItem = await storage.createInventoryItem({
               name: item.name, type: item.type || "Geral", unit: item.unit || "un",
-              quantity: item.quantity ?? 0, minStock: item.minStock ?? 5, pricePerUnit: item.pricePerUnit ?? 0,
+              quantity: item.quantity ?? 0, minStock: item.minStock ?? 5, pricePerUnit: normalizeMoneyReais(item.pricePerUnit),
             });
             created++;
             nameToNewId.set(key, newItem.id);
@@ -3976,7 +4036,7 @@ export async function registerRoutes(
           await storage.updateInventoryItem(inventoryId, {
             quantity: item.quantity ?? 0,
             minStock: item.minStock ?? 5,
-            pricePerUnit: item.pricePerUnit ?? 0,
+            pricePerUnit: normalizeMoneyReais(item.pricePerUnit),
           });
         }
       }
@@ -4000,7 +4060,7 @@ export async function registerRoutes(
         const key = String(p.name).toLowerCase().trim();
         const found = byName.get(key);
         if (found) {
-          await storage.updateProduct(found.id, {
+          await storage.updateProduct(found.id, normalizeProductPricingPayload({
             description: p.description ?? found.description,
             category: p.category ?? found.category,
             brand: p.brand ?? found.brand,
@@ -4009,10 +4069,10 @@ export async function registerRoutes(
             commission: p.commission ?? found.commission,
             maxDiscount: p.maxDiscount ?? found.maxDiscount,
             active: p.active ?? found.active,
-          });
+          }, found));
           updated++;
         } else {
-          await storage.createProduct({
+          await storage.createProduct(normalizeProductPricingPayload({
             name: p.name,
             description: p.description || "",
             category: p.category || "Sem Categoria",
@@ -4022,7 +4082,7 @@ export async function registerRoutes(
             commission: p.commission ?? 0,
             maxDiscount: p.maxDiscount ?? 0,
             active: p.active ?? true,
-          });
+          }));
           created++;
         }
       }
@@ -4041,17 +4101,17 @@ export async function registerRoutes(
         const key = String(s.name).toLowerCase().trim();
         const found = byName.get(key);
         if (found) {
-          await storage.updateService(found.id, {
+          await storage.updateService(found.id, normalizeServicePricingPayload({
             description: s.description ?? found.description,
             pricePerUnit: s.pricePerUnit ?? found.pricePerUnit,
             laborCostPerM2: s.laborCostPerM2 ?? found.laborCostPerM2,
             transportCostPerM2: s.transportCostPerM2 ?? found.transportCostPerM2,
             materialConsumptionPerM2: s.materialConsumptionPerM2 ?? found.materialConsumptionPerM2,
             serviceMaterials: s.serviceMaterials ?? found.serviceMaterials,
-          });
+          }, found));
           updated++;
         } else {
-          await storage.createService({
+          await storage.createService(normalizeServicePricingPayload({
             name: s.name,
             description: s.description || "",
             pricePerUnit: s.pricePerUnit ?? 0,
@@ -4059,7 +4119,7 @@ export async function registerRoutes(
             transportCostPerM2: s.transportCostPerM2 ?? 0,
             materialConsumptionPerM2: s.materialConsumptionPerM2 ?? 0,
             serviceMaterials: s.serviceMaterials ?? null,
-          });
+          }));
           created++;
         }
       }

@@ -192,6 +192,37 @@ assert.equal(mobilePreview.rows.find(row => row.rawEmployee === "Lequinho")?.use
 assert.equal(mobilePreview.rows.find(row => row.rawText.includes("barra de asfalto"))?.date, "2026-06-30", "data 30/06 deve aplicar nas linhas seguintes");
 assert.equal(mobilePreview.rows.some(row => row.date.startsWith("2025-")), false, "anotacoes sem ano nao devem assumir 2025 automaticamente");
 
+const pendingGroupedPreview = buildMobileNotesPreview({
+  importYear: 2026,
+  inventory: [
+    { id: 701, name: "raspador", type: "ferramenta", unit: "un", quantity: 10 },
+    { id: 702, name: "Extensao", type: "ferramenta", unit: "un", quantity: 1 },
+    { id: 703, name: "Marreta", type: "ferramenta", unit: "un", quantity: 10 },
+    { id: 704, name: "Furadeira", type: "ferramenta", unit: "un", quantity: 10 },
+    { id: 705, name: "broxa", type: "material", unit: "un", quantity: 10 },
+  ],
+  users: [
+    { id: 801, username: "leandro", fullName: "Lequinho Aplicador", role: "funcionario" },
+    { id: 802, username: "jhones", fullName: "Jhones Aplicador", role: "funcionario" },
+  ],
+  aliases: [{ alias: "Lequinho", userId: 801, username: "leandro" }],
+  text: `30/06
+Lequinho - raspador, extensão, soprador
+Jhones - 2x extensão, 1x marreta
+Biro - furadeira
+2x broxa
++ 20x broxa`,
+});
+const lequinhoRows = pendingGroupedPreview.rows.filter(row => row.rawText === "Lequinho - raspador, extensão, soprador");
+const jhonesRows = pendingGroupedPreview.rows.filter(row => row.rawText === "Jhones - 2x extensão, 1x marreta");
+const biroRows = pendingGroupedPreview.rows.filter(row => row.rawText === "Biro - furadeira");
+assert.equal(lequinhoRows.length, 3, "Lequinho deve manter uma linha original agrupavel com 3 itens");
+assert.deepEqual(jhonesRows.map(row => row.quantity), [2, 1], "Jhones deve preservar quantidades 2x extensao e 1x marreta");
+assert.equal(biroRows.length, 1, "Biro deve gerar um card/linha de retirada pendente");
+assert.equal(biroRows[0].userId, null, "Biro deve ficar pendente de funcionario quando nao houver usuario correspondente");
+assert.equal(lequinhoRows.find(row => row.rawItem === "soprador")?.status, "duvidoso", "Soprador deve ficar pendente dentro do card de Lequinho quando nao existir no estoque");
+assert.equal(pendingGroupedPreview.rows.some(row => row.stockWarning), true, "Estoque insuficiente deve virar alerta no preview, nao bloqueio");
+
 const applicator = { role: "funcionario", permissions: { registrarMaterials: true } };
 assert.equal(canAccess(applicator, "viewDashboard"), false);
 assert.equal(getDefaultLandingPath(applicator), "/controle-materiais");

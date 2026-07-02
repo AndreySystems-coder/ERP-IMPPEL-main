@@ -155,6 +155,12 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
       return { key, date, employee, rawText: rawParts.join("|"), rows: groupRows };
     });
   }, [groupedRows.retirada]);
+  const pendingWithdrawalGroups = useMemo(() => {
+    const pendingIds = new Set(groupedRows.pendentes.filter(row => row.type === "retirada").map(row => row.id));
+    return withdrawalGroups
+      .map(group => ({ ...group, rows: group.rows.filter(row => pendingIds.has(row.id)) }))
+      .filter(group => group.rows.length > 0);
+  }, [groupedRows.pendentes, withdrawalGroups]);
 
   const canApply = rows.some(row => !row.ignored) &&
     !preview?.duplicate &&
@@ -192,6 +198,11 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
   };
 
   const visibleRows = groupedRows[activeTab];
+  const tableRows = activeTab === "pendentes"
+    ? visibleRows.filter(row => row.type !== "retirada")
+    : visibleRows;
+  const cardWithdrawalGroups = activeTab === "retirada" ? withdrawalGroups : pendingWithdrawalGroups;
+  const showWithdrawalCards = activeTab === "retirada" || (activeTab === "pendentes" && pendingWithdrawalGroups.length > 0);
 
   return (
     <div className="space-y-5">
@@ -277,9 +288,9 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
             ))}
           </div>
 
-          {activeTab === "retirada" && (
+          {showWithdrawalCards && (
             <div className="mt-4 space-y-3">
-              {withdrawalGroups.map(group => {
+              {cardWithdrawalGroups.map(group => {
                 const firstRow = group.rows[0];
                 const groupStatus = withdrawalGroupStatus(group.rows);
                 return (
@@ -343,7 +354,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                   </details>
                 );
               })}
-              {withdrawalGroups.length === 0 && <div className="rounded-lg border border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Nenhuma retirada encontrada.</div>}
+              {cardWithdrawalGroups.length === 0 && <div className="rounded-lg border border-slate-200 px-4 py-8 text-center text-sm text-slate-500">Nenhuma retirada encontrada.</div>}
             </div>
           )}
 
@@ -363,7 +374,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((row) => (
+                {tableRows.map((row) => (
                   <tr key={row.id} className="border-t border-slate-100 align-top">
                     <td className="px-3 py-2"><Input type="date" value={row.date} onChange={(event) => updateRow(row.id, { date: event.target.value })} /></td>
                     <td className="px-3 py-2">
@@ -409,7 +420,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                     </td>
                   </tr>
                 ))}
-                {visibleRows.length === 0 && (
+                {tableRows.length === 0 && (
                   <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-slate-500">Nenhum item nesta categoria.</td></tr>
                 )}
               </tbody>
