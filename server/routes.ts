@@ -107,6 +107,182 @@ function assertMobileImportStock(rows: MobileImportPreviewRow[], inventoryItems:
   }
 }
 
+function operationalDate(value?: string | Date | null) {
+  if (!value) return "";
+  const raw = value instanceof Date ? value.toISOString() : String(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : raw.slice(0, 10);
+}
+
+function isMaterialPeriodMatch(date: string, period: string, year?: string, month?: string) {
+  if (!date) return false;
+  if (period === "all") return true;
+  if (period === "year") return Boolean(year) && date.startsWith(`${year}-`);
+  if (period === "month") {
+    if (!year || !month) return false;
+    return date.startsWith(`${year}-${month.padStart(2, "0")}`);
+  }
+  return true;
+}
+
+function buildMaterialControlExportPayload(params: {
+  withdrawals: any[];
+  movements: any[];
+  period: string;
+  year?: string;
+  month?: string;
+}) {
+  const period = params.period === "month" || params.period === "year" ? params.period : "all";
+  const year = params.year && /^\d{4}$/.test(params.year) ? params.year : undefined;
+  const month = params.month && /^\d{1,2}$/.test(params.month) ? params.month.padStart(2, "0") : undefined;
+  const label = period === "month" && year && month
+    ? `${MONTHS_PT_BR[Number(month) - 1]}/${year}`
+    : period === "year" && year
+      ? year
+      : "Todos os meses";
+
+  const withdrawals = params.withdrawals.filter(withdrawal =>
+    isMaterialPeriodMatch(operationalDate(withdrawal.withdrawalDate || withdrawal.createdAt), period, year, month)
+  );
+  const consumption = params.movements.filter(movement => {
+    const type = String(movement.type || "").toUpperCase();
+    const isConsumption = type === "SAÍDA" || type === "SAIDA";
+    const fromWithdrawal = String(movement.notes || "").toLowerCase().includes("retirada #");
+    return isConsumption && !fromWithdrawal && isMaterialPeriodMatch(operationalDate(movement.date), period, year, month);
+  });
+  const days = new Map<string, { withdrawals: any[]; consumption: any[] }>();
+  for (const withdrawal of withdrawals) {
+    const date = operationalDate(withdrawal.withdrawalDate || withdrawal.createdAt);
+    const group = days.get(date) || { withdrawals: [], consumption: [] };
+    group.withdrawals.push(withdrawal);
+    days.set(date, group);
+  }
+  for (const movement of consumption) {
+    const date = operationalDate(movement.date);
+    const group = days.get(date) || { withdrawals: [], consumption: [] };
+    group.consumption.push(movement);
+    days.set(date, group);
+  }
+
+  return {
+    type: "materiais",
+    version: "1.1",
+    exportedAt: new Date().toISOString(),
+    filters: { period, year: year || null, month: month || null, label },
+    data: {
+      withdrawals,
+      consumption,
+      days: Array.from(days.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, group]) => ({ date, ...group })),
+    },
+  };
+}
+
+const DEFAULT_SALARY_DISCOUNT_RULES = [
+  { name: "Bom - sem desconto", condition: "bom", discountType: "fixo", discountValue: 0, active: true },
+  { name: "Manutenção - avaliar responsabilidade", condition: "manutencao", discountType: "fixo", discountValue: 0, active: true },
+  { name: "Ferramenta danificada - aprovação manual", condition: "danificado", discountType: "fixo", discountValue: 0, active: true },
+  { name: "Ferramenta perdida - aprovação manual", condition: "perdido", discountType: "fixo", discountValue: 0, active: true },
+];
+
+function normalizeAuditName(value: unknown) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function buildArtificialDataAudit(params: { inventory: any[]; movements: any[]; users: any[] }) {
+  const suspiciousStockValues = new Set([100, 898, 10000]);
+  const byName = new Map<string, any[]>();
+  for (const item of params.inventory) {
+    const key = normalizeAuditName(item.name);
+    if (!key) continue;
+    byName.set(key, [...(byName.get(key) || []), item]);
+  }
+  const aliasOnlyNames = new Set(["lequinho", "biro", "tio", "borracha", "jhones", "jones"]);
+  const stockSuspects = params.inventory
+    .filter(item => suspiciousStockValues.has(Number(item.quantity)))
+    .map(item => ({
+      id: item.id,
+      name: item.name,
+      quantity: Number(item.quantity),
+      reason: `Saldo ${item.quantity} é valor comum de carga artificial ou teste.`,
+      suggestedAction: "Conferir contagem física antes de ajustar.",
+    }));
+  const duplicateMaterials = Array.from(byName.values())
+    .filter(items => items.length > 1)
+    .map(items => ({
+      name: items[0]?.name,
+      ids: items.map(item => item.id),
+      count: items.length,
+      reason: "Mesmo nome normalizado aparece mais de uma vez no estoque.",
+      suggestedAction: "Unificar cadastro após backup e conferência.",
+    }));
+  const oldMovements = params.movements
+    .filter(movement => operationalDate(movement.date).startsWith("2025-"))
+    .slice(0, 200)
+    .map(movement => ({
+      id: movement.id,
+      productName: movement.productName,
+      type: movement.type,
+      quantity: movement.quantity,
+      date: movement.date,
+      reason: "Movimentação em 2025 pode ser histórica ou importação antiga.",
+      suggestedAction: "Validar se deve permanecer no histórico ou ficar apenas em backup.",
+    }));
+  const aliasUsers = params.users
+    .filter(user => aliasOnlyNames.has(normalizeAuditName(user.username || user.fullName || user.name)))
+    .map(user => ({
+      id: user.id,
+      username: user.username,
+      fullName: user.fullName || user.name,
+      reason: "Usuário parece ter sido criado apenas por apelido.",
+      suggestedAction: "Conferir nome completo e cargo antes de usar em produção.",
+    }));
+  const artificialTools = params.inventory
+    .filter(item => String(item.type || "").toLowerCase().includes("ferramenta") && suspiciousStockValues.has(Number(item.quantity)))
+    .map(item => ({
+      id: item.id,
+      name: item.name,
+      quantity: Number(item.quantity),
+      reason: "Ferramenta retornável com saldo típico de teste.",
+      suggestedAction: "Zerar/recontar somente após backup e aprovação.",
+    }));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    safeMode: true,
+    message: "Auditoria somente leitura. Nenhum dado foi alterado.",
+    suspects: {
+      stockSuspects,
+      oldMovements,
+      aliasUsers,
+      duplicateMaterials,
+      artificialTools,
+    },
+    summary: {
+      stockSuspects: stockSuspects.length,
+      oldMovements: oldMovements.length,
+      aliasUsers: aliasUsers.length,
+      duplicateMaterials: duplicateMaterials.length,
+      artificialTools: artificialTools.length,
+    },
+  };
+}
+
+function resolveSaleInventoryItem(product: any, inventoryItems: any[]) {
+  if (product?.inventoryId) {
+    const byId = inventoryItems.find(item => Number(item.id) === Number(product.inventoryId));
+    if (byId) return byId;
+  }
+  const productName = normalizeAuditName(product?.name);
+  if (!productName) return null;
+  return inventoryItems.find(item => normalizeAuditName(item.name) === productName) || null;
+}
+
 const operationalEmployeeSchema = z.object({
   nomeCompleto: z.string().min(2),
   dataNascimento: z.string().min(8).optional(),
@@ -258,6 +434,21 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  async function ensureDefaultSalaryDiscountRules() {
+    const existingRules = await storage.getSalaryDiscountRules();
+    for (const defaultRule of DEFAULT_SALARY_DISCOUNT_RULES) {
+      const existing = existingRules.find(rule => rule.condition === defaultRule.condition);
+      if (existing) {
+        if (!existing.name) {
+          await storage.updateSalaryDiscountRule(existing.id, {
+            name: defaultRule.name,
+          });
+        }
+        continue;
+      }
+      await storage.createSalaryDiscountRule(defaultRule);
+    }
+  }
 
   async function ensureTechnicalTeamRole() {
     const roles = await storage.getRoles();
@@ -289,6 +480,10 @@ export async function registerRoutes(
       isDefault: true,
     });
   }
+
+  await ensureDefaultSalaryDiscountRules().catch(error => {
+    console.error("[startup] Falha ao garantir regras padrão de desconto:", error);
+  });
 
   async function ensureDefaultRoles() {
     await ensureTechnicalTeamRole();
@@ -1577,23 +1772,40 @@ export async function registerRoutes(
       const text = String(req.body?.text || "");
       if (!text.trim()) return res.status(400).json({ message: "Cole as anotações antes de interpretar." });
       const importYear = parseMobileImportYear(req.body?.importYear);
-      const [inventoryItems, users, aliases] = await Promise.all([
+      const [inventoryItems, products, users, aliases] = await Promise.all([
         storage.getInventoryItems(),
+        storage.getProducts(),
         storage.getUsers(),
         storage.getMobileImportAliases(),
       ]);
+      const inventoryNames = new Set(inventoryItems.map((item: any) => String(item.name || "").toLowerCase()));
+      const catalogCandidates = products
+        .filter((product: any) => product?.name && !inventoryNames.has(String(product.name).toLowerCase()))
+        .map((product: any) => ({
+          id: -Number(product.id),
+          productId: Number(product.id),
+          name: product.name,
+          type: product.category || "catalogo",
+          unit: product.unit,
+          quantity: 0,
+          source: "product" as const,
+        }));
       const hash = mobileImportHash(text, importYear);
       const duplicate = await storage.getMobileImportHistoryByHash(hash);
       const preview = buildMobileNotesPreview({
         text,
         importYear,
-        inventory: inventoryItems.map((item: any) => ({
+        inventory: [
+          ...inventoryItems.map((item: any) => ({
           id: item.id,
           name: item.name,
           type: item.type,
           unit: item.unit,
           quantity: item.quantity,
+          source: "inventory" as const,
         })),
+          ...catalogCandidates,
+        ],
         users: users.map((user: any) => ({
           id: user.id,
           username: user.username,
@@ -2980,10 +3192,10 @@ export async function registerRoutes(
         }
       }
 
-      // Auto-create pending salary discounts for lost/damaged items
+      // Lost, damaged and maintenance items require manual responsibility review.
       const rules = await storage.getSalaryDiscountRules();
       for (const retItem of normalizedReturnItems) {
-        if (retItem.condition === "perdido" || retItem.condition === "danificado") {
+        if (retItem.condition === "perdido" || retItem.condition === "danificado" || retItem.condition === "manutencao") {
           const original = existing.items.find((x: any) => x.id === retItem.id);
           if (!original) continue;
           const matchingRule = rules.find((r: any) => r.condition === retItem.condition && r.active);
@@ -3043,6 +3255,17 @@ export async function registerRoutes(
   app.get("/api/salary-discounts", requireAdmin, async (req, res) => {
     try { res.json(await storage.getSalaryDiscounts()); }
     catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.get("/api/audits/artificial-data", requireAdmin, async (_req, res) => {
+    try {
+      const [inventory, movements, users] = await Promise.all([
+        storage.getInventoryItems(),
+        storage.getInventoryMovements(),
+        storage.getUsers(),
+      ]);
+      res.json(buildArtificialDataAudit({ inventory, movements, users }));
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   app.patch("/api/salary-discounts/:id/approve", requireAdmin, async (req, res) => {
@@ -3220,11 +3443,15 @@ export async function registerRoutes(
         sales: canApprove ? sales : sales.filter(sale => sale.createdByUserId === user.id),
         generalMaxDiscount,
         canApprove,
-        catalog: products.filter(product => product.active && product.inventoryId).map(product => ({
-          ...product,
-          stock: Number(inventoryItems.find(item => item.id === product.inventoryId)?.quantity || 0),
-          effectiveMaxDiscount: getEffectiveMaterialSaleDiscountLimit(product, generalMaxDiscount),
-        })),
+        catalog: products.filter(product => product.active).map(product => {
+          const inventoryItem = resolveSaleInventoryItem(product, inventoryItems);
+          return {
+            ...product,
+            inventoryId: inventoryItem?.id || product.inventoryId || null,
+            stock: Number(inventoryItem?.quantity || 0),
+            effectiveMaxDiscount: getEffectiveMaterialSaleDiscountLimit(product, generalMaxDiscount),
+          };
+        }),
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message || "Internal Error" });
@@ -3248,24 +3475,26 @@ export async function registerRoutes(
       let total = 0;
       const items = requestedItems.map((requested: any) => {
         const product = products.find(candidate => candidate.id === Number(requested.productId) && candidate.active);
-        if (!product || !product.inventoryId) throw new Error("Produto inválido ou sem vínculo com estoque.");
-        const inventoryItem = inventoryItems.find(candidate => candidate.id === product.inventoryId);
+        if (!product) throw new Error("Produto inválido.");
+        const inventoryItem = resolveSaleInventoryItem(product, inventoryItems);
         const quantity = Math.max(1, Math.floor(Number(requested.quantity) || 0));
         const discountPercent = Math.max(0, Number(requested.discountPercent) || 0);
         const maxDiscount = getEffectiveMaterialSaleDiscountLimit(product, generalMaxDiscount);
         if (discountPercent > maxDiscount) throw new Error(`Desconto acima do limite para ${product.name}. Limite permitido: ${maxDiscount}%.`);
-        if (!inventoryItem) throw new Error(`Estoque insuficiente para ${product.name}.`);
+        if (!inventoryItem) throw new Error(`Produto ${product.name} ainda não possui item correspondente no estoque.`);
         const available = availableByInventoryId.get(inventoryItem.id) ?? 0;
         if (quantity > available) throw new Error(`Estoque insuficiente para ${product.name}: solicitado ${quantity}, disponível ${available}.`);
         availableByInventoryId.set(inventoryItem.id, available - quantity);
-        const unitPrice = Number(product.salePrice) || 0;
+        const canOverridePrice = user.role === "admin" || user.role === "supervisor" || user.role === "financeiro";
+        const requestedUnitPrice = Number(requested.unitPrice);
+        const unitPrice = canOverridePrice && Number.isFinite(requestedUnitPrice) && requestedUnitPrice >= 0 ? requestedUnitPrice : Number(product.salePrice) || 0;
         const originalTotal = unitPrice * quantity;
         const itemTotal = originalTotal * (1 - discountPercent / 100);
         subtotal += originalTotal;
         total += itemTotal;
         return {
           productId: product.id,
-          inventoryId: product.inventoryId,
+          inventoryId: inventoryItem.id,
           name: product.name,
           unit: product.unit || inventoryItem.unit || "un",
           quantity,
@@ -3598,7 +3827,14 @@ export async function registerRoutes(
   app.get("/api/backup/materiais", requireAdmin, async (req, res) => {
     try {
       const withdrawals = await storage.getMaterialWithdrawals();
-      res.json({ type: "materiais", version: "1.0", exportedAt: new Date().toISOString(), data: { withdrawals } });
+      const movements = await storage.getInventoryMovements();
+      res.json(buildMaterialControlExportPayload({
+        withdrawals,
+        movements,
+        period: String(req.query.period || "all"),
+        year: req.query.year ? String(req.query.year) : undefined,
+        month: req.query.month ? String(req.query.month) : undefined,
+      }));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

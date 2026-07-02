@@ -58,13 +58,22 @@ export function buildReturnableToolSummary(
 
       const quantity = toCount(withdrawalItem.quantity);
       const returnedQuantity = Math.min(quantity, toCount(withdrawalItem.returnedQuantity));
-      const pendingQuantity = Math.max(0, quantity - returnedQuantity);
       const condition = normalizeReturnCondition(withdrawalItem.condition);
 
-      summary.inField += pendingQuantity;
-      if (returnedQuantity > 0 && condition === "danificado") summary.damaged += returnedQuantity;
-      if (returnedQuantity > 0 && condition === "perdido") summary.lost += returnedQuantity;
-      if (returnedQuantity > 0 && condition === "manutencao") summary.maintenance += returnedQuantity;
+      if (condition === "danificado") {
+        summary.damaged += returnedQuantity || quantity;
+        continue;
+      }
+      if (condition === "perdido") {
+        summary.lost += Math.max(0, quantity - returnedQuantity) || quantity;
+        continue;
+      }
+      if (condition === "manutencao") {
+        summary.maintenance += returnedQuantity || quantity;
+        continue;
+      }
+
+      summary.inField += Math.max(0, quantity - returnedQuantity);
     }
   }
 

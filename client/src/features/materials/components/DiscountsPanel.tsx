@@ -95,25 +95,6 @@ export function DiscountsPanel({
     else createRuleMutation.mutate(editingRule);
   };
 
-  const createDefaultRules = async () => {
-    const existingConditions = new Set(discountRules.map(rule => rule.condition));
-    const defaults = [
-      { name: "Ferramenta danificada - revisar valor", condition: "danificado", discountType: "percentual", discountValue: 50, active: true },
-      { name: "Ferramenta perdida - revisar valor", condition: "perdido", discountType: "percentual", discountValue: 100, active: true },
-    ].filter(rule => !existingConditions.has(rule.condition));
-    if (defaults.length === 0) {
-      toast({ title: "Regras padrão já existem", description: "Danificado e perdido já possuem regras configuradas." });
-      return;
-    }
-    try {
-      await Promise.all(defaults.map(rule => apiRequest("POST", "/api/salary-discount-rules", rule)));
-      queryClient.invalidateQueries({ queryKey: ["/api/salary-discount-rules"] });
-      toast({ title: "Regras padrão criadas", description: "As sugestões iniciais foram salvas para revisão do Admin." });
-    } catch (err: any) {
-      toast({ title: "Erro ao criar regras padrão", description: err.message, variant: "destructive" });
-    }
-  };
-
   return (
     <div className="space-y-6">
       <section className="space-y-3">
@@ -246,9 +227,6 @@ export function DiscountsPanel({
           >
             <Plus className="mr-1 h-3 w-3" /> Nova regra
           </Button>
-          <Button size="sm" variant="outline" onClick={createDefaultRules} data-testid="button-create-default-discount-rules">
-            Regras padrão
-          </Button>
         </div>
 
         {loadingRules ? (
@@ -256,7 +234,7 @@ export function DiscountsPanel({
         ) : discountRules.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-sm text-gray-400">
-              Nenhuma regra configurada. As regras definem descontos automáticos para materiais perdidos ou danificados.
+              As regras padrão são criadas automaticamente ao iniciar o ERP. Use Nova regra apenas para ajustes da empresa.
             </CardContent>
           </Card>
         ) : (

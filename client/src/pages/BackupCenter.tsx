@@ -35,6 +35,11 @@ const MODE_LABEL: Record<string, string> = {
   overwrite: "Sobrescrita",
 };
 
+const MONTHS = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
 function reDownloadPDF(entry: BackupHistoryEntry) {
   generatePDF(entry.type, entry.backup);
 }
@@ -161,6 +166,10 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const [maintenanceError, setMaintenanceError] = useState("");
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const now = new Date();
+  const [materialPeriod, setMaterialPeriod] = useState<"all" | "year" | "month">("all");
+  const [materialYear, setMaterialYear] = useState(String(now.getFullYear()));
+  const [materialMonth, setMaterialMonth] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const page = PAGE_COPY[mode];
 
   const generateFullTechnicalBackup = async () => {
@@ -398,8 +407,35 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
                       purpose="export"
                       backupButtonLabel="Baixar PDF"
                       generatedBy={user?.username}
+                      materialFilters={cfg.type === "materiais" ? { period: materialPeriod, year: materialYear, month: materialMonth } : undefined}
                       onRestored={() => setRefresh(r => r + 1)}
                     />
+                    {cfg.type === "materiais" && (
+                      <div className="space-y-2 rounded-lg border border-amber-100 bg-amber-50/70 p-3">
+                        <p className="text-xs font-bold uppercase text-amber-700">Período</p>
+                        <select value={materialPeriod} onChange={event => setMaterialPeriod(event.target.value as "all" | "year" | "month")} className="h-9 w-full rounded-md border border-amber-200 bg-white px-2 text-xs">
+                          <option value="all">Todos os meses</option>
+                          <option value="year">Ano específico</option>
+                          <option value="month">Mês específico</option>
+                        </select>
+                        {materialPeriod !== "all" && (
+                          <input
+                            value={materialYear}
+                            onChange={event => setMaterialYear(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                            className="h-9 w-full rounded-md border border-amber-200 bg-white px-2 text-xs"
+                            placeholder="Ano"
+                          />
+                        )}
+                        {materialPeriod === "month" && (
+                          <select value={materialMonth} onChange={event => setMaterialMonth(event.target.value)} className="h-9 w-full rounded-md border border-amber-200 bg-white px-2 text-xs">
+                            {MONTHS.map((month, index) => (
+                              <option key={month} value={String(index + 1).padStart(2, "0")}>{month}</option>
+                            ))}
+                          </select>
+                        )}
+                        <p className="text-[11px] text-amber-800">Baixa PDF e JSON técnico usando a data operacional da retirada ou movimentação.</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );

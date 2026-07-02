@@ -98,6 +98,7 @@ export default function MaterialSales() {
   const sales = data?.sales || [];
   const generalMaxDiscount = data?.generalMaxDiscount ?? 10;
   const canCreate = canAccess(user as any, "createMaterialSales");
+  const canEditPrice = (user as any)?.role === "admin";
   const maxDiscountFor = (item: Pick<CatalogItem, "maxDiscount" | "effectiveMaxDiscount">) =>
     getEffectiveMaterialSaleDiscountLimit(
       { maxDiscount: item.effectiveMaxDiscount ?? item.maxDiscount },
@@ -119,7 +120,7 @@ export default function MaterialSales() {
   const createSale = useMutation({
     mutationFn: () => apiRequest("POST", "/api/material-sales", {
       buyerName, buyerPhone, notes,
-      items: cart.map(item => ({ productId: item.id, quantity: item.quantity, discountPercent: item.discountPercent })),
+      items: cart.map(item => ({ productId: item.id, quantity: item.quantity, discountPercent: item.discountPercent, unitPrice: item.salePrice })),
     }),
     onSuccess: () => {
       setCart([]); setBuyerName(""); setBuyerPhone(""); setNotes("");
@@ -234,6 +235,7 @@ export default function MaterialSales() {
                     <div className="flex justify-between gap-2"><strong className="text-sm">{item.name}</strong><button onClick={() => setCart(current => current.filter(row => row.id !== item.id))} aria-label="Remover"><X className="h-4 w-4" /></button></div>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <label className="text-xs text-slate-600">Quantidade<input type="number" min="1" max={item.stock} value={item.quantity} onChange={event => updateCart(item.id, { quantity: Math.min(item.stock, Number(event.target.value)) })} className="mt-1 h-9 w-full rounded border px-2" /></label>
+                      <label className="text-xs text-slate-600">Preço unitário<input type="number" min="0" step="0.01" value={item.salePrice} onChange={event => updateCart(item.id, { salePrice: Number(event.target.value) })} disabled={!canEditPrice} className="mt-1 h-9 w-full rounded border px-2 disabled:bg-slate-100 disabled:text-slate-500" /></label>
                       <label className="text-xs text-slate-600">Desconto (máx. {maxDiscount}%)<input type="number" min="0" max={maxDiscount} value={item.discountPercent} onChange={event => updateCart(item.id, { discountPercent: Number(event.target.value) })} className={`mt-1 h-9 w-full rounded border px-2 ${item.discountPercent > maxDiscount ? "border-red-500" : ""}`} /></label>
                     </div>
                   </div>

@@ -9,6 +9,8 @@ export type MobileImportInventoryItem = {
   type?: string | null;
   unit?: string | null;
   quantity?: number | null;
+  source?: "inventory" | "product";
+  productId?: number | null;
 };
 
 export type MobileImportUser = {
@@ -64,9 +66,13 @@ const MATERIAL_ALIASES: Array<[RegExp, string]> = [
   [/^1000$/i, "viaplus 1000"],
   [/^7000$/i, "viaplus 7000"],
   [/\bprime\b/gi, "primer"],
+  [/\bpincela\b/gi, "pincel"],
   [/\bviabit\b/gi, "viabit"],
   [/\bviafix\b/gi, "viafix"],
   [/\bextens[aã]o\b/gi, "extensao"],
+  [/\bescada\s+de\s+montar\b/gi, "escada"],
+  [/\bfuradeira\s+\w+\b/gi, "furadeira"],
+  [/\bbroxas\b/gi, "broxa"],
   [/\bdryko\s*manta\b/gi, "drykomanta"],
   [/\bsika\s+alu\b/gi, "sika alu"],
   [/\bmanta\s+liquida\b/gi, "manta liquida"],
@@ -129,10 +135,12 @@ function bestMatch<T>(query: string, values: T[], label: (value: T) => string) {
 }
 
 function parseQuantityItem(raw: string) {
-  const text = raw.trim();
-  let match = text.match(/^(\d+)\s*x?\s+(.+)$/i);
+  const text = raw.trim().replace(/^\+\s*/, "").replace(/\s+/g, " ");
+  let match = text.match(/^(\d+)\s*x\s*(.+)$/i);
   if (match) return { quantity: Math.max(1, Math.trunc(Number(match[1]) || 1)), name: match[2].trim() };
-  match = text.match(/^(.+?)\s+x?\s*(\d+)$/i);
+  match = text.match(/^(\d+)\s+(.+)$/i);
+  if (match) return { quantity: Math.max(1, Math.trunc(Number(match[1]) || 1)), name: match[2].trim() };
+  match = text.match(/^(.+?)\s+x\s*(\d+)$/i);
   if (match) return { quantity: Math.max(1, Math.trunc(Number(match[2]) || 1)), name: match[1].trim() };
   return { quantity: 1, name: text };
 }
@@ -164,6 +172,16 @@ function findUser(raw: string, users: MobileImportUser[], aliases: MobileImportA
   }
   const match = bestMatch(raw, users.filter(user => user.role !== "admin"), userLabel);
   return { user: match.value, score: match.score };
+}
+
+function findInventory(raw: string, inventory: MobileImportInventoryItem[]) {
+  const inventoryItems = inventory.filter(item => item.source !== "product");
+  const productItems = inventory.filter(item => item.source === "product");
+  const inventoryMatch = bestMatch(raw, inventoryItems, item => item.name);
+  if (inventoryMatch.score >= 70) return { item: inventoryMatch.value, score: inventoryMatch.score, catalogOnly: false };
+  const productMatch = bestMatch(raw, productItems, item => item.name);
+  if (productMatch.score > inventoryMatch.score) return { item: productMatch.value, score: productMatch.score, catalogOnly: true };
+  return { item: inventoryMatch.value, score: inventoryMatch.score, catalogOnly: false };
 }
 
 function applyStockStatus(rows: MobileImportPreviewRow[], inventory: MobileImportInventoryItem[]) {
@@ -222,18 +240,19 @@ export function buildMobileNotesPreview(input: {
       const userMatch = findUser(employeeText, input.users, input.aliases || []);
       for (const part of employeeLine[2].split(/[,;]/).map(value => value.trim()).filter(Boolean)) {
         const parsed = parseQuantityItem(part);
-        const itemMatch = bestMatch(parsed.name, input.inventory, item => item.name);
+        const itemMatch = findInventory(parsed.name, input.inventory);
         const warnings: string[] = [];
         if (!userMatch.user || userMatch.score < 70) warnings.push("Funcionário pendente");
-        if (!itemMatch.value || itemMatch.score < 70) warnings.push("Material duvidoso");
+        if (!itemMatch.item || itemMatch.score < 70) warnings.push("Item ainda não cadastrado.");
+        if (itemMatch.catalogOnly) warnings.push("Material encontrado no catálogo; selecione o item de estoque");
         rows.push({
           ...base,
           id: `row-${order}-${rows.length}`,
           type: "retirada",
           quantity: parsed.quantity,
           rawItem: parsed.name,
-          inventoryId: itemMatch.score >= 70 ? itemMatch.value?.id || null : null,
-          itemName: itemMatch.score >= 70 ? itemMatch.value?.name || null : null,
+          inventoryId: itemMatch.score >= 70 && !itemMatch.catalogOnly ? itemMatch.item?.id || null : null,
+          itemName: itemMatch.score >= 70 ? itemMatch.item?.name || null : null,
           itemConfidence: itemMatch.score,
           rawEmployee: employeeText,
           userId: userMatch.score >= 70 ? userMatch.user?.id || null : null,
@@ -252,15 +271,16 @@ export function buildMobileNotesPreview(input: {
       ignored.push({ ...base, type: "saida", quantity: 0, rawItem: line, inventoryId: null, itemName: null, itemConfidence: 0, status: "ignorado", warnings: ["Linha não reconhecida"], ignored: true });
       continue;
     }
-    const itemMatch = bestMatch(parsed.name, input.inventory, item => item.name);
-    const warnings = itemMatch.score >= 70 ? [] : ["Material duvidoso"];
+    const itemMatch = findInventory(parsed.name, input.inventory);
+    const warnings = itemMatch.score >= 70 ? [] : ["Item ainda não cadastrado."];
+    if (itemMatch.catalogOnly) warnings.push("Material encontrado no catálogo; selecione o item de estoque");
     rows.push({
       ...base,
       type: isEntry ? "entrada" : "saida",
       quantity: parsed.quantity,
       rawItem: parsed.name,
-      inventoryId: itemMatch.score >= 70 ? itemMatch.value?.id || null : null,
-      itemName: itemMatch.score >= 70 ? itemMatch.value?.name || null : null,
+      inventoryId: itemMatch.score >= 70 && !itemMatch.catalogOnly ? itemMatch.item?.id || null : null,
+      itemName: itemMatch.score >= 70 ? itemMatch.item?.name || null : null,
       itemConfidence: itemMatch.score,
       status: warnings.length ? "duvidoso" : "ok",
       warnings,

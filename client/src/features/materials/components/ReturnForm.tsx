@@ -155,7 +155,7 @@ export function ReturnForm({
                     </div>
                     {(retItem.condition === "perdido" || retItem.condition === "danificado" || retItem.condition === "manutencao") && (
                       <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3 shrink-0" /> Este item não volta ao disponível. Perdidos e danificados geram desconto para aprovação do gestor.
+                        <AlertTriangle className="w-3 h-3 shrink-0" /> Este item não volta ao disponível. Perdidos, danificados e manutenção seguem para avaliação do gestor.
                       </p>
                     )}
                   </div>

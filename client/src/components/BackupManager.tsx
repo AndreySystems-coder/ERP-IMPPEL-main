@@ -77,6 +77,14 @@ const FILE_LABELS: Record<BackupType, string> = {
   garantias: "Garantias",
 };
 
+const MONTHS = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+
+type MaterialPeriod = "all" | "year" | "month";
+type MaterialExportFilters = { period: MaterialPeriod; year: string; month: string };
+
 // Types for which restore should show overwrite warning
 const READ_ONLY_RESTORE: BackupType[] = [];
 
@@ -132,7 +140,7 @@ function getRecordCount(type: BackupType, backup: any): number {
   if (type === "estoque") return asArray(d.items).length;
   if (type === "produtos") return asArray(d.products).length;
   if (type === "servicos") return asArray(d.services).length;
-  if (type === "materiais") return asArray(d.withdrawals).length;
+  if (type === "materiais") return asArray(d.withdrawals).length + asArray(d.consumption).length;
   if (type === "clientes") return asArray(d.clients).length;
   if (type === "orcamentos") return asArray(d.jobs).length;
   if (type === "ordens-servico") return asArray(d.workOrders).length;
@@ -211,7 +219,7 @@ function getPreviewItems(type: BackupType, backup: any): { name: string; detail?
   if (type === "estoque") return toItem(d.items, "name", r => `${r.quantity} ${r.unit || "un"}`);
   if (type === "produtos") return toItem(d.products, "name", r => `R$ ${Number(r.salePrice || 0).toFixed(2)}`);
   if (type === "servicos") return toItem(d.services, "name", r => `R$ ${Number(r.pricePerUnit || 0).toFixed(2)}/m²`);
-  if (type === "materiais") return toItem(d.withdrawals, "id", r => `OS #${r.workOrderId || "—"}`);
+  if (type === "materiais") return toItem(d.withdrawals, "id", r => `${fmtDate(r.withdrawalDate || r.createdAt)} · ${r.username || "—"}`);
   if (type === "clientes") return toItem(d.clients, "name", r => r.phone || r.email || "—");
   if (type === "orcamentos") return toItem(d.jobs, "clientName", r => r.title || r.status || "—");
   if (type === "ordens-servico") return toItem(d.workOrders, "clientName", r => r.status || "—");
@@ -307,12 +315,64 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
     });
   } else if (type === "materiais") {
     const withdrawals = asArray<any>(backup.data?.withdrawals);
-    autoTable(doc, {
-      startY: 28,
-      head: [["#", "Data", "Técnico", "OS", "Materiais", "Status"]],
-      body: withdrawals.map((w: any) => [w.id, fmtDate(w.createdAt), w.username || "—", w.workOrderId ? `#${w.workOrderId}` : "—", asArray<any>(w.items).map((i: any) => `${i.productName} (${i.quantity})`).join(", "), w.status]),
-      styles: { fontSize: 7, cellPadding: 2 }, headStyles: headStyle, alternateRowStyles: altRow,
-    });
+    const consumption = asArray<any>(backup.data?.consumption);
+    const days = asArray<any>(backup.data?.days);
+    const periodLabel = backup.filters?.label ? `Período: ${backup.filters.label}` : "Período: Todos os meses";
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text(periodLabel, 14, 32);
+    if (!withdrawals.length && !consumption.length) {
+      doc.setFontSize(12);
+      doc.text("Nenhum registro encontrado para este período.", 14, 44);
+    } else if (days.length) {
+      let y = 40;
+      for (const day of days) {
+        if (y > 174) { doc.addPage(); y = 28; }
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text(fmtDate(day.date), 14, y);
+        y += 4;
+        const rows: string[][] = [];
+        for (const withdrawal of asArray<any>(day.withdrawals)) {
+          const items = asArray<any>(withdrawal.items);
+          const returned = items.filter(item => Number(item.returnedQuantity || 0) > 0).map(item => `${item.returnedQuantity}x ${item.productName}`).join(", ");
+          const open = items.filter(item => Number(item.returnedQuantity || 0) < Number(item.quantity || 0)).map(item => `${Number(item.quantity || 0) - Number(item.returnedQuantity || 0)}x ${item.productName}`).join(", ");
+          rows.push([
+            withdrawal.username || "—",
+            items.map(item => `${item.quantity}x ${item.productName}`).join(", ") || "—",
+            returned || "—",
+            open || "—",
+            withdrawal.status || "—",
+          ]);
+        }
+        if (asArray<any>(day.consumption).length) {
+          rows.push([
+            "Entradas/Saídas de consumo",
+            asArray<any>(day.consumption).map(item => `${item.quantity}x ${item.productName}`).join(", "),
+            "—",
+            "—",
+            "consumo",
+          ]);
+        }
+        autoTable(doc, {
+          startY: y,
+          head: [["Funcionário", "Itens retirados/consumidos", "Devolvidos", "Em aberto", "Status"]],
+          body: rows,
+          styles: { fontSize: 7, cellPadding: 2 },
+          headStyles: headStyle,
+          alternateRowStyles: altRow,
+          columnStyles: { 0: { cellWidth: 34 }, 1: { cellWidth: 88 }, 2: { cellWidth: 56 }, 3: { cellWidth: 56 }, 4: { cellWidth: 28 } },
+        });
+        y = ((doc as any).lastAutoTable?.finalY || y) + 8;
+      }
+    } else {
+      autoTable(doc, {
+        startY: 38,
+        head: [["#", "Data", "Técnico", "OS", "Materiais", "Status"]],
+        body: withdrawals.map((w: any) => [w.id, fmtDate(w.withdrawalDate || w.createdAt), w.username || "—", w.workOrderId ? `#${w.workOrderId}` : "—", asArray<any>(w.items).map((i: any) => `${i.productName} (${i.quantity})`).join(", "), w.status]),
+        styles: { fontSize: 7, cellPadding: 2 }, headStyles: headStyle, alternateRowStyles: altRow,
+      });
+    }
   } else if (type === "clientes") {
     const clients = asArray<any>(backup.data?.clients);
     autoTable(doc, {
@@ -524,6 +584,7 @@ interface BackupManagerProps {
   backupButtonLabel?: string;
   purpose?: "backup" | "export";
   generatedBy?: string;
+  materialFilters?: MaterialExportFilters;
 }
 
 const INVALIDATE_KEYS: Record<BackupType, string[]> = {
@@ -541,7 +602,7 @@ const INVALIDATE_KEYS: Record<BackupType, string[]> = {
 };
 
 export default function BackupManager({
-  type, label, onRestored, adminOnly = true, isAdmin = true, showBackup = true, showRestore = true, backupButtonLabel = "Gerar backup", purpose = "backup", generatedBy,
+  type, label, onRestored, adminOnly = true, isAdmin = true, showBackup = true, showRestore = true, backupButtonLabel = "Gerar backup", purpose = "backup", generatedBy, materialFilters,
 }: BackupManagerProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -589,7 +650,10 @@ export default function BackupManager({
   const handleGenerateBackup = async () => {
     setLoadingBackup(true);
     try {
-      const backupRes = await apiRequest("GET", `/api/backup/${type}`);
+      const params = type === "materiais" && materialFilters
+        ? `?period=${encodeURIComponent(materialFilters.period)}&year=${encodeURIComponent(materialFilters.year)}&month=${encodeURIComponent(materialFilters.month)}`
+        : "";
+      const backupRes = await apiRequest("GET", `/api/backup/${type}${params}`);
       const backup = await backupRes.json();
       const downloadableBackup = type === "usuarios" ? buildOperationalUsersBackup(backup) : backup;
       const isExport = purpose === "export";
@@ -603,7 +667,7 @@ export default function BackupManager({
         generatedBy,
       });
 
-      if (!isExport || type === "usuarios") {
+      if (!isExport || type === "usuarios" || type === "materiais") {
         const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -628,7 +692,7 @@ export default function BackupManager({
 
       toast({
         title: isExport ? "Relatório exportado com sucesso!" : "Backup gerado com sucesso!",
-        description: isExport && type !== "usuarios"
+        description: isExport && type !== "usuarios" && type !== "materiais"
           ? `${baseName}.pdf baixado para conferência segura.`
           : `${baseName}.json restaurável e PDF de conferência baixados.`,
       });
