@@ -9,6 +9,7 @@ const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMater
 const { getEffectiveMaterialSaleDiscountLimit } = await import("../shared/materialSalesPolicy");
 const { buildReturnableToolSummary } = await import("../shared/returnableToolSummary");
 const { buildMobileNotesPreview } = await import("../shared/mobileNotesImport");
+const { __testPdfRestoreParsing } = await import("../server/pdf-restore");
 
 const storage = createMemoryStorage();
 const inventory = await storage.createInventoryItem({ name: "Primer teste", type: "material", unit: "un", quantity: 5, minStock: 1, pricePerUnit: 10 });
@@ -222,6 +223,100 @@ assert.equal(biroRows.length, 1, "Biro deve gerar um card/linha de retirada pend
 assert.equal(biroRows[0].userId, null, "Biro deve ficar pendente de funcionario quando nao houver usuario correspondente");
 assert.equal(lequinhoRows.find(row => row.rawItem === "soprador")?.status, "duvidoso", "Soprador deve ficar pendente dentro do card de Lequinho quando nao existir no estoque");
 assert.equal(pendingGroupedPreview.rows.some(row => row.stockWarning), true, "Estoque insuficiente deve virar alerta no preview, nao bloqueio");
+
+const pdfRow = (cells: Array<[number, string]>, y = 700) => ({
+  y,
+  page: 1,
+  items: cells.map(([x, text]) => ({ x, y, page: 1, text })),
+});
+const report = (type: any, headerTotal = 0) => ({ type, restoreType: type === "movimentacoes" ? "estoque" : type, marker: `tipo=${type}`, title: `IMPPEL ERP tipo=${type}`, headerTotal });
+
+assert.equal(__testPdfRestoreParsing.parseMoney("R$ 60.64"), 60.64);
+assert.equal(__testPdfRestoreParsing.parseMoney("R$ 990.00"), 990);
+assert.equal(__testPdfRestoreParsing.parseMoney("R$ 1923.00"), 1923);
+assert.equal(__testPdfRestoreParsing.parseMoney("R$ 95.15"), 95.15);
+assert.equal(__testPdfRestoreParsing.parseMoney("R$ 1.234,56"), 1234.56);
+
+const productRows = Array.from({ length: 45 }, (_, index) => {
+  const names = ["Viaplus 1000", "Viaplus 7000", "Barra de Asfalto"];
+  const prices = ["R$ 60.64", "R$ 211.76", "R$ 1758.95"];
+  return pdfRow([
+    [40, names[index] || `Material Sintetico ${index + 1}`],
+    [270, "Impermeabilizante"],
+    [430, "Marca"],
+    [510, "un"],
+    [560, prices[index] || "R$ 10.00"],
+    [670, "0%"],
+    [750, "Sim"],
+  ], 700 - index);
+});
+const productPreview = __testPdfRestoreParsing.parseProducts("produtos.pdf", "produtos", report("produtos", 45), productRows);
+assert.equal(productPreview.backup.data.products.length, 45, "PDF de produtos deve extrair 45 produtos");
+assert.equal(productPreview.backup.data.products.find((item: any) => item.name === "Viaplus 1000").salePrice, 60.64);
+assert.equal(productPreview.backup.data.products.find((item: any) => item.name === "Viaplus 7000").salePrice, 211.76);
+assert.equal(productPreview.backup.data.products.find((item: any) => item.name === "Barra de Asfalto").salePrice, 1758.95);
+
+const serviceRows = Array.from({ length: 24 }, (_, index) => {
+  const names = ["Impermeabilização piscina", "Manta líquida + tela V50", "Manta asfáltica poliéster 3mm"];
+  const prices = ["R$ 95.15", "R$ 104.50", "R$ 80.04"];
+  return pdfRow([
+    [40, names[index] || `Servico Sintetico ${index + 1}`],
+    [210, "Descrição segura"],
+    [660, prices[index] || "R$ 50.00"],
+    [705, "R$ 10.00"],
+    [760, "R$ 5.00"],
+  ], 700 - index);
+});
+const servicePreview = __testPdfRestoreParsing.parseServices("servicos.pdf", "servicos", report("servicos", 24), serviceRows);
+assert.equal(servicePreview.backup.data.services.length, 24, "PDF de servicos deve extrair 24 servicos");
+assert.equal(servicePreview.backup.data.services.find((item: any) => item.name === "Impermeabilização piscina").pricePerUnit, 95.15);
+assert.equal(servicePreview.backup.data.services.find((item: any) => item.name === "Manta líquida + tela V50").pricePerUnit, 104.50);
+assert.equal(servicePreview.backup.data.services.find((item: any) => item.name === "Manta asfáltica poliéster 3mm").pricePerUnit, 80.04);
+
+const stockRows = Array.from({ length: 72 }, (_, index) => {
+  const names = ["Furadeira", "Batedor", "Viapol Manta Comum 3 mm"];
+  const types = ["ferramenta", "ferramenta", "consumivel"];
+  return pdfRow([
+    [40, names[index] || `Item Sintetico ${index + 1}`],
+    [280, types[index] || "consumivel"],
+    [380, types[index] === "ferramenta" ? "Retornavel" : "Consumivel"],
+    [470, "un"],
+    [540, "2"],
+    [630, "1"],
+    [700, "R$ 990.00"],
+  ], 700 - index);
+});
+const stockPreview = __testPdfRestoreParsing.parseStock("estoque.pdf", "estoque", report("estoque", 72), stockRows);
+assert.equal(stockPreview.backup.data.items.length, 72, "PDF de estoque deve extrair 72 itens");
+assert.deepEqual(
+  (({ name, type, pricePerUnit }: any) => ({ name, type, pricePerUnit }))(stockPreview.backup.data.items.find((item: any) => item.name === "Furadeira")),
+  { name: "Furadeira", type: "ferramenta", pricePerUnit: 0 },
+  "Furadeira nao deve carregar tipo/preco sujo do PDF",
+);
+assert.equal(stockPreview.backup.data.items.find((item: any) => item.name === "Batedor").type, "ferramenta");
+assert.equal(stockPreview.backup.data.items.find((item: any) => item.name === "Viapol Manta Comum 3 mm").type, "consumivel");
+
+const userRows = [
+  pdfRow([[40, "Admin"], [160, "Senha alterada"], [260, "Administrador"], [480, "—"], [650, "admin"], [760, "Ativo"]], 700),
+  pdfRow([[40, "joao.silva"], [160, "15022001"], [260, "Joao Silva"], [480, "Equipe Técnica"], [650, "funcionario"], [760, "Ativo"]], 690),
+  pdfRow([[40, "maria.souza"], [160, "Senha alterada"], [260, "Maria Souza"], [480, "Administrativo /"], [650, "funcionario"], [760, "Inativo"]], 680),
+];
+const userPreview = __testPdfRestoreParsing.parseUsers(
+  "usuarios.pdf",
+  "usuarios",
+  report("usuarios", 3),
+  userRows,
+  "Administrativo / Financeiro\nComercial / Atendimento\nMarketing / Redes Sociais\nEquipe Técnica\nGestão de EPIs,\nMateriais e Equipamentos\nGestão de Funcionários\nObras / Operações",
+);
+const adminUser = userPreview.backup.data.users.find((user: any) => user.username === "Admin");
+const joaoUser = userPreview.backup.data.users.find((user: any) => user.username === "joao.silva");
+const mariaUser = userPreview.backup.data.users.find((user: any) => user.username === "maria.souza");
+assert.equal(adminUser.role, "admin", "Admin deve continuar admin");
+assert.equal(joaoUser.role, "funcionario", "Funcionario deve continuar funcionario");
+assert.equal(mariaUser.status, "inativo", "Status Inativo deve ser preservado");
+assert.equal(adminUser.cargo, null, "Cargo travessao do Admin deve virar null");
+assert.ok(userPreview.backup.data.roles.some((role: any) => role.name === "gestao_epis"), "Cargo gestao_epis deve entrar no preview");
+assert.ok(userPreview.backup.data.roles.some((role: any) => role.name === "materiais_equipamentos"), "Cargo materiais_equipamentos deve entrar no preview");
 
 const applicator = { role: "funcionario", permissions: { registrarMaterials: true } };
 assert.equal(canAccess(applicator, "viewDashboard"), false);

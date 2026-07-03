@@ -57,11 +57,17 @@ const REPORT_TYPES: Array<{ type: ErpPdfReportType; marker: string; restoreType?
 
 const ROLE_TECHNICAL_BY_LABEL: Record<string, string> = {
   "Administrativo / Financeiro": "administrativo_financeiro",
+  "Administrativo /": "administrativo_financeiro",
   "Comercial / Atendimento": "comercial_atendimento",
   "Marketing / Redes Sociais": "marketing_redes_sociais",
   "Equipe Técnica": "equipe_tecnica",
   "Equipe Técnica (Obras / Serviços)": "equipe_tecnica",
   "Gestor de Obras": "gestor_obras",
+  "Gestão de EPIs, Uniformes e Botas": "gestao_epis",
+  "Gestão de EPIs,": "gestao_epis",
+  "Materiais e Equipamentos": "materiais_equipamentos",
+  "Gestão de Funcionários": "gestao_funcionarios",
+  "Obras / Operações": "obras_operacoes",
 };
 
 function normalizeText(value: string) {
@@ -73,8 +79,15 @@ function normalizeKey(value: string) {
 }
 
 function parseMoney(value = "") {
-  const match = value.replace(/\s+/g, " ").match(/(?:R\$\s*)?(-?\d+(?:[.,]\d{2})?)/);
-  return match ? Number(match[1].replace(/\./g, "").replace(",", ".")) || 0 : 0;
+  const clean = value.replace(/\s+/g, " ").replace(/^R\$\s*/i, "").trim();
+  if (!clean || clean === "—" || clean === "-") return 0;
+
+  if (clean.includes(",")) {
+    return Number(clean.replace(/\./g, "").replace(",", ".")) || 0;
+  }
+
+  const match = clean.match(/(\d[\d.]*)/);
+  return match ? Number(match[1]) || 0 : 0;
 }
 
 function parsePercent(value = "") {
@@ -190,9 +203,11 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
     const login = cell(row, 35, 150);
     const senhaInicialRaw = cell(row, 150, 255);
     const nomeCompleto = cell(row, 255, 470);
-    const cargo = cell(row, 470, 675);
-    const perfil = cell(row, 675, 745);
-    const status = cell(row, 745, 820);
+    const cargoRaw = cell(row, 470, 640);
+    const cargo = cargoRaw === "—" ? "" : cargoRaw;
+    const perfilRaw = cell(row, 640, 745);
+    const perfil = perfilRaw.split(" ")[0];
+    const status = cell(row, 738, 820);
     if (!/^(Admin|[a-z][a-z0-9]+(?:\.[a-z0-9]+)+)$/i.test(login)) continue;
     const userKey = normalizeText(login);
     if (seenUsers.has(userKey)) {
@@ -382,8 +397,8 @@ function parseStock(fileName: string, selectedType: BackupType, report: ReturnTy
       continue;
     }
     if (!inMovements && report.type === "estoque") {
-      const name = cell(row, 35, 285);
-      const type = cell(row, 285, 465);
+      const name = cell(row, 35, 275);
+      const type = cell(row, 275, 370);
       const unit = cell(row, 465, 530);
       const quantity = cell(row, 530, 620);
       const minStock = cell(row, 620, 690);
@@ -397,7 +412,11 @@ function parseStock(fileName: string, selectedType: BackupType, report: ReturnTy
         continue;
       }
       seenItems.add(key);
-      items.push({ name, type, unit, quantity: parseIntSafe(quantity), minStock: parseIntSafe(minStock), pricePerUnit: parseMoney(price) });
+      const parsedStockPrice = parseMoney(price);
+      items.push({ name, type, unit, quantity: parseIntSafe(quantity), minStock: parseIntSafe(minStock), pricePerUnit: 0 });
+      if (parsedStockPrice > 0) {
+        preview.warnings.push(`${name}: preço do PDF de estoque (${price}) não foi restaurado como preço unitário; mantenha o catálogo como fonte principal.`);
+      }
       preview.rows.push({ name, detail: `${parseIntSafe(quantity)} ${unit} · mínimo ${parseIntSafe(minStock)}`, status: "atualizar" });
       continue;
     }
@@ -451,11 +470,20 @@ export async function previewErpPdfBuffer(input: { fileName: string; selectedTyp
     const preview = basePreview(input.fileName, input.selectedType, report);
     preview.errorCount = 1;
     preview.errors.push(`Módulo selecionado (${input.selectedType}) não confere com o PDF detectado (${report.restoreType}).`);
-    return preview;
-  }
+  return preview;
+}
   if (report.type === "usuarios") return parseUsers(input.fileName, input.selectedType, report, rows, rawText);
   if (report.type === "produtos") return parseProducts(input.fileName, input.selectedType, report, rows);
   if (report.type === "servicos") return parseServices(input.fileName, input.selectedType, report, rows);
   if (report.type === "estoque" || report.type === "movimentacoes") return parseStock(input.fileName, input.selectedType, report, rows);
   return unsupportedPreview(input.fileName, input.selectedType, report);
 }
+
+export const __testPdfRestoreParsing = {
+  parseMoney,
+  parseUsers,
+  parseProducts,
+  parseServices,
+  parseStock,
+  detectReport,
+};
