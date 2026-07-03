@@ -425,8 +425,8 @@ function parseStock(fileName: string, selectedType: BackupType, report: ReturnTy
     if (!iso) continue;
     const productName = cell(row, 140, 360).replace(/\s+(ENTRADA|SAÍDA|AJUSTE)$/i, "").trim();
     const type = (cell(row, 360, 450).match(/ENTRADA|SAÍDA|AJUSTE/i)?.[0] || "SAÍDA").toUpperCase();
-    const quantity = parseIntSafe(cell(row, 450, 510));
-    const notes = cell(row, 510, 820) || "Importação por relatório ERP";
+    const quantity = parseIntSafe(cell(row, 540, 615));
+    const notes = cell(row, 615, 820) || "Importação por relatório ERP";
     if (!productName || !quantity) {
       preview.pendingCount++;
       preview.pending.push(`Movimentação pendente em ${dateText}: ${rowText}`);

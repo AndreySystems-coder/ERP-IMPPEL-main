@@ -286,8 +286,19 @@ const stockRows = Array.from({ length: 72 }, (_, index) => {
     [700, "R$ 990.00"],
   ], 700 - index);
 });
-const stockPreview = __testPdfRestoreParsing.parseStock("estoque.pdf", "estoque", report("estoque", 72), stockRows);
+const stockMovementHeader = pdfRow([[40, "Histórico de Movimentações"]], 500);
+const stockMovementRows = Array.from({ length: 44 }, (_, index) => pdfRow([
+  [40, `${String((index % 28) + 1).padStart(2, "0")}/06/2026`],
+  [150, index % 2 === 0 ? "Furadeira" : "Viapol Manta Comum 3 mm"],
+  [370, index % 2 === 0 ? "ENTRADA" : "SAÍDA"],
+  [544, String((index % 5) + 1)],
+  [630, `Movimento sintetico ${index + 1}`],
+], 480 - index));
+const stockPreview = __testPdfRestoreParsing.parseStock("estoque.pdf", "estoque", report("estoque", 72), [...stockRows, stockMovementHeader, ...stockMovementRows]);
 assert.equal(stockPreview.backup.data.items.length, 72, "PDF de estoque deve extrair 72 itens");
+assert.equal(stockPreview.backup.data.movements.length, 44, "PDF de estoque deve extrair 44 movimentacoes historicas");
+assert.equal(stockPreview.pending.filter((item: string) => item.includes("Movimentação pendente")).length, 0, "movimentacoes historicas nao devem ficar pendentes por falta de quantidade");
+assert.equal(stockPreview.backup.data.movements[0].quantity, 1, "quantidade em X=544 deve ser capturada");
 assert.deepEqual(
   (({ name, type, pricePerUnit }: any) => ({ name, type, pricePerUnit }))(stockPreview.backup.data.items.find((item: any) => item.name === "Furadeira")),
   { name: "Furadeira", type: "ferramenta", pricePerUnit: 0 },
