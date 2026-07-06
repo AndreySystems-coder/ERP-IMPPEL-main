@@ -3224,20 +3224,34 @@ export async function registerRoutes(
       const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
       const month = months[now.getMonth()];
 
-      const normalizedReturnItems = items.map((item: any) => ({
-        ...item,
-        returnedQuantity: Math.max(0, Math.trunc(Number(item.returnedQuantity) || 0)),
-        condition: normalizeReturnCondition(item.condition),
-      }));
+      const normalizedReturnItems = items.map((item: any) => {
+        const original = existing.items.find((existingItem: any) => Number(existingItem.id) === Number(item.id));
+        const previousReturned = Math.max(0, Math.trunc(Number(original?.returnedQuantity) || 0));
+        const submittedReturned = Math.max(0, Math.trunc(Number(item.returnedQuantity) || 0));
+        const originalQuantity = Math.max(0, Math.trunc(Number(original?.quantity) || 0));
+        const remainingQuantity = Math.max(0, originalQuantity - previousReturned);
+        const returnedQuantity = previousReturned > 0 && submittedReturned <= remainingQuantity
+          ? previousReturned + submittedReturned
+          : submittedReturned;
+        const cappedReturnedQuantity = Math.min(originalQuantity, returnedQuantity);
+        return {
+          ...item,
+          id: Number(item.id),
+          returnedQuantity: cappedReturnedQuantity,
+          returnedNow: Math.max(0, cappedReturnedQuantity - previousReturned),
+          condition: normalizeReturnCondition(item.condition),
+        };
+      });
 
       // Update withdrawal items (returnedQuantity and condition)
       await storage.updateMaterialWithdrawalItems(id, normalizedReturnItems);
 
       // Determine new status
+      const returnedById = new Map<number, number>(normalizedReturnItems.map((item: any) => [Number(item.id), Number(item.returnedQuantity) || 0]));
       const allReturned = existing.items.every((orig: any) => {
         if (!hasReturnableMaterialItems([{ productName: orig.productName }])) return true;
-        const returned = normalizedReturnItems.find((i: any) => i.id === orig.id);
-        return returned ? returned.returnedQuantity >= orig.quantity : false;
+        const returnedQuantity = returnedById.get(Number(orig.id)) ?? Math.max(0, Number(orig.returnedQuantity) || 0);
+        return returnedQuantity >= Number(orig.quantity);
       });
       const newStatus = allReturned ? "retornado" : "parcial";
 
@@ -3251,14 +3265,14 @@ export async function registerRoutes(
 
       // Register ENTRADA movements for returned (non-lost) items
       for (const retItem of normalizedReturnItems) {
-        if (retItem.returnedQuantity > 0 && shouldRestoreReturnedQuantityToStock(retItem.condition)) {
+        if (retItem.returnedNow > 0 && shouldRestoreReturnedQuantityToStock(retItem.condition)) {
           const original = existing.items.find((x: any) => x.id === retItem.id);
           if (!original) continue;
           await storage.createInventoryMovement({
             inventoryId: original.inventoryId,
             productName: original.productName,
             type: "ENTRADA",
-            quantity: retItem.returnedQuantity,
+            quantity: retItem.returnedNow,
             date: dateStr,
             month,
             notes: `Origem: DEVOLUCAO_MATERIAL | Retirada #${existing.id}${existing.workOrderId ? " | OS #" + existing.workOrderId : ""} | Responsavel: ${existing.username}${existing.clientName ? " | Cliente: " + existing.clientName : ""} | Condicao: ${retItem.condition}`,
@@ -3269,7 +3283,7 @@ export async function registerRoutes(
       // Lost, damaged and maintenance items require manual responsibility review.
       const rules = await storage.getSalaryDiscountRules();
       for (const retItem of normalizedReturnItems) {
-        if (retItem.condition === "perdido" || retItem.condition === "danificado" || retItem.condition === "manutencao") {
+        if (retItem.returnedNow > 0 && (retItem.condition === "perdido" || retItem.condition === "danificado" || retItem.condition === "manutencao")) {
           const original = existing.items.find((x: any) => x.id === retItem.id);
           if (!original) continue;
           const matchingRule = rules.find((r: any) => r.condition === retItem.condition && r.active);
@@ -3507,7 +3521,7 @@ export async function registerRoutes(
     try {
       const user = await storage.getUser(req.session.userId!);
       if (!user) return res.status(401).json({ message: "Não autenticado" });
-      const canApprove = user.role === "admin" || await userHasAnyPermission(user.id, ["approveMaterialSales"]);
+      const canApprove = Boolean(user.role === "admin" || await userHasAnyPermission(user.id, ["approveMaterialSales"]));
       const [sales, products, inventoryItems] = await Promise.all([
         storage.getMaterialSales(), storage.getProducts(), storage.getInventoryItems(),
       ]);

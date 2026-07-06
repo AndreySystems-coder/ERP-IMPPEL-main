@@ -31,7 +31,7 @@ import {
   type InsertSalaryDiscountRule, type InsertSalaryDiscount,
   type MaterialSale, type InsertMaterialSale,
 } from "@shared/schema";
-import { eq, desc, sql, getTableColumns } from "drizzle-orm";
+import { eq, desc, sql, getTableColumns, and } from "drizzle-orm";
 
 export const COMPLETE_BACKUP_MODULE_TABLES = {
   usuarios: ["roles", "users"],
@@ -1095,8 +1095,8 @@ export class DatabaseStorage implements IStorage {
   async updateMaterialWithdrawalItems(withdrawalId: number, items: { id: number; returnedQuantity: number; condition: string }[]): Promise<void> {
     for (const item of items) {
       await db.update(materialWithdrawalItems)
-        .set({ returnedQuantity: item.returnedQuantity, condition: item.condition })
-        .where(eq(materialWithdrawalItems.id, item.id));
+        .set({ returnedQuantity: Number(item.returnedQuantity) || 0, condition: item.condition })
+        .where(and(eq(materialWithdrawalItems.id, item.id), eq(materialWithdrawalItems.withdrawalId, withdrawalId)));
     }
   }
 

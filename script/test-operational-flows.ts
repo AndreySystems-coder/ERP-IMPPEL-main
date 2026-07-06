@@ -90,6 +90,29 @@ assert.equal(shouldRestoreReturnedQuantityToStock("danificado"), false, "danific
 assert.equal(shouldRestoreReturnedQuantityToStock("perdido"), false, "perdido nao deve voltar ao disponivel");
 assert.equal(shouldRestoreReturnedQuantityToStock("manutencao"), false, "manutencao nao deve voltar ao disponivel");
 
+const toolForReturn = await storage.createInventoryItem({ name: "Ferramenta teste retorno", type: "ferramenta", unit: "un", quantity: 1, minStock: 0, pricePerUnit: 0 });
+const withdrawalForReturn = await storage.createMaterialWithdrawal({
+  userId: 2,
+  username: "aplicador",
+  status: "pendente",
+  withdrawalDate: "2026-06-30",
+  withdrawalPhoto: "foto",
+  withdrawalSignature: "assinatura",
+}, [{
+  inventoryId: toolForReturn.id,
+  productName: toolForReturn.name,
+  unit: "un",
+  quantity: 2,
+  returnedQuantity: 0,
+  condition: "bom",
+}]);
+await storage.updateMaterialWithdrawalItems(withdrawalForReturn.id, [{ id: withdrawalForReturn.items[0].id, returnedQuantity: 2, condition: "manutencao" }]);
+await storage.updateMaterialWithdrawal(withdrawalForReturn.id, { status: "retornado" } as any);
+const returnedWithdrawal = await storage.getMaterialWithdrawal(withdrawalForReturn.id);
+assert.equal(returnedWithdrawal?.status, "retornado", "retirada com todos os itens devolvidos deve ficar retornado");
+assert.equal(returnedWithdrawal?.items[0].returnedQuantity, 2, "quantidade devolvida deve persistir no item");
+assert.equal(returnedWithdrawal?.items[0].condition, "manutencao", "condicao da ferramenta deve persistir no item");
+
 const furadeiraSummary = buildReturnableToolSummary(
   { id: 101, name: "Furadeira", type: "ferramenta", quantity: 2 },
   [{ status: "pendente", items: [{ inventoryId: 101, productName: "Furadeira", quantity: 1, returnedQuantity: 0, condition: "bom" }] }],
