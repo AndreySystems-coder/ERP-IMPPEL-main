@@ -1,0 +1,63 @@
+﻿# Changelog - ERP IMPPEL
+
+Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
+Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
+
+## [2026-07-16] - Criacao da documentacao oficial
+
+### Adicionado
+
+- Criado `PROMPT_MESTRE.md` com as regras permanentes de governanca tecnica do ERP IMPPEL.
+- Criado `BACKLOG.md` como fonte oficial de tarefas futuras e pendencias planejadas.
+- Criado `CHANGELOG.md` como historico oficial de implementacoes.
+- Criado `KNOWN_ISSUES.md` como registro oficial de riscos e problemas conhecidos.
+- Criado `ROADMAP.md` como direcao de evolucao do ERP.
+
+### Migrado
+
+- Migradas as fases do plano V.L.A.E.G. de `docs/task_plan.md` para `BACKLOG.md` e `ROADMAP.md`.
+- Migrado o log de inicializacao de `docs/progress.md` para este changelog.
+- Migrada a informacao de ausencia de descobertas/restricoes de `docs/findings.md` para `KNOWN_ISSUES.md`.
+
+### Preservado
+
+- Os arquivos antigos em `docs/` foram mantidos sem remocao nesta etapa.
+- Nenhuma funcionalidade do ERP foi alterada.
+- Nenhum schema, dado real, API ou componente foi alterado.
+
+### Validacao
+
+- Projeto sincronizado com `origin/main` antes da criacao da documentacao.
+- Esta sprint alterou apenas documentacao.
+
+## [2026-05-13] - Registro historico migrado de docs/progress.md
+
+### Registrado originalmente em docs/progress.md
+
+- Inicializacao: estrutura de pastas e arquivos base criada com sucesso conforme Protocolo 0.
+- Status: aguardando respostas da Fase 1 (Visao).
+
+### Observacao
+
+Este registro foi migrado como historico. Ele nao confirma estado funcional atual do ERP em producao.
+
+## [2026-07-16] - Preparacao documental para producao e Vercel
+
+### Adicionado
+
+- Criado `DEPLOYMENT.md` com fluxo de producao, variaveis obrigatorias, banco, Replit, Vercel e checklist pos-deploy.
+- Criado `AI_CONTEXT.md` com contexto tecnico e operacional para agentes de IA.
+
+### Documentado
+
+- Registrado que o ERP e full stack: React/Vite no frontend e Express/PostgreSQL no backend.
+- Registrado que `npm run build` gera `dist/public` e `dist/index.cjs`.
+- Registrado que `npm start` executa `node dist/index.cjs`.
+- Registrado que deploy Vercel precisa validar backend Express, APIs, sessoes e banco, nao apenas frontend estatico.
+- Registrado que valores reais de variaveis devem ficar apenas em secrets do provedor ou `.env` local ignorado.
+
+### Preservado
+
+- Nenhuma funcionalidade de negocio foi alterada.
+- Nenhum schema ou dado real foi alterado.
+- Nenhum arquivo antigo de `docs/` foi removido.
