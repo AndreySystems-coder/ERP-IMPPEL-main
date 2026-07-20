@@ -16,12 +16,17 @@ const PgSession = connectPgSimple(session);
 
 const app = express();
 const httpServer = createServer(app);
+const isProduction = process.env.NODE_ENV === "production";
 const sessionSecret =
   process.env.SESSION_SECRET ||
-  (process.env.NODE_ENV === "production" ? "" : "imppel-dev-session-secret");
+  (isProduction ? "" : "imppel-dev-session-secret");
 
 if (!sessionSecret) {
   throw new Error("SESSION_SECRET must be set in production.");
+}
+
+if (isProduction) {
+  app.set("trust proxy", 1);
 }
 
 declare module "http" {
@@ -59,7 +64,8 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: false,
+    secure: isProduction,
+    sameSite: "lax",
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
   },
@@ -95,6 +101,10 @@ app.use((req, res, next) => {
 (async () => {
   await registerRoutes(httpServer, app);
 
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "Not found" });
+  });
+
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -111,7 +121,7 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production") {
+  if (isProduction) {
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");

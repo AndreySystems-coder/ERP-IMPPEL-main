@@ -3,6 +3,20 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-20] - Preparacao final de producao
+
+### Corrigido
+
+- `server/index.ts` agora configura `trust proxy` em producao para operar corretamente atras de proxy HTTPS como Replit/Vercel/VPS.
+- Cookies de sessao passaram a usar `secure=true` automaticamente em `NODE_ENV=production`, mantendo ambiente local sem HTTPS funcional.
+- Cookies de sessao agora declaram `sameSite=lax` e preservam `httpOnly`.
+- Rotas inexistentes em `/api/*` agora retornam 404 em JSON antes do fallback HTML do frontend.
+- A rotina de inicializacao do Admin deixou de redefinir senha bcrypt existente ao normalizar usuario/role; senha so e criada para Admin inexistente ou convertida quando ainda esta em texto legado.
+
+### Validacao
+
+- TypeScript validado com `npx tsc --noEmit --incremental false`.
+
 ## [2026-07-20] - Estabilizacao final da importacao PDF operacional
 
 ### Corrigido

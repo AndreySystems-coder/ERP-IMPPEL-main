@@ -155,3 +155,10 @@ Se `npm run test` estiver bloqueado por limitacao externa, registrar o bloqueio 
 - A UI de importacao mostra `Dependencias encontradas` e painel expansivel de pendentes, erros e ignorados.
 - `Nao trabalha para nos` e responsavel historico, nao usuario a criar.
 - O subtipo `movimentacoes` do PDF de estoque deve aparecer como `Movimentacoes de Estoque`; `materiais` deve aparecer como `Controle de Materiais`.
+
+## Atualizacao de contexto - 2026-07-20 - Producao
+
+- Em `NODE_ENV=production`, o Express ativa `trust proxy` para cookies seguros atras de proxy HTTPS.
+- Cookie de sessao usa `secure=true` somente em producao, `sameSite=lax` e `httpOnly=true`.
+- Rotas inexistentes sob `/api` devem responder JSON 404 antes do fallback SPA.
+- A inicializacao do Admin nao deve redefinir senha bcrypt existente; apenas cria Admin ausente ou converte senha legado em texto para bcrypt.

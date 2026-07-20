@@ -700,13 +700,17 @@ export async function registerRoutes(
       const hashed = await bcrypt.hash(DEFAULT_PASSWORD, BCRYPT_ROUNDS);
       await storage.createUser({ username: DEFAULT_USERNAME, password: hashed, role: "admin" });
     } else {
-      // Ensure role is admin, username is correct, and password is bcrypt-hashed
+      // Ensure role is admin and username is canonical without resetting an existing password silently.
       const isHashed = adminUser.password.startsWith("$2");
-      if (!isHashed || adminUser.role !== "admin" || adminUser.username !== DEFAULT_USERNAME) {
-        const hashed = await bcrypt.hash(DEFAULT_PASSWORD, BCRYPT_ROUNDS);
+      if (!isHashed) {
         await storage.updateUser(adminUser.id, {
           username: DEFAULT_USERNAME,
-          password: hashed,
+          password: await bcrypt.hash(adminUser.password || DEFAULT_PASSWORD, BCRYPT_ROUNDS),
+          role: "admin",
+        });
+      } else if (adminUser.role !== "admin" || adminUser.username !== DEFAULT_USERNAME) {
+        await storage.updateUser(adminUser.id, {
+          username: DEFAULT_USERNAME,
           role: "admin",
         });
       }
