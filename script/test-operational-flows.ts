@@ -382,6 +382,32 @@ assert.deepEqual(
 assert.equal(materialsPreview.backup.data.entries[0].status, "registrado", "Entrada deve manter status operacional de movimentação concluída");
 assert.equal(materialsPreview.backup.data.consumption[0].type, "SAÍDA", "Saída/consumo deve virar movimentação de saída");
 assert.equal(__testPdfRestoreParsing.parseMaterialItems("2x Extensão elétrica, 15x Viaplus 1000 (18 kg)")[1].productName, "Viaplus 1000 (18 kg)");
+const realLayoutMaterialRows = [
+  pdfRow([[40, "30/06/2026"]], 700),
+  pdfRow([[46, "Responsável"], [142, "Itens"], [391, "Tipo"], [477, "Origem/Observação"], [681, "Status"]], 680),
+  pdfRow([[46, "Saídas/Consumo"], [142, "3x P.U. Bisnaga 900 g, 1x Impertela 1,05x50, 1x Suporte de"], [391, "Saída"], [477, "Registro rápido/estoque"], [681, "consumo"]], 660),
+  pdfRow([[142, "Rolo, 3x Broxa, 1x Luva de Raspa"]], 652),
+  pdfRow([[46, "Responsável"], [142, "Itens"], [391, "Tipo"], [477, "Origem/Observação"], [681, "Status"]], 640),
+  pdfRow([[142, "2x Pincel"], [477, "observação continuada"], [681, "consumo"]], 632),
+  pdfRow([[46, "Entradas"], [142, "70x Sika Alu tipo III 4mm, 10x Barra de Asfalto"], [391, "Entrada"], [477, "Registro rápido/estoque"], [681, "registrado"]], 620),
+  pdfRow([[46, "Não trabalha para nós"], [142, "1x Escada"], [391, "Retirada"], [477, "Importado via Registro Rapido"], [681, "pendente"]], 600),
+];
+const realLayoutPreview = __testPdfRestoreParsing.parseMaterials(
+  "controle-materiais-real-layout.pdf",
+  "materiais",
+  report("materiais", 4),
+  realLayoutMaterialRows,
+  "IMPPEL ERP\ntipo=materiais\nControle de Materiais",
+);
+assert.equal(realLayoutPreview.canApply, true, "Layout real deve habilitar preview quando todos os blocos operacionais são reconhecidos");
+assert.equal(realLayoutPreview.backup.data.consumption.length, 1, "Saída quebrada deve continuar em um único bloco lógico");
+assert.equal(realLayoutPreview.backup.data.entries.length, 1, "Entrada deve ser reconhecida pelo conteúdo e pelas colunas reais");
+assert.equal(realLayoutPreview.backup.data.withdrawals.length, 1, "Responsável com espaço deve ser aceito em retirada");
+assert.deepEqual(
+  realLayoutPreview.backup.data.consumption[0].items.map((item: any) => item.productName),
+  ["P.U. Bisnaga 900 g", "Impertela 1,05x50", "Suporte de Rolo", "Broxa", "Luva de Raspa", "Pincel"],
+  "Itens com medida 1,05x50 e continuação após cabeçalho repetido devem ser preservados",
+);
 const applicator = { role: "funcionario", permissions: { registrarMaterials: true } };
 assert.equal(canAccess(applicator, "viewDashboard"), false);
 assert.equal(getDefaultLandingPath(applicator), "/controle-materiais");

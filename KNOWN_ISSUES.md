@@ -69,3 +69,11 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Arquivos envolvidos: `server/pdf-restore.ts`, `server/routes.ts`.
 - Workaround: restaurar ou cadastrar previamente catalogo, estoque e usuarios antes de aplicar PDF de Controle de Materiais.
 - Status: comportamento seguro implementado; mapeamento manual pode ser evoluido em sprint futura.
+
+### KI-007 - Total do cabecalho do PDF de materiais tem granularidade diferente dos blocos operacionais
+
+- Severidade: Melhoria.
+- Causa raiz: o relatorio PDF de Controle de Materiais informa `Total de registros` em uma granularidade diferente dos blocos operacionais importaveis.
+- Impacto: a validacao de seguranca nao deve comparar cegamente o total do cabecalho com retiradas/entradas/consumos, pois isso pode bloquear uma previa correta.
+- Arquivos envolvidos: `server/pdf-restore.ts`.
+- Status: mitigado; o parser registra a diferenca em aviso e usa blocos operacionais identificaveis para decidir confianca.

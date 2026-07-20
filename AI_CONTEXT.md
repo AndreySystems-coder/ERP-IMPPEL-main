@@ -141,3 +141,9 @@ Se `npm run test` estiver bloqueado por limitacao externa, registrar o bloqueio 
 - Retiradas sao aplicadas em `material_withdrawals` e `material_withdrawal_items`; entradas e consumo viram movimentacoes oficiais de estoque.
 - PDFs antigos de Controle de Materiais preservam datas historicas no preview e no restore.
 - Produtos e responsaveis nao encontrados nao sao criados automaticamente; ficam listados como pendentes/nao resolvidos.
+
+## Atualizacao de contexto - 2026-07-20 - Parser PDF real de materiais
+
+- O PDF real PDF real de Controle de Materiais validado localmente possui colunas principais em `x~46`, `x~142`, `x~391`, `x~477` e `x~681`.
+- A previa validada extrai 110 blocos operacionais: 78 retiradas, 5 entradas e 27 saidas/consumos, sem pendentes.
+- `Total de registros: 294` no cabecalho nao deve ser tratado como total de blocos operacionais importaveis.

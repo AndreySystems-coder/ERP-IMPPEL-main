@@ -3,6 +3,19 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-20] - Ajuste cirurgico do parser PDF real de materiais
+
+### Corrigido
+
+- `parseMaterials()` agora detecta dinamicamente as colunas do PDF real pelos cabecalhos `Responsavel`, `Itens`, `Tipo`, `Origem/Observacao` e `Status`.
+- O parser passou a suportar o layout real com responsavel em `x~46` e itens em `x~142`.
+- Linhas quebradas e cabecalhos repetidos entre paginas deixaram de fragmentar registros.
+- Medidas como `1,05x50` sao preservadas como parte do nome do produto, sem virar quantidade.
+- A regra de confianca passou a comparar os blocos operacionais identificaveis, evitando bloquear quando o total do cabecalho representa outra granularidade do relatorio.
+
+### Validacao
+
+- Preview do PDF real PDF real de Controle de Materiais validado localmente extraiu 110 blocos operacionais: 78 retiradas, 5 entradas e 27 saidas/consumos, sem pendentes.
 ## [2026-07-20] - Importacao PDF do Controle de Materiais
 
 ### Corrigido

@@ -466,6 +466,10 @@ type ParsedMaterialPdfRecord = {
   page: number;
   rowY: number;
 };
+type MaterialColumnLayout = { responsible: number; items: number; type: number; notes: number; status: number };
+type MaterialRowParts = { responsible: string; itemsText: string; typeText: string; notes: string; statusText: string };
+
+const DEFAULT_MATERIAL_COLUMNS: MaterialColumnLayout = { responsible: 46, items: 142, type: 391, notes: 477, status: 681 };
 
 function normalizeMaterialStatus(kind: ParsedMaterialPdfRecord["kind"], statusText = "") {
   const normalized = normalizeText(statusText);
@@ -488,11 +492,11 @@ function classifyMaterialRecord(responsible: string, typeText = "") {
 function parseMaterialItems(value = ""): ParsedMaterialPdfItem[] {
   const text = value.replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
   if (!text) return [];
-  const matches = [...text.matchAll(/(\d+(?:[,.]\d+)?)\s*x\s*/gi)];
+  const starts = [...text.matchAll(/(?:^|,\s+)(\d+(?:[,.]\d+)?)\s*x\s*/gi)];
   const items: ParsedMaterialPdfItem[] = [];
-  for (let index = 0; index < matches.length; index++) {
-    const match = matches[index];
-    const next = matches[index + 1];
+  for (let index = 0; index < starts.length; index++) {
+    const match = starts[index];
+    const next = starts[index + 1];
     const quantity = Number(String(match[1] || "0").replace(",", "."));
     const start = (match.index || 0) + match[0].length;
     const end = next?.index ?? text.length;
@@ -508,6 +512,104 @@ function materialRecordKey(record: ParsedMaterialPdfRecord, items: ParsedMateria
   return `${record.kind}|${record.date}|${normalizeText(record.responsible)}|${itemsKey}|${normalizeText(record.notes)}|${normalizeText(record.statusText)}`;
 }
 
+function isMaterialHeaderRow(rowText: string) {
+  const normalized = normalizeText(rowText);
+  return normalized.includes("responsavel") && normalized.includes("itens") && normalized.includes("tipo") && normalized.includes("status");
+}
+
+function isMaterialNoiseRow(rowText: string) {
+  const normalized = normalizeText(rowText);
+  return !normalized ||
+    normalized.includes("imppel erp") ||
+    normalized.includes("relatorio controle de materiais") ||
+    normalized.includes("gerado em") ||
+    normalized.includes("responsavel: admin") ||
+    normalized.includes("total de registros") ||
+    normalized.includes("estrutura erp") ||
+    normalized.includes("periodo") ||
+    normalized.includes("tipo=materiais") ||
+    normalized.includes("pagina ") ||
+    normalized.includes("documento confidencial") ||
+    isMaterialHeaderRow(rowText);
+}
+
+function detectMaterialColumns(row: PdfRow): MaterialColumnLayout | null {
+  const lookup = new Map<string, number>();
+  for (const item of row.items) {
+    const key = normalizeText(item.text);
+    if (key === "responsavel") lookup.set("responsible", item.x);
+    else if (key === "itens") lookup.set("items", item.x);
+    else if (key === "tipo") lookup.set("type", item.x);
+    else if (key.includes("origem") || key.includes("observacao")) lookup.set("notes", item.x);
+    else if (key === "status") lookup.set("status", item.x);
+  }
+  if (!lookup.has("responsible") || !lookup.has("items") || !lookup.has("type") || !lookup.has("status")) return null;
+  return {
+    responsible: lookup.get("responsible") ?? DEFAULT_MATERIAL_COLUMNS.responsible,
+    items: lookup.get("items") ?? DEFAULT_MATERIAL_COLUMNS.items,
+    type: lookup.get("type") ?? DEFAULT_MATERIAL_COLUMNS.type,
+    notes: lookup.get("notes") ?? DEFAULT_MATERIAL_COLUMNS.notes,
+    status: lookup.get("status") ?? DEFAULT_MATERIAL_COLUMNS.status,
+  };
+}
+
+function materialCell(row: PdfRow, columns: MaterialColumnLayout, column: keyof MaterialColumnLayout) {
+  const order: Array<keyof MaterialColumnLayout> = ["responsible", "items", "type", "notes", "status"];
+  const index = order.indexOf(column);
+  const currentX = columns[column];
+  const previousX = index > 0 ? columns[order[index - 1]] : currentX - 70;
+  const nextX = index < order.length - 1 ? columns[order[index + 1]] : currentX + 180;
+  const minX = index === 0 ? currentX - 20 : (previousX + currentX) / 2;
+  const maxX = index === order.length - 1 ? nextX + 220 : (currentX + nextX) / 2;
+  return cell(row, minX, maxX);
+}
+
+function isRecognizedMaterialResponsible(value = "") {
+  const normalized = normalizeText(value).replace(/[,.;:-]+$/g, "").trim();
+  if (!normalized) return false;
+  if (normalized === "entradas" || normalized.includes("saidas/consumo") || normalized.includes("saidas consumo")) return true;
+  if (/^[a-z][a-z0-9_-]+\.[a-z0-9_.-]+$/i.test(value.trim())) return true;
+  if (/^(nao trabalha para nos|não trabalha para nós)$/i.test(value.trim())) return true;
+  return /^[a-zà-ÿ]+(?:\s+[a-zà-ÿ]+){1,5}$/i.test(value.trim()) && !/[,.]$/.test(value.trim());
+}
+function splitMaterialTextSemantically(rowText: string): MaterialRowParts | null {
+  const normalized = rowText.replace(/\s+/g, " ").trim();
+  const statusMatch = normalized.match(/\s(pendente|parcial|retornado|consumo|registrado)\s*$/i);
+  const statusText = statusMatch?.[1] || "";
+  const withoutStatus = statusMatch ? normalized.slice(0, statusMatch.index).trim() : normalized;
+  const typeMatch = withoutStatus.match(/\s(Retirada|Entrada|Sa[íi]da)\s/i);
+  const typeText = typeMatch?.[1] || "";
+  const beforeType = typeMatch ? withoutStatus.slice(0, typeMatch.index).trim() : withoutStatus;
+  const notes = typeMatch ? withoutStatus.slice((typeMatch.index || 0) + typeMatch[0].length).trim() : "";
+  const itemStart = beforeType.search(/(?:^|\s)(\d+(?:[,.]\d+)?)\s*x\s+\S/i);
+  if (itemStart < 0) return null;
+  const responsible = beforeType.slice(0, itemStart).trim();
+  const itemsText = beforeType.slice(itemStart).trim();
+  if (!responsible || !itemsText) return null;
+  return { responsible, itemsText, typeText, notes, statusText };
+}
+
+function materialRowParts(row: PdfRow, columns: MaterialColumnLayout): MaterialRowParts {
+  const rowText = row.items.map(item => item.text).join(" ").replace(/\s+/g, " ").trim();
+  const byColumns: MaterialRowParts = {
+    responsible: materialCell(row, columns, "responsible"),
+    itemsText: materialCell(row, columns, "items"),
+    typeText: materialCell(row, columns, "type"),
+    notes: materialCell(row, columns, "notes"),
+    statusText: materialCell(row, columns, "status"),
+  };
+  if (byColumns.responsible && byColumns.itemsText) return byColumns;
+  const semantic = splitMaterialTextSemantically(rowText);
+  if (!semantic) return byColumns;
+  return {
+    responsible: byColumns.responsible || semantic.responsible,
+    itemsText: byColumns.itemsText || semantic.itemsText,
+    typeText: byColumns.typeText || semantic.typeText,
+    notes: byColumns.notes || semantic.notes,
+    statusText: byColumns.statusText || semantic.statusText,
+  };
+}
+
 function parseMaterials(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>, rows: PdfRow[], rawText: string) {
   const preview = basePreview(fileName, selectedType, report);
   const withdrawals: any[] = [];
@@ -517,13 +619,16 @@ function parseMaterials(fileName: string, selectedType: BackupType, report: Retu
   const records: ParsedMaterialPdfRecord[] = [];
   let currentDate = "";
   let current: ParsedMaterialPdfRecord | null = null;
+  let columns = DEFAULT_MATERIAL_COLUMNS;
+  let logicalBlocks = 0;
 
   const flush = () => {
     if (!current) return;
+    logicalBlocks++;
     const items = parseMaterialItems(current.itemsText);
     if (!current.date || !current.responsible || items.length === 0) {
       preview.pendingCount++;
-      preview.pending.push(`${current.date || "sem data"} · ${current.responsible || "sem responsável"}: itens não extraídos com segurança.`);
+      preview.pending.push(`p${current.page} y${Math.round(current.rowY)} · ${current.date || "sem data"} · ${current.responsible || "sem responsável"}: itens não extraídos com segurança.`);
       preview.rows.push({ name: current.responsible || "Registro pendente", detail: current.itemsText || "Sem itens reconhecidos", status: "pendente" });
       current = null;
       return;
@@ -587,27 +692,36 @@ function parseMaterials(fileName: string, selectedType: BackupType, report: Retu
       currentDate = dateOnly;
       continue;
     }
-    if (/^(IMPPEL ERP|Controle de Materiais|Responsável|Responsavel|Itens|Tipo|Origem|Observação|Observacao|Status|Total de registros|tipo=materiais)/i.test(rowText)) continue;
+    const detectedColumns = detectMaterialColumns(row);
+    if (detectedColumns) {
+      columns = detectedColumns;
+      continue;
+    }
+    if (isMaterialNoiseRow(rowText)) continue;
 
-    const responsible = cell(row, 35, 185);
-    const itemsText = cell(row, 185, 500);
-    const typeText = cell(row, 500, 595);
-    const notes = cell(row, 595, 735);
-    const statusText = cell(row, 735, 840);
-    const hasItemPattern = /\d+(?:[,.]\d+)?\s*x\s+\S/i.test(rowText);
-    const startsRecord = Boolean(currentDate && responsible && (itemsText || hasItemPattern) && !/^\d+(?:[,.]\d+)?\s*x\b/i.test(responsible));
+    const parts = materialRowParts(row, columns);
+    const hasItemPattern = /(?:^|[,\s])(\d+(?:[,.]\d+)?)\s*x\s+\S/i.test(rowText);
+    const startsRecord = Boolean(currentDate && parts.responsible && parts.itemsText && hasItemPattern);
+
+    if (startsRecord && current && !isRecognizedMaterialResponsible(parts.responsible)) {
+      const continuedItems = parts.itemsText.includes(parts.responsible) ? parts.itemsText : `${parts.responsible} ${parts.itemsText}`;
+      const itemSeparator = /^\d+(?:[,.]\d+)?\s*x\s+/i.test(continuedItems) && !/[,:;]\s*$/.test(current.itemsText) ? ", " : " ";
+      current.itemsText = `${current.itemsText}${itemSeparator}${continuedItems}`.trim();
+      if (parts.notes) current.notes = `${current.notes} ${parts.notes}`.trim();
+      if (!current.statusText && parts.statusText) current.statusText = parts.statusText;
+      continue;
+    }
 
     if (startsRecord) {
       flush();
-      const fallbackItems = itemsText || rowText.replace(responsible, "").replace(typeText, "").replace(notes, "").replace(statusText, "").trim();
       current = {
-        kind: classifyMaterialRecord(responsible, typeText),
+        kind: classifyMaterialRecord(parts.responsible, parts.typeText),
         date: currentDate,
-        responsible,
-        itemsText: fallbackItems,
-        typeText,
-        notes,
-        statusText,
+        responsible: parts.responsible,
+        itemsText: parts.itemsText,
+        typeText: parts.typeText,
+        notes: parts.notes,
+        statusText: parts.statusText,
         page: row.page,
         rowY: row.y,
       };
@@ -615,20 +729,24 @@ function parseMaterials(fileName: string, selectedType: BackupType, report: Retu
     }
 
     if (current) {
-      const continuationItems = itemsText || (hasItemPattern ? rowText : "");
-      if (continuationItems) current.itemsText = `${current.itemsText} ${continuationItems}`.trim();
-      else if (notes || rowText) current.notes = `${current.notes} ${notes || rowText}`.trim();
-      if (!current.typeText && typeText) {
-        current.typeText = typeText;
-        current.kind = classifyMaterialRecord(current.responsible, typeText);
+      const continuationItems = parts.itemsText || (hasItemPattern ? rowText : "");
+      const continuationNotes = parts.notes || (!continuationItems ? rowText : "");
+      if (continuationItems) {
+        const itemSeparator = /^\d+(?:[,.]\d+)?\s*x\s+/i.test(continuationItems) && !/[,:;]\s*$/.test(current.itemsText) ? ", " : " ";
+        current.itemsText = `${current.itemsText}${itemSeparator}${continuationItems}`.trim();
       }
-      if (!current.statusText && statusText) current.statusText = statusText;
+      if (continuationNotes) current.notes = `${current.notes} ${continuationNotes}`.trim();
+      if (!current.typeText && parts.typeText) {
+        current.typeText = parts.typeText;
+        current.kind = classifyMaterialRecord(current.responsible, parts.typeText);
+      }
+      if (!current.statusText && parts.statusText) current.statusText = parts.statusText;
       continue;
     }
 
     if (currentDate && hasItemPattern) {
       preview.pendingCount++;
-      preview.pending.push(`${currentDate}: linha com itens sem responsável: ${rowText}`);
+      preview.pending.push(`p${row.page} y${Math.round(row.y)} · ${currentDate}: linha com itens sem responsável: ${rowText.slice(0, 160)}`);
       preview.rows.push({ name: "Registro pendente", detail: rowText, status: "pendente" });
     }
   }
@@ -644,22 +762,28 @@ function parseMaterials(fileName: string, selectedType: BackupType, report: Retu
     meta: {
       parser: "parseMaterials",
       records: records.length,
+      logicalBlocks,
       sourceFile: fileName,
       rawMarkerFound: normalizeText(rawText).includes("tipo=materiais"),
     },
   };
-  preview.canApply = preview.extracted > 0 && preview.errorCount === 0;
-  if (report.headerTotal && preview.extracted !== report.headerTotal) {
-    const diff = Math.max(0, report.headerTotal - preview.extracted - preview.pendingCount - preview.duplicateCount);
-    if (diff > 0) {
-      preview.pendingCount += diff;
-      preview.warnings.push(`PDF informa ${report.headerTotal} registros; ${preview.extracted} foram extraídos com segurança.`);
-    }
+  const declaredTotal = report.headerTotal || 0;
+  const identifiableTotal = logicalBlocks + preview.duplicateCount;
+  const coverage = identifiableTotal ? preview.extracted / identifiableTotal : 1;
+  preview.canApply = preview.extracted > 0 && preview.errorCount === 0 && preview.pendingCount === 0;
+  if (declaredTotal && declaredTotal !== identifiableTotal) {
+    preview.warnings.push(`PDF informa ${declaredTotal} registros no cabeçalho; ${identifiableTotal} bloco(s) operacional(is) com tipo de movimento foram identificado(s).`);
+  }
+  if (identifiableTotal && preview.extracted !== identifiableTotal) {
+    preview.warnings.push(`${preview.extracted} de ${identifiableTotal} bloco(s) operacional(is) foram extraídos com segurança (${Math.round(coverage * 100)}%).`);
+  }
+  if (identifiableTotal >= 20 && coverage < 0.9) {
+    preview.canApply = false;
+    preview.warnings.push("Importação bloqueada: menos de 90% dos blocos operacionais identificáveis foram reconhecidos com segurança.");
   }
   preview.warnings.push(`Materiais: ${withdrawals.length} retirada(s), ${entries.length} entrada(s), ${consumption.length} saída(s)/consumo extraídas.`);
   return preview;
-}
-function unsupportedPreview(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>) {
+}function unsupportedPreview(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>) {
   const preview = basePreview(fileName, selectedType, report);
   preview.pendingCount = report.headerTotal || 1;
   preview.warnings.push("Este módulo foi reconhecido, mas ainda exige parser específico para importação segura por PDF.");
