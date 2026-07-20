@@ -247,10 +247,10 @@ assert.equal(biroRows[0].userId, null, "Biro deve ficar pendente de funcionario 
 assert.equal(lequinhoRows.find(row => row.rawItem === "soprador")?.status, "duvidoso", "Soprador deve ficar pendente dentro do card de Lequinho quando nao existir no estoque");
 assert.equal(pendingGroupedPreview.rows.some(row => row.stockWarning), true, "Estoque insuficiente deve virar alerta no preview, nao bloqueio");
 
-const pdfRow = (cells: Array<[number, string]>, y = 700) => ({
+const pdfRow = (cells: Array<[number, string]>, y = 700, page = 1) => ({
   y,
-  page: 1,
-  items: cells.map(([x, text]) => ({ x, y, page: 1, text })),
+  page,
+  items: cells.map(([x, text]) => ({ x, y, page, text })),
 });
 const report = (type: any, headerTotal = 0) => ({ type, restoreType: type === "movimentacoes" ? "estoque" : type, marker: `tipo=${type}`, title: `IMPPEL ERP tipo=${type}`, headerTotal });
 
@@ -355,11 +355,12 @@ assert.ok(userPreview.backup.data.roles.some((role: any) => role.name === "mater
 const materialDateRow = pdfRow([[40, "30/06/2026"]], 620);
 const materialRows = [
   materialDateRow,
-  pdfRow([[40, "wellington.pires"], [200, "1x Furadeira, 2x Extensão elétrica"], [520, "Retirada"], [610, "OS 15"], [760, "pendente"]], 610),
-  pdfRow([[200, "15x Viaplus 1000 (18 kg)"]], 600),
-  pdfRow([[40, "Entradas"], [200, "3x Marreta"], [520, "Entrada"], [610, "Compra NF 10"], [760, "registrado"]], 590),
-  pdfRow([[40, "Saídas/Consumo"], [200, "2x Broxa"], [520, "Saída/Consumo"], [610, "Consumo obra"], [760, "consumo"]], 580),
-  pdfRow([[40, "Saídas/Consumo"], [200, "2x Broxa"], [520, "Saída/Consumo"], [610, "Consumo obra"], [760, "consumo"]], 570),
+  pdfRow([[46, "Responsável"], [142, "Itens"], [391, "Tipo"], [477, "Origem/Observação"], [681, "Status"]], 615),
+  pdfRow([[46, "wellington.pires"], [142, "1x Furadeira, 2x Extensão elétrica"], [391, "Retirada"], [477, "OS 15"], [681, "pendente"]], 610),
+  pdfRow([[142, "15x Viaplus 1000 (18 kg)"]], 600),
+  pdfRow([[46, "Entradas"], [142, "3x Marreta"], [391, "Entrada"], [477, "Compra NF 10"], [681, "registrado"]], 590),
+  pdfRow([[46, "Saídas/Consumo"], [142, "2x Broxa"], [391, "Saída/Consumo"], [477, "Consumo obra"], [681, "consumo"]], 580),
+  pdfRow([[46, "Saídas/Consumo"], [142, "2x Broxa"], [391, "Saída/Consumo"], [477, "Consumo obra"], [681, "consumo"]], 570),
 ];
 const materialsPreview = __testPdfRestoreParsing.parseMaterials(
   "controle-materiais.pdf",
@@ -408,6 +409,37 @@ assert.deepEqual(
   ["P.U. Bisnaga 900 g", "Impertela 1,05x50", "Suporte de Rolo", "Broxa", "Luva de Raspa", "Pincel"],
   "Itens com medida 1,05x50 e continuação após cabeçalho repetido devem ser preservados",
 );
+
+const crossPageMaterialRows = [
+  pdfRow([[40, "30/06/2026"]], 700, 1),
+  pdfRow([[46, "Responsável"], [142, "Itens"], [391, "Tipo"], [477, "Origem/Observação"], [681, "Status"]], 680, 1),
+  pdfRow([[46, "Saídas/Consumo"], [142, "32x Viaplus 1000, 6x Luva de"], [391, "Saída"], [477, "Registro Rapido #94224e6d3fcb"], [681, "consumo"]], 660, 1),
+  pdfRow([[142, "Raspa, 2x Impertela 1,05x50, 1x Viapol Manta Torodin 4 mm"]], 740, 2),
+  pdfRow([[142, "1x Aplicador de PU, 1x Suporte de Rolo, 1x Viabit Primer (base solvente)"]], 730, 2),
+  pdfRow([[46, "luiz.silva"], [142, "1x Drykoprimer Comum 4 mm"], [391, "Retirada"], [477, "OS teste"], [681, "pendente"]], 720, 2),
+];
+const crossPagePreview = __testPdfRestoreParsing.parseMaterials(
+  "controle-materiais-cross-page.pdf",
+  "materiais",
+  report("materiais", 2),
+  crossPageMaterialRows,
+  "IMPPEL ERP\ntipo=materiais\nControle de Materiais",
+);
+assert.equal(crossPagePreview.backup.data.consumption.length, 1, "Continuação entre páginas não deve criar novo registro sem Tipo válido");
+assert.deepEqual(
+  crossPagePreview.backup.data.consumption[0].items.map((item: any) => `${item.quantity}x ${item.productName}`),
+  [
+    "32x Viaplus 1000",
+    "6x Luva de Raspa",
+    "2x Impertela 1,05x50",
+    "1x Viapol Manta Torodin 4 mm",
+    "1x Aplicador de PU",
+    "1x Suporte de Rolo",
+    "1x Viabit Primer (base solvente)",
+  ],
+  "Itens reais quebrados entre linhas/páginas devem ser reconstruídos sem quebrar medidas como 1,05x50",
+);
+assert.equal(crossPagePreview.backup.data.withdrawals[0].items[0].productName, "Drykoprimer Comum 4 mm", "Linha com Tipo Retirada deve iniciar novo registro real");
 const applicator = { role: "funcionario", permissions: { registrarMaterials: true } };
 assert.equal(canAccess(applicator, "viewDashboard"), false);
 assert.equal(getDefaultLandingPath(applicator), "/controle-materiais");

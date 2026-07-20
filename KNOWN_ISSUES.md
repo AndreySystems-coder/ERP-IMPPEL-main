@@ -86,3 +86,12 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Arquivos envolvidos: `server/pdf-restore.ts`.
 - Workaround: validar novamente quando o PDF exato usado no Replit estiver disponivel no ambiente local.
 - Status: sem alteracao corretiva aplicada porque a causa nao foi reproduzida no arquivo local.
+
+### KI-009 - Restore real de Controle de Materiais ainda exige PostgreSQL descartavel
+
+- Severidade: Critico para aprovacao final da restauracao.
+- Causa raiz: o ambiente local desta sessao nao possui `DATABASE_URL` de teste descartavel para executar a sequencia completa em PostgreSQL real.
+- Impacto: o parser, a classificacao e os testes automatizados passaram, mas a aprovacao operacional final exige restaurar os cinco PDFs reais em banco PostgreSQL descartavel, repetir a importacao e comparar duplicidade/saldos.
+- Arquivos envolvidos: `server/routes.ts`, `server/pdf-restore.ts`, `client/src/components/CompleteBackupManager.tsx`.
+- Workaround: executar a validacao em Replit/dev com banco clonado ou PostgreSQL temporario, nunca em producao.
+- Status: pendente de ambiente externo; nao bloqueia commit da correcao, mas bloqueia aprovacao final `CONTROLE DE MATERIAIS VALIDADO PARA RESTAURACAO`.

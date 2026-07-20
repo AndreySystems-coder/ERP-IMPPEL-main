@@ -30,6 +30,11 @@ export type ErpPdfRestorePreview = {
   errorCount: number;
   pendingCount: number;
   duplicateCount: number;
+  fullyApplicableCount?: number;
+  partiallyApplicableCount?: number;
+  blockedCount?: number;
+  unresolvedItemCount?: number;
+  requiresPartialConfirmation?: boolean;
   warnings: string[];
   ignored: string[];
   pending: string[];
@@ -501,6 +506,18 @@ function classifyMaterialRecord(responsible: string, typeText = "") {
   return "withdrawal" as const;
 }
 
+function hasValidMaterialType(parts: MaterialRowParts) {
+  const normalizedType = normalizeText(parts.typeText);
+  const normalizedResponsible = normalizeText(parts.responsible);
+  return normalizedType.includes("retirada") ||
+    normalizedType.includes("entrada") ||
+    normalizedType.includes("saida") ||
+    normalizedType.includes("consumo") ||
+    normalizedResponsible === "entradas" ||
+    normalizedResponsible.includes("saidas/consumo") ||
+    normalizedResponsible.includes("saidas consumo");
+}
+
 function parseMaterialItems(value = ""): ParsedMaterialPdfItem[] {
   const text = value.replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
   if (!text) return [];
@@ -713,7 +730,7 @@ function parseMaterials(fileName: string, selectedType: BackupType, report: Retu
 
     const parts = materialRowParts(row, columns);
     const hasItemPattern = /(?:^|[,\s])(\d+(?:[,.]\d+)?)\s*x\s+\S/i.test(rowText);
-    const startsRecord = Boolean(currentDate && parts.responsible && parts.itemsText && hasItemPattern);
+    const startsRecord = Boolean(currentDate && parts.responsible && parts.itemsText && hasItemPattern && hasValidMaterialType(parts));
 
     if (startsRecord && current && !isRecognizedMaterialResponsible(parts.responsible)) {
       const continuedItems = parts.itemsText.includes(parts.responsible) ? parts.itemsText : `${parts.responsible} ${parts.itemsText}`;

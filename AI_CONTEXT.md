@@ -162,3 +162,12 @@ Se `npm run test` estiver bloqueado por limitacao externa, registrar o bloqueio 
 - Cookie de sessao usa `secure=true` somente em producao, `sameSite=lax` e `httpOnly=true`.
 - Rotas inexistentes sob `/api` devem responder JSON 404 antes do fallback SPA.
 - A inicializacao do Admin nao deve redefinir senha bcrypt existente; apenas cria Admin ausente ou converte senha legado em texto para bcrypt.
+
+## Atualizacao de contexto - 2026-07-20 - Restore PDF de Controle de Materiais
+
+- Controle de Materiais usa `inventory` como fonte operacional de matching; `products` e catalogo comercial nao devem ser exigidos para ferramentas/equipamentos.
+- Novo registro de Controle de Materiais so deve iniciar quando houver tipo operacional valido (`Retirada`, `Entrada`, `Saida`/`Consumo`) na estrutura do PDF.
+- Linhas com itens e sem tipo valido devem continuar o registro aberto, inclusive entre paginas.
+- Preview deve diferenciar `fullyApplicableCount`, `partiallyApplicableCount`, `blockedCount` e `unresolvedItemCount`.
+- Importacao parcial exige confirmacao literal `IMPORTAR PARCIALMENTE`.
+- Responsavel historico `Nao trabalha para nos` nunca vira usuario e nunca deve persistir `userId=0`; usar usuario de auditoria existente e preservar o nome historico.

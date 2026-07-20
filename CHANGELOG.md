@@ -3,6 +3,24 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-20] - Restore seguro de Controle de Materiais por PDF
+
+### Corrigido
+
+- O parser de Controle de Materiais agora exige tipo operacional valido para iniciar novo registro, evitando que linhas de continuacao com quantidade sejam tratadas como registros novos.
+- Continuidade de itens quebrados na mesma pagina ou entre paginas foi reforcada para casos reais como `Luva de Raspa`, `Impertela 1,05x50`, `Aplicador de PU`, `Suporte de Rolo`, `Viabit Primer (base solvente)` e `Viapol Manta Torodin 4 mm`.
+- O preview de Controle de Materiais passou a separar registros completamente aplicaveis, parcialmente aplicaveis, bloqueados e itens nao encontrados.
+- A importacao parcial exige confirmacao explicita `IMPORTAR PARCIALMENTE`; o fluxo normal `IMPORTAR` nao aplica registros com itens ausentes.
+- A rota de restore passou a registrar `restoredComplete`, `restoredPartial`, `unresolvedItems` e `duplicateRecords`.
+- Responsavel historico `Nao trabalha para nos` nao cria conta e nao usa `userId=0`; a retirada usa um usuario de auditoria existente e preserva o nome historico no campo `username`.
+- O matching operacional de materiais usa `inventory` como fonte, com nome exato e normalizacao completa segura; `products` permanece apenas como referencia comercial.
+
+### Validacao
+
+- PDFs reais validados em preview local: usuarios/cargos 12 usuarios e 9 cargos; produtos 45; servicos 24; estoque 96; Controle de Materiais 294 declarados, 110 blocos logicos, 78 retiradas, 5 entradas, 27 saidas/consumos e 469 itens.
+- Testes operacionais adicionados para continuacao entre paginas e itens reais quebrados.
+- Validacoes executadas: `npm install`, `npx tsc --noEmit --incremental false`, `npm run build`, `npm run test`, `npm run test:backup`, `npm run test:operational`, `git diff --check`.
+
 ## [2026-07-20] - Preparacao final de producao
 
 ### Corrigido

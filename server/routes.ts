@@ -116,6 +116,16 @@ function normalizeRestoreDependencyKey(value: unknown) {
   return String(value || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function normalizeMaterialMatchKey(value: unknown) {
+  return normalizeRestoreDependencyKey(value)
+    .replace(/(\d+(?:[,.]\d+)?)\s*x\s*(\d+)/g, "$1x$2")
+    .replace(/(\d+)\s*mm\b/g, "$1 mm")
+    .replace(/[()]/g, " ")
+    .replace(/[.,;:/_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function isHistoricalMaterialResponsible(value: unknown) {
   const normalized = normalizeRestoreDependencyKey(value);
   return normalized === "nao trabalha para nos" || normalized === "nao trabalha conosco";
@@ -162,14 +172,53 @@ async function attachPdfRestoreDependencies(preview: any) {
       (Array.isArray(record.items) ? record.items : []).map((item: any) => item.productName || item.materialName || item.name)
     ));
     const userKeys = new Set(users.flatMap((user: any) => [user.username, user.fullName, user.name].map(normalizeRestoreDependencyKey).filter(Boolean)));
-    const inventoryKeys = new Set(inventory.map((item: any) => normalizeRestoreDependencyKey(item.name)).filter(Boolean));
+    const inventoryKeys = new Set(inventory.map((item: any) => normalizeMaterialMatchKey(item.name)).filter(Boolean));
     const missingUsers = responsibleNames.filter(name => !userKeys.has(normalizeRestoreDependencyKey(name)));
-    const missingInventory = materialNames.filter(name => !inventoryKeys.has(normalizeRestoreDependencyKey(name)));
+    const missingInventory = materialNames.filter(name => !inventoryKeys.has(normalizeMaterialMatchKey(name)));
+    const classifyRecord = (record: any, requiresUser: boolean) => {
+      const rawItems = Array.isArray(record.items) ? record.items : [];
+      const unresolvedItems = rawItems
+        .map((item: any) => String(item.productName || item.materialName || item.name || "").trim())
+        .filter((name: string) => name && !inventoryKeys.has(normalizeMaterialMatchKey(name)));
+      const resolvedCount = rawItems.length - unresolvedItems.length;
+      const responsible = record.username || record.responsible;
+      const userOk = !requiresUser || isHistoricalMaterialResponsible(responsible) || userKeys.has(normalizeRestoreDependencyKey(responsible));
+      if (!userOk || resolvedCount <= 0) return { status: "blocked", unresolvedItems };
+      if (unresolvedItems.length > 0) return { status: "partial", unresolvedItems };
+      return { status: "full", unresolvedItems };
+    };
+    const classifications = [
+      ...withdrawals.map((record: any) => classifyRecord(record, true)),
+      ...entries.map((record: any) => classifyRecord(record, false)),
+      ...consumption.map((record: any) => classifyRecord(record, false)),
+    ];
+    const fullyApplicableCount = classifications.filter(item => item.status === "full").length;
+    const partiallyApplicableCount = classifications.filter(item => item.status === "partial").length;
+    const blockedCount = classifications.filter(item => item.status === "blocked").length;
+    const unresolvedItemCount = classifications.reduce((sum, item) => sum + item.unresolvedItems.length, 0);
 
     addCheck("Usuários", true, responsibleNames.length - missingUsers.length, missingUsers, missingUsers.length ? "Importe Usuários e Cargos antes do Controle de Materiais." : "Responsáveis encontrados.");
-    addCheck("Catálogo de Produtos", true, products.length, products.length === 0 && materialNames.length > 0 ? ["Catálogo de Produtos vazio"] : [], products.length ? "Catálogo disponível." : "Importe Catálogo de Produtos antes do Controle de Materiais.");
+    addCheck("Catálogo de Produtos", false, products.length, [], products.length ? "Catálogo disponível para conferência comercial." : "Catálogo vazio; Controle de Materiais usa Estoque como fonte operacional.");
     addCheck("Estoque", true, materialNames.length - missingInventory.length, missingInventory, missingInventory.length ? "Importe Estoque antes do Controle de Materiais." : "Materiais encontrados no estoque.");
     addCheck("Catálogo de Serviços", false, services.length, [], services.length ? "Serviços disponíveis." : "Serviços não são obrigatórios para este PDF.");
+    preview.fullyApplicableCount = fullyApplicableCount;
+    preview.partiallyApplicableCount = partiallyApplicableCount;
+    preview.blockedCount = blockedCount;
+    preview.unresolvedItemCount = unresolvedItemCount;
+    preview.requiresPartialConfirmation = partiallyApplicableCount > 0 || blockedCount > 0 || unresolvedItemCount > 0;
+    preview.backup = {
+      ...preview.backup,
+      meta: {
+        ...(preview.backup?.meta || {}),
+        restoreClassification: {
+          fullyApplicableCount,
+          partiallyApplicableCount,
+          blockedCount,
+          unresolvedItemCount,
+          matchingSource: "inventory",
+        },
+      },
+    };
     if (historicalResponsibleCount > 0) {
       warnings.push(`${historicalResponsibleCount} retirada(s) usam "Não trabalha para nós" como responsável histórico; nenhum usuário será criado automaticamente.`);
     }
@@ -186,6 +235,10 @@ async function attachPdfRestoreDependencies(preview: any) {
     preview.pendingCount += blockedReasons.length;
     preview.pending.push(...blockedReasons.map(reason => `Dependência ausente: ${reason}`));
     preview.warnings.push("Importação bloqueada: conclua as dependências indicadas antes de aplicar este PDF.");
+  }
+  if (preview?.restoreType === "materiais" && Number(preview.fullyApplicableCount || 0) + Number(preview.partiallyApplicableCount || 0) <= 0) {
+    preview.canApply = false;
+    preview.warnings.push("Importação bloqueada: nenhum registro aplicável foi encontrado contra as dependências atuais.");
   }
   preview.warnings.push(...warnings);
   return preview;
@@ -4228,6 +4281,7 @@ export async function registerRoutes(
   app.post("/api/backup/restore/materiais", requireAdmin, async (req, res) => {
     try {
       const { data } = req.body;
+      const allowPartial = req.body?.allowPartial === true;
       if (!data || (!Array.isArray(data.withdrawals) && !Array.isArray(data.entries) && !Array.isArray(data.consumption))) {
         return res.status(400).json({ message: "Formato de backup inválido" });
       }
@@ -4258,28 +4312,38 @@ export async function registerRoutes(
         storage.getInventoryMovements(),
       ]);
       const inventoryByExactName = new Map(inventory.map((item: any) => [String(item.name || "").trim(), item]));
-      const inventoryByNormalizedName = new Map(inventory.map((item: any) => [normalizeRestoreKey(item.name), item]));
+      const inventoryByNormalizedName = new Map(inventory.map((item: any) => [normalizeMaterialMatchKey(item.name), item]));
       const usersByUsername = new Map(users.map((user: any) => [normalizeRestoreKey(user.username), user]));
+      const historicalResponsibleUser = users.find((user: any) => user.id === req.session.userId) || users.find((user: any) => user.role === "admin") || users[0] || null;
       const resolveInventory = (item: any) => {
         const explicit = Number(item.inventoryId || 0);
         if (explicit > 0) return inventory.find((row: any) => Number(row.id) === explicit) || null;
         const name = String(item.productName || item.materialName || item.name || "").trim();
-        return inventoryByExactName.get(name) || inventoryByNormalizedName.get(normalizeRestoreKey(name)) || null;
+        return inventoryByExactName.get(name) || inventoryByNormalizedName.get(normalizeMaterialMatchKey(name)) || null;
       };
-      const resolveItems = (items: any[]) => items.map(item => {
-        const product = resolveInventory(item);
-        const quantity = Math.ceil(Number(item.quantity || 0));
-        if (!product || quantity <= 0) return null;
-        return {
-          withdrawalId: 0,
-          inventoryId: Number(product.id),
-          productName: String(product.name),
-          unit: product.unit || item.unit || "unid",
-          quantity,
-          returnedQuantity: item.returnedQuantity ? Math.ceil(Number(item.returnedQuantity)) : null,
-          condition: item.condition || "bom",
-        };
-      }).filter(Boolean) as any[];
+      const resolveItems = (items: any[]) => {
+        const resolved: any[] = [];
+        const unresolved: string[] = [];
+        for (const item of items) {
+          const product = resolveInventory(item);
+          const quantity = Math.ceil(Number(item.quantity || 0));
+          const rawName = String(item.productName || item.materialName || item.name || "sem nome").trim();
+          if (!product || quantity <= 0) {
+            unresolved.push(rawName);
+            continue;
+          }
+          resolved.push({
+            withdrawalId: 0,
+            inventoryId: Number(product.id),
+            productName: String(product.name),
+            unit: product.unit || item.unit || "unid",
+            quantity,
+            returnedQuantity: item.returnedQuantity ? Math.ceil(Number(item.returnedQuantity)) : null,
+            condition: item.condition || "bom",
+          });
+        }
+        return { resolved, unresolved };
+      };
 
       const existingWithdrawalKeys = new Set(existingWithdrawals.map((withdrawal: any) =>
         withdrawalKey(withdrawal, Array.isArray(withdrawal.items) ? withdrawal.items : [])
@@ -4293,22 +4357,32 @@ export async function registerRoutes(
       ].join("|")));
 
       let withdrawalsCreated = 0;
+      let restoredComplete = 0;
+      let restoredPartial = 0;
       let movementsCreated = 0;
       let skipped = 0;
       const unresolved: string[] = [];
       const duplicates: string[] = [];
+      let partialBlock: string[] | null = null;
 
       for (const withdrawal of data.withdrawals || []) {
         const rawItems = Array.isArray(withdrawal.items) ? withdrawal.items : [];
-        const resolvedItems = resolveItems(rawItems);
+        const { resolved: resolvedItems, unresolved: unresolvedItems } = resolveItems(rawItems);
         const username = String(withdrawal.username || withdrawal.responsible || "").trim();
         const user = usersByUsername.get(normalizeRestoreKey(username));
         const isHistoricalResponsible = isHistoricalMaterialResponsible(username);
-        if (!username || (!user && !isHistoricalResponsible) || resolvedItems.length === 0) {
+        if (!username || (!user && !isHistoricalResponsible) || (isHistoricalResponsible && !historicalResponsibleUser) || resolvedItems.length === 0) {
           skipped++;
           if (!user && !isHistoricalResponsible) unresolved.push(`Responsável não encontrado: ${username || "sem responsável"}`);
-          for (const rawItem of rawItems) if (!resolveInventory(rawItem)) unresolved.push(`Material não encontrado: ${rawItem.productName || rawItem.name || "sem nome"}`);
+          if (isHistoricalResponsible && !historicalResponsibleUser) unresolved.push(`Responsável histórico sem usuário de auditoria disponível: ${username}`);
+          for (const itemName of unresolvedItems) unresolved.push(`Material não encontrado: ${itemName}`);
           continue;
+        }
+        if (unresolvedItems.length > 0 && !allowPartial) {
+          return res.status(409).json({
+            message: "Importação parcial bloqueada. Gere o preview e confirme com IMPORTAR PARCIALMENTE para aplicar apenas os itens resolvidos.",
+            unresolvedItems,
+          });
         }
         const key = withdrawalKey(withdrawal, resolvedItems);
         if (existingWithdrawalKeys.has(key)) {
@@ -4319,8 +4393,9 @@ export async function registerRoutes(
         existingWithdrawalKeys.add(key);
         const date = withdrawal.withdrawalDate || withdrawal.date || new Date().toISOString().split("T")[0];
         const restoredUsername = user?.username || username;
+        const auditUser = user || historicalResponsibleUser;
         const restored = await storage.createMaterialWithdrawal({
-          userId: user ? Number(user.id) : 0,
+          userId: Number(auditUser.id),
           username: restoredUsername,
           workOrderId: withdrawal.workOrderId ? Number(withdrawal.workOrderId) : null,
           jobId: withdrawal.jobId ? Number(withdrawal.jobId) : null,
@@ -4329,12 +4404,15 @@ export async function registerRoutes(
           status: withdrawal.status || "pendente",
           withdrawalPhoto: withdrawal.withdrawalPhoto || "restauracao-pdf-materiais",
           withdrawalSignature: withdrawal.withdrawalSignature || "restauracao-pdf-materiais",
-          notes: `Importação PDF Controle de Materiais | hash:${withdrawal.sourceHash || "sem-hash"}${withdrawal.notes ? " | " + withdrawal.notes : ""}`,
+          notes: `Importação PDF Controle de Materiais | hash:${withdrawal.sourceHash || "sem-hash"}${withdrawal.notes ? " | " + withdrawal.notes : ""}${unresolvedItems.length ? " | ITENS_NAO_RESTAURADOS: " + unresolvedItems.join(", ") : ""}`,
           returnPhoto: withdrawal.returnPhoto || null,
           returnSignature: withdrawal.returnSignature || null,
           returnNotes: withdrawal.returnNotes || null,
         } as any, resolvedItems);
         withdrawalsCreated++;
+        if (unresolvedItems.length > 0) restoredPartial++;
+        else restoredComplete++;
+        unresolved.push(...unresolvedItems.map(name => `Material não restaurado parcialmente: ${name}`));
         for (const item of restored.items || resolvedItems) {
           const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | Retirada #${restored.id} | hash:${withdrawal.sourceHash || "sem-hash"} | Responsavel: ${restoredUsername}${isHistoricalResponsible ? " | Responsavel historico sem conta de usuario" : ""}`;
           const keyMovement = [Number(item.inventoryId), "SAÍDA", Number(item.quantity), date, normalizeRestoreKey(notes)].join("|");
@@ -4347,40 +4425,63 @@ export async function registerRoutes(
 
       const restoreMovements = async (records: any[], type: "ENTRADA" | "SAÍDA") => {
         for (const record of records || []) {
-          for (const rawItem of Array.isArray(record.items) ? record.items : []) {
-            const product = resolveInventory(rawItem);
-            const quantity = Math.ceil(Number(rawItem.quantity || 0));
-            if (!product || quantity <= 0) {
-              skipped++;
-              unresolved.push(`Material não encontrado: ${rawItem.productName || rawItem.name || "sem nome"}`);
-              continue;
-            }
+          const rawItems = Array.isArray(record.items) ? record.items : [];
+          const { resolved: resolvedItems, unresolved: unresolvedItems } = resolveItems(rawItems);
+          if (unresolvedItems.length > 0 && !allowPartial) {
+            partialBlock = unresolvedItems;
+            return;
+          }
+          if (resolvedItems.length === 0) {
+            skipped++;
+            unresolved.push(...unresolvedItems.map(name => `Material não encontrado: ${name}`));
+            continue;
+          }
+          if (unresolvedItems.length > 0) restoredPartial++;
+          else restoredComplete++;
+          unresolved.push(...unresolvedItems.map(name => `Material não restaurado parcialmente: ${name}`));
+          for (const item of resolvedItems) {
             const date = record.date || new Date().toISOString().split("T")[0];
             const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | ${type === "ENTRADA" ? "Entrada" : "Saída/Consumo"} | hash:${record.sourceHash || "sem-hash"}${record.notes ? " | " + record.notes : ""}`;
-            const key = [Number(product.id), type, quantity, date, normalizeRestoreKey(notes)].join("|");
+            const key = [Number(item.inventoryId), type, Number(item.quantity), date, normalizeRestoreKey(notes)].join("|");
             if (existingMovementKeys.has(key)) {
               skipped++;
-              duplicates.push(`${type} duplicada: ${product.name} em ${date}`);
+              duplicates.push(`${type} duplicada: ${item.productName} em ${date}`);
               continue;
             }
             existingMovementKeys.add(key);
-            await storage.createInventoryMovement({ inventoryId: product.id, productName: product.name, type, quantity, date, month: safeMonth(date, record.month), notes });
+            await storage.createInventoryMovement({ inventoryId: item.inventoryId, productName: item.productName, type, quantity: item.quantity, date, month: safeMonth(date, record.month), notes });
             movementsCreated++;
           }
         }
       };
 
       await restoreMovements(data.entries || [], "ENTRADA");
+      if (partialBlock) {
+        return res.status(409).json({
+          message: "Importação parcial bloqueada. Gere o preview e confirme com IMPORTAR PARCIALMENTE para aplicar apenas os itens resolvidos.",
+          unresolvedItems: partialBlock,
+        });
+      }
       await restoreMovements(data.consumption || [], "SAÍDA");
+      if (partialBlock) {
+        return res.status(409).json({
+          message: "Importação parcial bloqueada. Gere o preview e confirme com IMPORTAR PARCIALMENTE para aplicar apenas os itens resolvidos.",
+          unresolvedItems: partialBlock,
+        });
+      }
 
       res.json({
         message: "Controle de materiais restaurado por PDF em modo merge seguro.",
         updated: 0,
         created: withdrawalsCreated,
+        restoredComplete,
+        restoredPartial,
         movementsCreated,
         skipped,
-        duplicates: duplicates.slice(0, 20),
-        unresolved: unresolved.slice(0, 20),
+        duplicateRecords: duplicates.length,
+        unresolvedItems: unresolved.length,
+        duplicates: duplicates.slice(0, 50),
+        unresolved: unresolved.slice(0, 50),
       });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });

@@ -1,14 +1,14 @@
 # Production Readiness - ERP IMPPEL
 
 Data da auditoria: 2026-07-20
-Commit auditado localmente: `37c3083 Stabilize PDF import dependencies and labels`
-Commit remoto confirmado antes da estabilizacao: `68b5604 Fix real material control PDF parser`
+Commit auditado localmente antes desta correcao: `f1b8709 Prepare ERP for production publishing`
+Commit remoto confirmado antes desta correcao: `f1b8709 Prepare ERP for production publishing`
 
 ## Resumo executivo
 
-Status geral: ⚠ Pronto para publicacao apos sincronizacao GitHub/Replit e validacao do banco real.
+Status geral: ⚠ Pronto para publicacao apos validacao do banco real e restore em PostgreSQL descartavel.
 
-O codigo compila, o build passa e os testes automatizados principais passaram. A estabilizacao da importacao PDF melhorou seguranca operacional, dependencias de restore e nomenclatura. A preparacao final corrigiu cookies seguros em producao, `trust proxy`, 404 JSON para `/api/*` inexistente e evitou redefinicao silenciosa da senha bcrypt do Admin existente. Permanecem como bloqueios externos: enviar os commits locais para o GitHub e validar o banco/URL publicados no ambiente final.
+O codigo compila, o build passa e os testes automatizados principais passaram. A estabilizacao da importacao PDF melhorou seguranca operacional, dependencias de restore e nomenclatura. A preparacao final corrigiu cookies seguros em producao, `trust proxy`, 404 JSON para `/api/*` inexistente e evitou redefinicao silenciosa da senha bcrypt do Admin existente. A correcao do Controle de Materiais adicionou confirmacao parcial explicita, classificacao por registro e matching operacional via estoque. Permanecem como bloqueios externos: validar banco/URL publicados e executar a sequencia completa dos PDFs reais em PostgreSQL descartavel.
 
 ## Checklist de producao
 
@@ -16,6 +16,7 @@ O codigo compila, o build passa e os testes automatizados principais passaram. A
 - ✅ Backup completo: testes automatizados validaram 18 modulos, 38 arquivos e 10 anexos sinteticos.
 - ⚠ Restore PDF: parser e preview estao funcionais em testes locais, mas restore real em banco de producao nao foi executado nesta homologacao.
 - ✅ Controle de Materiais PDF: parser real validado anteriormente para 110 blocos operacionais; estabilizacao adicionou dependencias e bloqueio seguro.
+- ⚠ Controle de Materiais restore real: preview dos PDFs reais foi validado localmente, mas a importacao completa e idempotente ainda precisa ser executada em PostgreSQL descartavel.
 - ⚠ Estoque PDF: parser possui faixa `540-615` para quantidade, cobrindo `X~544`; o unico PDF local encontrado extraiu 96 itens e 0 movimentacoes, diferente do caso Replit 72/44.
 - ✅ Servicos PDF: possiveis duplicidades agora geram aviso em vez de descarte automatico.
 - ✅ Usuarios/Admin: criacao do Admin existe e nao redefine senha bcrypt existente ao normalizar username/role.
@@ -24,22 +25,12 @@ O codigo compila, o build passa e os testes automatizados principais passaram. A
 - ✅ Build: `npm run build` passou.
 - ✅ TypeScript: `npx tsc --noEmit --incremental false` passou.
 - ✅ Testes: `npm run test`, `npm run test:backup` e `npm run test:operational` passaram.
-- ⚠ GitHub: commit local `37c3083` esta `ahead 1`; push travou por credencial/interacao invisivel.
+- ✅ GitHub: sincronizacao deve ser confirmada apos o commit desta correcao.
 - ❌ Deploy/URL publicada: nao validado nesta homologacao.
 
 ## Problemas criticos
 
-### CR-001 - Commit de estabilizacao nao confirmado no GitHub
-
-- Arquivo: repositorio Git local.
-- Funcao: entrega/sincronizacao.
-- Causa: `git push origin main` e `git push --porcelain origin main` ficaram travados sem saida, indicando credencial HTTPS ou interacao invisivel.
-- Impacto: GitHub e ambientes externos podem continuar sem a estabilizacao `37c3083`.
-- Risco: producao/Replit/Vercel nao receberem as correcoes de dependencias e nomenclatura.
-- Como reproduzir: executar `git status -sb`; resultado esperado atual: `main...origin/main [ahead 1]`.
-- Recomendacao: autenticar Git Credential Manager ou executar push em terminal interativo autenticado; depois confirmar `git status -sb` limpo e `origin/main` no hash `37c3083` ou equivalente.
-
-### CR-002 - Banco real de producao nao homologado
+### CR-001 - Banco real de producao nao homologado
 
 - Arquivo: `server/db.ts`, `drizzle.config.ts`, ambiente externo.
 - Funcao: conexao PostgreSQL e persistencia.
@@ -49,7 +40,7 @@ O codigo compila, o build passa e os testes automatizados principais passaram. A
 - Como reproduzir: iniciar em `NODE_ENV=production` sem `DATABASE_URL` gera erro obrigatorio.
 - Recomendacao: validar provider, credenciais e conectividade; executar checagem nao destrutiva de tabelas antes de qualquer `db:push`.
 
-### CR-003 - Deploy publicado nao foi homologado visualmente
+### CR-002 - Deploy publicado nao foi homologado visualmente
 
 - Arquivo: infraestrutura/deploy.
 - Funcao: producao.
@@ -58,6 +49,16 @@ O codigo compila, o build passa e os testes automatizados principais passaram. A
 - Risco: liberar ERP sem funcionamento real para uso diario.
 - Como reproduzir: nao ha URL validada registrada nesta auditoria.
 - Recomendacao: publicar em ambiente oficial e validar login Admin, dashboard, APIs, estoque, usuarios, backup e sessoes.
+
+### CR-003 - Restore de Controle de Materiais ainda nao foi executado em PostgreSQL descartavel
+
+- Arquivo: `server/routes.ts`, `server/pdf-restore.ts`, `client/src/components/CompleteBackupManager.tsx`.
+- Funcao: importacao PDF real de Controle de Materiais.
+- Causa: nao havia `DATABASE_URL` de teste descartavel nesta sessao.
+- Impacto: nao e possivel afirmar que a restauracao completa dos cinco PDFs reais e idempotente em PostgreSQL.
+- Risco: divergencia entre validacao local/parser e persistencia real em banco.
+- Como reproduzir: criar banco PostgreSQL descartavel, restaurar usuarios, produtos, servicos, estoque, preview/importar Controle de Materiais e repetir ambos.
+- Recomendacao: executar essa sequencia no Replit/dev ou Postgres temporario antes do uso diario definitivo.
 
 ## Problemas altos
 
@@ -116,14 +117,14 @@ Nenhum problema alto conhecido permanece apos a preparacao final local.
 
 ## Riscos para producao
 
-- Produzir sem push do commit local deixara ambientes externos desatualizados.
 - Produzir sem banco real validado pode quebrar login, sessoes e persistencia.
 - Produzir sem URL homologada deixa riscos de infraestrutura e variaveis invisiveis.
+- Iniciar uso diario do Controle de Materiais antes do teste em PostgreSQL descartavel pode deixar duplicidades ou registros parciais sem comparacao de saldo.
 
 ## Plano de correcao recomendado
 
-1. Resolver autenticacao Git e enviar `37c3083` para `origin/main`.
-2. Validar banco PostgreSQL real com leitura nao destrutiva de tabelas e contagens.
+1. Validar banco PostgreSQL real com leitura nao destrutiva de tabelas e contagens.
+2. Executar restore dos PDFs reais em PostgreSQL descartavel e repetir a importacao para confirmar idempotencia.
 3. Fazer deploy/homologacao visual em URL real.
 4. Validar novamente backup, restore preview, login, dashboard, estoque, usuarios e APIs.
 

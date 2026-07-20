@@ -33,6 +33,11 @@ type PdfRestorePreview = {
   errorCount: number;
   pendingCount: number;
   duplicateCount: number;
+  fullyApplicableCount?: number;
+  partiallyApplicableCount?: number;
+  blockedCount?: number;
+  unresolvedItemCount?: number;
+  requiresPartialConfirmation?: boolean;
   warnings: string[];
   ignored: string[];
   pending: string[];
@@ -416,6 +421,7 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
   const restore = async () => {
     const applicable = previews.filter(preview => preview.canApply && preview.backup && preview.restoreType);
     if (!applicable.length) return;
+    const allowPartial = confirmation === "IMPORTAR PARCIALMENTE";
     setBusy(true);
     setMessage("");
     try {
@@ -425,11 +431,11 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(preview.backup),
+          body: JSON.stringify({ ...preview.backup, allowPartial: allowPartial && preview.requiresPartialConfirmation }),
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.message || `Falha ao importar ${preview.fileName}.`);
-        imported += Number(result.created || 0) + Number(result.updated || 0);
+        imported += Number(result.created || 0) + Number(result.updated || 0) + Number(result.movementsCreated || 0);
       }
       setHistory(savePdfImportHistory({
         id: Date.now().toString(36),
@@ -476,8 +482,14 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
     errorCount: sum.errorCount + preview.errorCount,
     pendingCount: sum.pendingCount + preview.pendingCount,
     duplicateCount: sum.duplicateCount + preview.duplicateCount,
-  }), { extracted: 0, newCount: 0, updatedCount: 0, ignoredCount: 0, errorCount: 0, pendingCount: 0, duplicateCount: 0 });
-  const canRestore = isAdmin && safetyBackup && previews.some(preview => preview.canApply) && confirmation === "IMPORTAR";
+    fullyApplicableCount: sum.fullyApplicableCount + Number(preview.fullyApplicableCount || 0),
+    partiallyApplicableCount: sum.partiallyApplicableCount + Number(preview.partiallyApplicableCount || 0),
+    blockedCount: sum.blockedCount + Number(preview.blockedCount || 0),
+    unresolvedItemCount: sum.unresolvedItemCount + Number(preview.unresolvedItemCount || 0),
+  }), { extracted: 0, newCount: 0, updatedCount: 0, ignoredCount: 0, errorCount: 0, pendingCount: 0, duplicateCount: 0, fullyApplicableCount: 0, partiallyApplicableCount: 0, blockedCount: 0, unresolvedItemCount: 0 });
+  const requiresPartialConfirmation = previews.some(preview => preview.requiresPartialConfirmation);
+  const expectedConfirmation = requiresPartialConfirmation ? "IMPORTAR PARCIALMENTE" : "IMPORTAR";
+  const canRestore = isAdmin && safetyBackup && previews.some(preview => preview.canApply) && confirmation === expectedConfirmation;
   const cancelImport = () => {
     setFiles([]);
     setPreviews([]);
@@ -533,6 +545,10 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
               {[
                 ["Extraídos", totals.extracted],
+                ["Completos", totals.fullyApplicableCount],
+                ["Parciais", totals.partiallyApplicableCount],
+                ["Bloqueados", totals.blockedCount],
+                ["Itens ausentes", totals.unresolvedItemCount],
                 ["Novos", totals.newCount],
                 ["Atualiz.", totals.updatedCount],
                 ["Ignorados", totals.ignoredCount],
@@ -555,6 +571,14 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
                     <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">bloqueado</span>
                   )}
                 </div>
+                {(preview.fullyApplicableCount != null || preview.partiallyApplicableCount != null || preview.blockedCount != null) && (
+                  <div className="grid gap-2 border-b border-slate-100 bg-white px-3 py-3 text-xs sm:grid-cols-4">
+                    <div><strong>{preview.fullyApplicableCount || 0}</strong><p className="text-slate-500">registros completos</p></div>
+                    <div><strong>{preview.partiallyApplicableCount || 0}</strong><p className="text-slate-500">registros parciais</p></div>
+                    <div><strong>{preview.blockedCount || 0}</strong><p className="text-slate-500">registros bloqueados</p></div>
+                    <div><strong>{preview.unresolvedItemCount || 0}</strong><p className="text-slate-500">itens não encontrados</p></div>
+                  </div>
+                )}
                 <div className="max-h-60 divide-y divide-slate-100 overflow-y-auto">
                   {preview.rows.slice(0, 60).map((row, index) => (
                     <div key={`${row.name}-${index}`} className="flex justify-between gap-3 px-3 py-2 text-xs">
@@ -628,8 +652,12 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
 
         {previews.length > 0 && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <p className="text-sm text-amber-900">Para confirmar a importação em merge, digite <strong>IMPORTAR</strong>.</p>
-            <input value={confirmation} onChange={event => setConfirmation(event.target.value)} className="mt-3 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm" placeholder="IMPORTAR" />
+            <p className="text-sm text-amber-900">
+              {requiresPartialConfirmation
+                ? <>Serão importados {totals.fullyApplicableCount} registro(s) completo(s) e {totals.partiallyApplicableCount} parcial(is). {totals.blockedCount} registro(s) serão bloqueado(s), com {totals.unresolvedItemCount} item(ns) não encontrado(s). Para confirmar, digite <strong>IMPORTAR PARCIALMENTE</strong>.</>
+                : <>Para confirmar a importação em merge, digite <strong>IMPORTAR</strong>.</>}
+            </p>
+            <input value={confirmation} onChange={event => setConfirmation(event.target.value)} className="mt-3 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm" placeholder={expectedConfirmation} />
           </div>
         )}
 
