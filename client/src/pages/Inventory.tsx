@@ -333,7 +333,7 @@ const INVENTORY_PAGE_COPY: Record<InventoryMode, { title: string; description: s
     description: "Cole ou envie uma contagem para ajustar o estoque.",
   },
   movements: {
-    title: "Movimentações",
+    title: "Movimentações de Estoque",
     description: "Acompanhe tudo que entrou, saiu ou foi ajustado.",
   },
 };
@@ -1088,7 +1088,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Histórico de Movimentações</h2>
+                <h2 className="text-lg font-bold text-slate-900">Histórico de Movimentações de Estoque</h2>
                 <p className="text-sm text-slate-500 mt-0.5">{historyItem.name}</p>
               </div>
               <button onClick={() => setHistoryItem(null)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X className="w-5 h-5 text-slate-500" /></button>

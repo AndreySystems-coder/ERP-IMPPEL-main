@@ -38,6 +38,19 @@ type PdfRestorePreview = {
   pending: string[];
   errors: string[];
   rows: { name: string; detail: string; status: string }[];
+  dependencies?: {
+    canApply: boolean;
+    checks: Array<{
+      name: string;
+      required: boolean;
+      found: number;
+      missing: number;
+      missingItems: string[];
+      message: string;
+    }>;
+    warnings: string[];
+    blockedReasons: string[];
+  };
   backup?: any;
   canApply: boolean;
 };
@@ -47,7 +60,7 @@ const PDF_RESTORE_MODULES: PdfRestoreModule[] = [
   { id: "produtos", type: "produtos", label: "Catálogo de Produtos" },
   { id: "servicos", type: "servicos", label: "Catálogo de Serviços" },
   { id: "estoque", type: "estoque", label: "Estoque" },
-  { id: "movimentacoes", type: "estoque", label: "Movimentações" },
+  { id: "movimentacoes", type: "estoque", label: "Movimentações de Estoque" },
 ];
 
 type PdfImportHistoryEntry = {
@@ -88,6 +101,20 @@ function downloadBlob(blob: Blob, filename: string) {
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+const PDF_REPORT_LABELS: Record<string, string> = {
+  usuarios: "Usuários e Cargos",
+  produtos: "Catálogo de Produtos",
+  servicos: "Catálogo de Serviços",
+  estoque: "Estoque",
+  movimentacoes: "Movimentações de Estoque",
+  materiais: "Controle de Materiais",
+};
+
+function pdfRestoreLabel(preview: PdfRestorePreview) {
+  if (preview.reportType === "materiais" || preview.restoreType === "materiais") return "Controle de Materiais";
+  return PDF_REPORT_LABELS[preview.reportType] || PDF_REPORT_LABELS[preview.restoreType || ""] || preview.reportType;
 }
 
 export function CompleteBackupGeneration({ isAdmin }: { isAdmin: boolean }) {
@@ -523,7 +550,10 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
               <div key={preview.fileName} className="rounded-md border border-slate-100">
                 <div className="border-b bg-slate-50 px-3 py-2 text-sm">
                   <strong>{preview.fileName}</strong>
-                  <span className="ml-2 text-slate-500">Detectado: {preview.reportType} · Total PDF: {preview.headerTotal || 0} · Extraído: {preview.extracted}</span>
+                  <span className="ml-2 text-slate-500">Detectado: {pdfRestoreLabel(preview)} · Total PDF: {preview.headerTotal || 0} · Extraído: {preview.extracted}</span>
+                  {!preview.canApply && (
+                    <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">bloqueado</span>
+                  )}
                 </div>
                 <div className="max-h-60 divide-y divide-slate-100 overflow-y-auto">
                   {preview.rows.slice(0, 60).map((row, index) => (
@@ -534,6 +564,58 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
                     </div>
                   ))}
                 </div>
+                {preview.dependencies && (
+                  <div className="border-t border-blue-100 bg-blue-50 px-3 py-3 text-xs text-blue-950">
+                    <h4 className="font-bold">Dependências encontradas</h4>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {preview.dependencies.checks.map(check => (
+                        <div key={check.name} className="rounded-md border border-blue-100 bg-white p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <strong>{check.name}{check.required ? " *" : ""}</strong>
+                            <span className={check.missing > 0 ? "font-bold text-red-700" : "font-bold text-emerald-700"}>
+                              {check.found} encontrado(s) · {check.missing} ausente(s)
+                            </span>
+                          </div>
+                          <p className="mt-1 text-blue-800">{check.message}</p>
+                          {check.missingItems.length > 0 && (
+                            <textarea
+                              readOnly
+                              value={check.missingItems.join("\n")}
+                              className="mt-2 h-16 w-full resize-none rounded border border-blue-100 bg-slate-50 p-2 font-mono text-[11px] text-slate-700"
+                              aria-label={`Lista de pendências de ${check.name}`}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {preview.dependencies.warnings.map((warning, index) => (
+                      <p key={`${warning}-${index}`} className="mt-2 font-medium text-amber-800">{warning}</p>
+                    ))}
+                  </div>
+                )}
+                {(preview.pending.length > 0 || preview.ignored.length > 0 || preview.errors.length > 0) && (
+                  <details className="border-t border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    <summary className="cursor-pointer font-bold">
+                      Pendentes, rejeitados e ignorados ({preview.pending.length + preview.ignored.length + preview.errors.length})
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {[
+                        ["Erros", preview.errors],
+                        ["Pendentes", preview.pending],
+                        ["Ignorados", preview.ignored],
+                      ].map(([label, items]) => Array.isArray(items) && items.length > 0 && (
+                        <div key={label as string}>
+                          <p className="font-semibold">{label as string}</p>
+                          {(items as string[]).map((item, index) => (
+                            <p key={`${label}-${index}`} className="mt-1 rounded bg-white px-2 py-1">
+                              <span className="font-semibold">Módulo:</span> {pdfRestoreLabel(preview)} · <span className="font-semibold">Registro:</span> {item}
+                            </p>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
                 {[...preview.warnings, ...preview.errors, ...preview.pending.slice(0, 5), ...preview.ignored.slice(0, 5)].length > 0 && (
                   <div className="space-y-1 border-t border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     {[...preview.warnings, ...preview.errors, ...preview.pending.slice(0, 5), ...preview.ignored.slice(0, 5)].map((item, index) => <p key={index}>{item}</p>)}

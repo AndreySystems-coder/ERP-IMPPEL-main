@@ -147,3 +147,11 @@ Se `npm run test` estiver bloqueado por limitacao externa, registrar o bloqueio 
 - O PDF real PDF real de Controle de Materiais validado localmente possui colunas principais em `x~46`, `x~142`, `x~391`, `x~477` e `x~681`.
 - A previa validada extrai 110 blocos operacionais: 78 retiradas, 5 entradas e 27 saidas/consumos, sem pendentes.
 - `Total de registros: 294` no cabecalho nao deve ser tratado como total de blocos operacionais importaveis.
+
+## Atualizacao de contexto - 2026-07-20 - Estabilizacao PDF
+
+- `canApply` do preview PDF deve considerar dependencias do banco, nao apenas leitura do arquivo.
+- Controle de Materiais depende de usuarios, catalogo de produtos e estoque antes de aplicar restore por PDF.
+- A UI de importacao mostra `Dependencias encontradas` e painel expansivel de pendentes, erros e ignorados.
+- `Nao trabalha para nos` e responsavel historico, nao usuario a criar.
+- O subtipo `movimentacoes` do PDF de estoque deve aparecer como `Movimentacoes de Estoque`; `materiais` deve aparecer como `Controle de Materiais`.

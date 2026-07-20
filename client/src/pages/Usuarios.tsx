@@ -89,7 +89,7 @@ const PERMISSION_GROUPS = [
     items: [
       { key: "viewInventoryCurrent", label: "Estoque Atual" },
       { key: "viewInventoryCount", label: "Contagem Física" },
-      { key: "viewInventoryMovements", label: "Movimentações" },
+      { key: "viewInventoryMovements", label: "Movimentações de Estoque" },
       { key: "editInventory", label: "Editar produtos do estoque" },
     ],
   },

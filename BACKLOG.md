@@ -99,3 +99,5 @@ Os itens V.L.A.E.G. foram migrados como historico e precisam ser reavaliados ant
 
 - Avaliar uma camada transacional unica para restores complexos que envolvem varias tabelas, usando uma abstracao de storage compativel com PostgreSQL e storage em memoria de testes.
 - Evoluir a interface de mapeamento manual de produtos/responsaveis pendentes quando PDFs antigos trouxerem nomes divergentes do catalogo atual.
+- Criar fluxo assistido de ordem de importacao para backups PDF reais: Usuarios e Cargos, Produtos, Servicos, Estoque e Controle de Materiais.
+- Validar com o PDF de Estoque usado no Replit que deve conter 72 itens e 44 movimentacoes historicas, pois o unico PDF local encontrado em 2026-07-20 continha 96 itens e 0 movimentacoes.

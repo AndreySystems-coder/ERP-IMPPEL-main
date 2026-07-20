@@ -112,6 +112,85 @@ function normalizeServicePricingPayload<T extends Record<string, any>>(payload: 
   };
 }
 
+function normalizeRestoreDependencyKey(value: unknown) {
+  return String(value || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function isHistoricalMaterialResponsible(value: unknown) {
+  const normalized = normalizeRestoreDependencyKey(value);
+  return normalized === "nao trabalha para nos" || normalized === "nao trabalha conosco";
+}
+
+function uniqueRestoreValues(values: unknown[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const text = String(value || "").trim();
+    const key = normalizeRestoreDependencyKey(text);
+    if (!text || seen.has(key)) continue;
+    seen.add(key);
+    result.push(text);
+  }
+  return result;
+}
+
+async function attachPdfRestoreDependencies(preview: any) {
+  const [users, products, services, inventory] = await Promise.all([
+    storage.getUsers(),
+    storage.getProducts(),
+    storage.getServices(),
+    storage.getInventoryItems(),
+  ]);
+  const checks: any[] = [];
+  const warnings: string[] = [];
+  const blockedReasons: string[] = [];
+  const addCheck = (name: string, required: boolean, found: number, missingItems: string[], message: string) => {
+    checks.push({ name, required, found, missing: missingItems.length, missingItems, message });
+    if (required && missingItems.length > 0) blockedReasons.push(`${name}: ${missingItems.slice(0, 8).join(", ")}`);
+  };
+
+  if (preview?.restoreType === "materiais") {
+    const data = preview.backup?.data || {};
+    const withdrawals = Array.isArray(data.withdrawals) ? data.withdrawals : [];
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+    const consumption = Array.isArray(data.consumption) ? data.consumption : [];
+    const historicalResponsibleCount = withdrawals.filter((withdrawal: any) => isHistoricalMaterialResponsible(withdrawal.username || withdrawal.responsible)).length;
+    const responsibleNames = uniqueRestoreValues(withdrawals
+      .map((withdrawal: any) => withdrawal.username || withdrawal.responsible)
+      .filter((name: unknown) => !isHistoricalMaterialResponsible(name)));
+    const materialNames = uniqueRestoreValues([...withdrawals, ...entries, ...consumption].flatMap((record: any) =>
+      (Array.isArray(record.items) ? record.items : []).map((item: any) => item.productName || item.materialName || item.name)
+    ));
+    const userKeys = new Set(users.flatMap((user: any) => [user.username, user.fullName, user.name].map(normalizeRestoreDependencyKey).filter(Boolean)));
+    const inventoryKeys = new Set(inventory.map((item: any) => normalizeRestoreDependencyKey(item.name)).filter(Boolean));
+    const missingUsers = responsibleNames.filter(name => !userKeys.has(normalizeRestoreDependencyKey(name)));
+    const missingInventory = materialNames.filter(name => !inventoryKeys.has(normalizeRestoreDependencyKey(name)));
+
+    addCheck("Usuários", true, responsibleNames.length - missingUsers.length, missingUsers, missingUsers.length ? "Importe Usuários e Cargos antes do Controle de Materiais." : "Responsáveis encontrados.");
+    addCheck("Catálogo de Produtos", true, products.length, products.length === 0 && materialNames.length > 0 ? ["Catálogo de Produtos vazio"] : [], products.length ? "Catálogo disponível." : "Importe Catálogo de Produtos antes do Controle de Materiais.");
+    addCheck("Estoque", true, materialNames.length - missingInventory.length, missingInventory, missingInventory.length ? "Importe Estoque antes do Controle de Materiais." : "Materiais encontrados no estoque.");
+    addCheck("Catálogo de Serviços", false, services.length, [], services.length ? "Serviços disponíveis." : "Serviços não são obrigatórios para este PDF.");
+    if (historicalResponsibleCount > 0) {
+      warnings.push(`${historicalResponsibleCount} retirada(s) usam "Não trabalha para nós" como responsável histórico; nenhum usuário será criado automaticamente.`);
+    }
+  } else {
+    addCheck("Usuários", false, users.length, [], users.length ? "Usuários existentes encontrados." : "Nenhum usuário existente.");
+    addCheck("Catálogo de Produtos", false, products.length, [], products.length ? "Produtos existentes encontrados." : "Nenhum produto existente.");
+    addCheck("Catálogo de Serviços", false, services.length, [], services.length ? "Serviços existentes encontrados." : "Nenhum serviço existente.");
+    addCheck("Estoque", false, inventory.length, [], inventory.length ? "Itens de estoque existentes encontrados." : "Nenhum item de estoque existente.");
+  }
+
+  preview.dependencies = { canApply: blockedReasons.length === 0, checks, warnings, blockedReasons };
+  if (blockedReasons.length > 0) {
+    preview.canApply = false;
+    preview.pendingCount += blockedReasons.length;
+    preview.pending.push(...blockedReasons.map(reason => `Dependência ausente: ${reason}`));
+    preview.warnings.push("Importação bloqueada: conclua as dependências indicadas antes de aplicar este PDF.");
+  }
+  preview.warnings.push(...warnings);
+  return preview;
+}
+
 function normalizeMobileImportRows(rows: unknown): MobileImportPreviewRow[] {
   if (!Array.isArray(rows)) return [];
   return rows.map((row: any, index) => ({
@@ -3508,7 +3587,8 @@ export async function registerRoutes(
         }
         const encoded = String(file.dataBase64 || "").replace(/^data:application\/pdf;base64,/i, "");
         const bytes = Uint8Array.from(Buffer.from(encoded, "base64"));
-        previews.push(await previewErpPdfBuffer({ fileName, selectedType, data: bytes }));
+        const preview = await previewErpPdfBuffer({ fileName, selectedType, data: bytes });
+        previews.push(await attachPdfRestoreDependencies(preview));
       }
       res.json({ previews, safetyBackup });
     } catch (err: any) {
@@ -4219,9 +4299,10 @@ export async function registerRoutes(
         const resolvedItems = resolveItems(rawItems);
         const username = String(withdrawal.username || withdrawal.responsible || "").trim();
         const user = usersByUsername.get(normalizeRestoreKey(username));
-        if (!username || !user || resolvedItems.length === 0) {
+        const isHistoricalResponsible = isHistoricalMaterialResponsible(username);
+        if (!username || (!user && !isHistoricalResponsible) || resolvedItems.length === 0) {
           skipped++;
-          if (!user) unresolved.push(`Responsável não encontrado: ${username || "sem responsável"}`);
+          if (!user && !isHistoricalResponsible) unresolved.push(`Responsável não encontrado: ${username || "sem responsável"}`);
           for (const rawItem of rawItems) if (!resolveInventory(rawItem)) unresolved.push(`Material não encontrado: ${rawItem.productName || rawItem.name || "sem nome"}`);
           continue;
         }
@@ -4233,9 +4314,10 @@ export async function registerRoutes(
         }
         existingWithdrawalKeys.add(key);
         const date = withdrawal.withdrawalDate || withdrawal.date || new Date().toISOString().split("T")[0];
+        const restoredUsername = user?.username || username;
         const restored = await storage.createMaterialWithdrawal({
-          userId: Number(user.id),
-          username: user.username,
+          userId: user ? Number(user.id) : 0,
+          username: restoredUsername,
           workOrderId: withdrawal.workOrderId ? Number(withdrawal.workOrderId) : null,
           jobId: withdrawal.jobId ? Number(withdrawal.jobId) : null,
           clientName: withdrawal.clientName || null,
@@ -4250,7 +4332,7 @@ export async function registerRoutes(
         } as any, resolvedItems);
         withdrawalsCreated++;
         for (const item of restored.items || resolvedItems) {
-          const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | Retirada #${restored.id} | hash:${withdrawal.sourceHash || "sem-hash"} | Responsavel: ${user.username}`;
+          const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | Retirada #${restored.id} | hash:${withdrawal.sourceHash || "sem-hash"} | Responsavel: ${restoredUsername}${isHistoricalResponsible ? " | Responsavel historico sem conta de usuario" : ""}`;
           const keyMovement = [Number(item.inventoryId), "SAÍDA", Number(item.quantity), date, normalizeRestoreKey(notes)].join("|");
           if (existingMovementKeys.has(keyMovement)) continue;
           existingMovementKeys.add(keyMovement);

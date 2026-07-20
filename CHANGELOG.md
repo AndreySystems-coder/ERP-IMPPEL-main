@@ -3,6 +3,27 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-20] - Estabilizacao final da importacao PDF operacional
+
+### Corrigido
+
+- A tela de importacao por PDF agora diferencia `Controle de Materiais` de `Movimentacoes de Estoque` nos rotulos de preview, menu e permissoes.
+- O preview de PDF agora valida dependencias reais do ERP antes de liberar aplicacao, principalmente usuarios, catalogo de produtos e estoque antes do Controle de Materiais.
+- `canApply` passou a representar se o ERP consegue importar com seguranca, e nao apenas se o parser conseguiu ler o PDF.
+- Responsaveis historicos marcados como `Nao trabalha para nos` nao geram usuarios automaticamente; ficam registrados como historico no restore de materiais.
+- O parser de servicos deixou de descartar duplicidades automaticamente; possiveis duplicados sao avisados para decisao do usuario no preview.
+
+### Interface
+
+- Adicionada secao `Dependencias encontradas` no preview de PDFs, com contagens de encontrados/ausentes e listas copiaveis.
+- Pendencias, erros e ignorados passaram a aparecer em painel expansivel por arquivo, sem ocultar registros rejeitados.
+
+### Validacao
+
+- TypeScript validado com `npx tsc --noEmit --incremental false`.
+- PDF real de Estoque disponivel localmente validado sem importacao: 96 itens, 0 movimentacoes, 0 pendencias.
+- A faixa de quantidade das movimentacoes de estoque ja estava em `540-615`, cobrindo `X~544`.
+
 ## [2026-07-20] - Ajuste cirurgico do parser PDF real de materiais
 
 ### Corrigido

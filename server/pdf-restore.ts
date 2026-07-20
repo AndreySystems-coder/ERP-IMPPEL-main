@@ -35,6 +35,19 @@ export type ErpPdfRestorePreview = {
   pending: string[];
   errors: string[];
   rows: { name: string; detail: string; status: "novo" | "atualizar" | "existente" | "ignorado" | "pendente" | "erro" }[];
+  dependencies?: {
+    canApply: boolean;
+    checks: Array<{
+      name: string;
+      required: boolean;
+      found: number;
+      missing: number;
+      missingItems: string[];
+      message: string;
+    }>;
+    warnings: string[];
+    blockedReasons: string[];
+  };
   backup?: any;
   canApply: boolean;
 };
@@ -346,23 +359,22 @@ function parseServices(fileName: string, selectedType: BackupType, report: Retur
   }
   flush();
   const seen = new Set<string>();
-  const uniqueServices = services.filter(service => {
+  for (const service of services) {
     const key = normalizeText(service.name);
     if (seen.has(key)) {
       preview.duplicateCount++;
-      preview.ignored.push(`Serviço duplicado no PDF: ${service.name}`);
-      return false;
+      preview.warnings.push(`Possível serviço duplicado no PDF: ${service.name}. Confira no preview antes de importar.`);
+    } else {
+      seen.add(key);
     }
-    seen.add(key);
-    return true;
-  });
-  preview.extracted = uniqueServices.length;
-  preview.updatedCount = uniqueServices.length;
-  preview.backup = { type: "servicos", version: "erp-pdf-preview", exportedAt: new Date().toISOString(), data: { services: uniqueServices } };
-  preview.canApply = uniqueServices.length > 0;
-  if (report.headerTotal && uniqueServices.length !== report.headerTotal) {
-    preview.pendingCount += Math.max(0, report.headerTotal - uniqueServices.length);
-    preview.warnings.push(`PDF informa ${report.headerTotal} serviços; ${uniqueServices.length} foram extraídos com segurança.`);
+  }
+  preview.extracted = services.length;
+  preview.updatedCount = services.length;
+  preview.backup = { type: "servicos", version: "erp-pdf-preview", exportedAt: new Date().toISOString(), data: { services } };
+  preview.canApply = services.length > 0;
+  if (report.headerTotal && services.length !== report.headerTotal) {
+    preview.pendingCount += Math.max(0, report.headerTotal - services.length);
+    preview.warnings.push(`PDF informa ${report.headerTotal} serviços; ${services.length} foram extraídos com segurança.`);
   }
   return preview;
 }

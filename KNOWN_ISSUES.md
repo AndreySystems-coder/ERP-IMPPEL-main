@@ -77,3 +77,12 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Impacto: a validacao de seguranca nao deve comparar cegamente o total do cabecalho com retiradas/entradas/consumos, pois isso pode bloquear uma previa correta.
 - Arquivos envolvidos: `server/pdf-restore.ts`.
 - Status: mitigado; o parser registra a diferenca em aviso e usa blocos operacionais identificaveis para decidir confianca.
+
+### KI-008 - PDF local de Estoque difere do caso validado no Replit
+
+- Severidade: Melhoria.
+- Causa raiz: o unico arquivo `Relatorio_Estoque_14-07-2026_12-39.pdf` localizado no computador em 2026-07-20 extraiu 96 itens e 0 movimentacoes, enquanto a auditoria do Replit citava um PDF com 72 itens e 44 movimentacoes historicas.
+- Impacto: nao foi possivel reproduzir localmente a contagem 72/44 com o arquivo disponivel; a faixa de leitura de quantidade ja cobre `X~544`.
+- Arquivos envolvidos: `server/pdf-restore.ts`.
+- Workaround: validar novamente quando o PDF exato usado no Replit estiver disponivel no ambiente local.
+- Status: sem alteracao corretiva aplicada porque a causa nao foi reproduzida no arquivo local.
