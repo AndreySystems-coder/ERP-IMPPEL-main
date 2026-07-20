@@ -1,4 +1,4 @@
-﻿# AI Context - ERP IMPPEL
+# AI Context - ERP IMPPEL
 
 Este arquivo resume o contexto tecnico e operacional que qualquer agente de IA deve ler antes de trabalhar no ERP IMPPEL.
 
@@ -133,3 +133,11 @@ Se `npm run test` estiver bloqueado por limitacao externa, registrar o bloqueio 
 - O projeto usa PostgreSQL por `DATABASE_URL`.
 - O deploy Vercel requer validacao real de backend, banco e sessoes.
 - Vercel CLI nao estava disponivel no ambiente local durante a auditoria.
+
+## Atualizacao de contexto - 2026-07-20
+
+- `server/pdf-restore.ts` possui parser especifico para `tipo=materiais`.
+- O parser de materiais separa `withdrawals`, `entries` e `consumption`.
+- Retiradas sao aplicadas em `material_withdrawals` e `material_withdrawal_items`; entradas e consumo viram movimentacoes oficiais de estoque.
+- PDFs antigos de Controle de Materiais preservam datas historicas no preview e no restore.
+- Produtos e responsaveis nao encontrados nao sao criados automaticamente; ficam listados como pendentes/nao resolvidos.

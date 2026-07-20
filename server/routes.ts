@@ -4144,54 +4144,158 @@ export async function registerRoutes(
   app.post("/api/backup/restore/materiais", requireAdmin, async (req, res) => {
     try {
       const { data } = req.body;
-      if (!data?.withdrawals) return res.status(400).json({ message: "Formato de backup inválido" });
+      if (!data || (!Array.isArray(data.withdrawals) && !Array.isArray(data.entries) && !Array.isArray(data.consumption))) {
+        return res.status(400).json({ message: "Formato de backup inválido" });
+      }
 
-      const existing = await storage.getMaterialWithdrawals();
-      const existingKeys = new Set(existing.map((withdrawal: any) =>
-        `${withdrawal.username}|${withdrawal.workOrderId || ""}|${withdrawal.notes || ""}`.toLowerCase()
+      const normalizeRestoreKey = (value: any) => String(value || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
+      const materialItemsKey = (items: any[]) => items
+        .map(item => `${normalizeRestoreKey(item.productName || item.materialName || item.name)}:${Math.ceil(Number(item.quantity || 0))}`)
+        .sort()
+        .join("|");
+      const withdrawalKey = (withdrawal: any, items: any[]) => [
+        withdrawal.sourceHash || "",
+        withdrawal.withdrawalDate || withdrawal.date || "",
+        normalizeRestoreKey(withdrawal.username || withdrawal.responsible),
+        withdrawal.workOrderId || "",
+        materialItemsKey(items),
+        normalizeRestoreKey(withdrawal.notes),
+      ].join("|");
+      const safeMonth = (date: string, fallback?: string) => {
+        if (fallback) return fallback;
+        const parsed = new Date(`${date}T12:00:00`);
+        return Number.isNaN(parsed.getTime()) ? MONTHS_PT_BR[new Date().getMonth()] : parsed.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+      };
+
+      const [inventory, users, existingWithdrawals, existingMovements] = await Promise.all([
+        storage.getInventoryItems(),
+        storage.getUsers(),
+        storage.getMaterialWithdrawals(),
+        storage.getInventoryMovements(),
+      ]);
+      const inventoryByExactName = new Map(inventory.map((item: any) => [String(item.name || "").trim(), item]));
+      const inventoryByNormalizedName = new Map(inventory.map((item: any) => [normalizeRestoreKey(item.name), item]));
+      const usersByUsername = new Map(users.map((user: any) => [normalizeRestoreKey(user.username), user]));
+      const resolveInventory = (item: any) => {
+        const explicit = Number(item.inventoryId || 0);
+        if (explicit > 0) return inventory.find((row: any) => Number(row.id) === explicit) || null;
+        const name = String(item.productName || item.materialName || item.name || "").trim();
+        return inventoryByExactName.get(name) || inventoryByNormalizedName.get(normalizeRestoreKey(name)) || null;
+      };
+      const resolveItems = (items: any[]) => items.map(item => {
+        const product = resolveInventory(item);
+        const quantity = Math.ceil(Number(item.quantity || 0));
+        if (!product || quantity <= 0) return null;
+        return {
+          withdrawalId: 0,
+          inventoryId: Number(product.id),
+          productName: String(product.name),
+          unit: product.unit || item.unit || "unid",
+          quantity,
+          returnedQuantity: item.returnedQuantity ? Math.ceil(Number(item.returnedQuantity)) : null,
+          condition: item.condition || "bom",
+        };
+      }).filter(Boolean) as any[];
+
+      const existingWithdrawalKeys = new Set(existingWithdrawals.map((withdrawal: any) =>
+        withdrawalKey(withdrawal, Array.isArray(withdrawal.items) ? withdrawal.items : [])
       ));
+      const existingMovementKeys = new Set(existingMovements.map((movement: any) => [
+        Number(movement.inventoryId),
+        movement.type,
+        Number(movement.quantity),
+        movement.date,
+        normalizeRestoreKey(movement.notes),
+      ].join("|")));
 
-      let created = 0;
+      let withdrawalsCreated = 0;
+      let movementsCreated = 0;
       let skipped = 0;
+      const unresolved: string[] = [];
+      const duplicates: string[] = [];
+
       for (const withdrawal of data.withdrawals || []) {
-        const key = `${withdrawal.username}|${withdrawal.workOrderId || ""}|${withdrawal.notes || ""}`.toLowerCase();
-        if (existingKeys.has(key)) {
+        const rawItems = Array.isArray(withdrawal.items) ? withdrawal.items : [];
+        const resolvedItems = resolveItems(rawItems);
+        const username = String(withdrawal.username || withdrawal.responsible || "").trim();
+        const user = usersByUsername.get(normalizeRestoreKey(username));
+        if (!username || !user || resolvedItems.length === 0) {
           skipped++;
+          if (!user) unresolved.push(`Responsável não encontrado: ${username || "sem responsável"}`);
+          for (const rawItem of rawItems) if (!resolveInventory(rawItem)) unresolved.push(`Material não encontrado: ${rawItem.productName || rawItem.name || "sem nome"}`);
           continue;
         }
-
-        const items = Array.isArray(withdrawal.items) ? withdrawal.items : [];
-        if (!withdrawal.username || items.length === 0) {
+        const key = withdrawalKey(withdrawal, resolvedItems);
+        if (existingWithdrawalKeys.has(key)) {
           skipped++;
+          duplicates.push(`Retirada duplicada: ${username} em ${withdrawal.withdrawalDate || withdrawal.date || "sem data"}`);
           continue;
         }
-
-        await storage.createMaterialWithdrawal({
-          userId: Number(withdrawal.userId || 0),
-          username: String(withdrawal.username),
+        existingWithdrawalKeys.add(key);
+        const date = withdrawal.withdrawalDate || withdrawal.date || new Date().toISOString().split("T")[0];
+        const restored = await storage.createMaterialWithdrawal({
+          userId: Number(user.id),
+          username: user.username,
           workOrderId: withdrawal.workOrderId ? Number(withdrawal.workOrderId) : null,
           jobId: withdrawal.jobId ? Number(withdrawal.jobId) : null,
           clientName: withdrawal.clientName || null,
+          withdrawalDate: date,
           status: withdrawal.status || "pendente",
-          withdrawalPhoto: withdrawal.withdrawalPhoto || "restauracao-assistida",
-          withdrawalSignature: withdrawal.withdrawalSignature || "restauracao-assistida",
-          notes: withdrawal.notes || "Origem: RESTAURACAO_ASSISTIDA_TEXTO",
+          withdrawalPhoto: withdrawal.withdrawalPhoto || "restauracao-pdf-materiais",
+          withdrawalSignature: withdrawal.withdrawalSignature || "restauracao-pdf-materiais",
+          notes: `Importação PDF Controle de Materiais | hash:${withdrawal.sourceHash || "sem-hash"}${withdrawal.notes ? " | " + withdrawal.notes : ""}`,
           returnPhoto: withdrawal.returnPhoto || null,
           returnSignature: withdrawal.returnSignature || null,
           returnNotes: withdrawal.returnNotes || null,
-        } as any, items.map((item: any) => ({
-          withdrawalId: 0,
-          inventoryId: Number(item.inventoryId || 0),
-          productName: String(item.productName || item.materialName || item.name || "Material"),
-          unit: item.unit || "unid",
-          quantity: Math.ceil(Number(item.quantity || 0)),
-          returnedQuantity: item.returnedQuantity ? Math.ceil(Number(item.returnedQuantity)) : null,
-          condition: item.condition || "bom",
-        })));
-        created++;
+        } as any, resolvedItems);
+        withdrawalsCreated++;
+        for (const item of restored.items || resolvedItems) {
+          const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | Retirada #${restored.id} | hash:${withdrawal.sourceHash || "sem-hash"} | Responsavel: ${user.username}`;
+          const keyMovement = [Number(item.inventoryId), "SAÍDA", Number(item.quantity), date, normalizeRestoreKey(notes)].join("|");
+          if (existingMovementKeys.has(keyMovement)) continue;
+          existingMovementKeys.add(keyMovement);
+          await storage.createInventoryMovement({ inventoryId: item.inventoryId, productName: item.productName, type: "SAÍDA", quantity: item.quantity, date, month: safeMonth(date, withdrawal.month), notes });
+          movementsCreated++;
+        }
       }
 
-      res.json({ message: "Controle de materiais restaurado por texto assistido", updated: 0, created, skipped });
+      const restoreMovements = async (records: any[], type: "ENTRADA" | "SAÍDA") => {
+        for (const record of records || []) {
+          for (const rawItem of Array.isArray(record.items) ? record.items : []) {
+            const product = resolveInventory(rawItem);
+            const quantity = Math.ceil(Number(rawItem.quantity || 0));
+            if (!product || quantity <= 0) {
+              skipped++;
+              unresolved.push(`Material não encontrado: ${rawItem.productName || rawItem.name || "sem nome"}`);
+              continue;
+            }
+            const date = record.date || new Date().toISOString().split("T")[0];
+            const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | ${type === "ENTRADA" ? "Entrada" : "Saída/Consumo"} | hash:${record.sourceHash || "sem-hash"}${record.notes ? " | " + record.notes : ""}`;
+            const key = [Number(product.id), type, quantity, date, normalizeRestoreKey(notes)].join("|");
+            if (existingMovementKeys.has(key)) {
+              skipped++;
+              duplicates.push(`${type} duplicada: ${product.name} em ${date}`);
+              continue;
+            }
+            existingMovementKeys.add(key);
+            await storage.createInventoryMovement({ inventoryId: product.id, productName: product.name, type, quantity, date, month: safeMonth(date, record.month), notes });
+            movementsCreated++;
+          }
+        }
+      };
+
+      await restoreMovements(data.entries || [], "ENTRADA");
+      await restoreMovements(data.consumption || [], "SAÍDA");
+
+      res.json({
+        message: "Controle de materiais restaurado por PDF em modo merge seguro.",
+        updated: 0,
+        created: withdrawalsCreated,
+        movementsCreated,
+        skipped,
+        duplicates: duplicates.slice(0, 20),
+        unresolved: unresolved.slice(0, 20),
+      });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

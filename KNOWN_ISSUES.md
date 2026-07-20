@@ -1,4 +1,4 @@
-﻿# Known Issues - ERP IMPPEL
+# Known Issues - ERP IMPPEL
 
 Este arquivo registra riscos, problemas conhecidos, limitacoes e pendencias que precisam ser consideradas antes de cada sprint.
 
@@ -60,3 +60,12 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Impacto: possivel aumento no tempo de carregamento inicial, sem bloquear build ou producao.
 - Arquivos envolvidos: `vite.config.ts`, rotas/componentes frontend, estrategia futura de code splitting.
 - Plano: avaliar dynamic imports e manual chunks em sprint futura de performance.
+
+### KI-006 - Restore PDF de materiais depende de nomes existentes no ERP
+
+- Severidade: Melhoria.
+- Causa raiz: PDFs antigos carregam nomes textuais de materiais e responsaveis; o restore seguro nao deve criar produtos ou usuarios automaticamente.
+- Impacto: registros cujo produto ou responsavel nao exista no ERP atual sao ignorados no merge e retornam em `unresolved` para revisao.
+- Arquivos envolvidos: `server/pdf-restore.ts`, `server/routes.ts`.
+- Workaround: restaurar ou cadastrar previamente catalogo, estoque e usuarios antes de aplicar PDF de Controle de Materiais.
+- Status: comportamento seguro implementado; mapeamento manual pode ser evoluido em sprint futura.

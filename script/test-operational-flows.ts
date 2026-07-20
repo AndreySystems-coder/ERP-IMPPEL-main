@@ -352,6 +352,36 @@ assert.equal(adminUser.cargo, null, "Cargo travessao do Admin deve virar null");
 assert.ok(userPreview.backup.data.roles.some((role: any) => role.name === "gestao_epis"), "Cargo gestao_epis deve entrar no preview");
 assert.ok(userPreview.backup.data.roles.some((role: any) => role.name === "materiais_equipamentos"), "Cargo materiais_equipamentos deve entrar no preview");
 
+const materialDateRow = pdfRow([[40, "30/06/2026"]], 620);
+const materialRows = [
+  materialDateRow,
+  pdfRow([[40, "wellington.pires"], [200, "1x Furadeira, 2x Extensão elétrica"], [520, "Retirada"], [610, "OS 15"], [760, "pendente"]], 610),
+  pdfRow([[200, "15x Viaplus 1000 (18 kg)"]], 600),
+  pdfRow([[40, "Entradas"], [200, "3x Marreta"], [520, "Entrada"], [610, "Compra NF 10"], [760, "registrado"]], 590),
+  pdfRow([[40, "Saídas/Consumo"], [200, "2x Broxa"], [520, "Saída/Consumo"], [610, "Consumo obra"], [760, "consumo"]], 580),
+  pdfRow([[40, "Saídas/Consumo"], [200, "2x Broxa"], [520, "Saída/Consumo"], [610, "Consumo obra"], [760, "consumo"]], 570),
+];
+const materialsPreview = __testPdfRestoreParsing.parseMaterials(
+  "controle-materiais.pdf",
+  "materiais",
+  report("materiais", 4),
+  materialRows,
+  "IMPPEL ERP\ntipo=materiais\nControle de Materiais",
+);
+assert.equal(materialsPreview.canApply, true, "PDF de materiais deve habilitar importação quando extrai registros válidos");
+assert.equal(materialsPreview.backup.data.withdrawals.length, 1, "PDF de materiais deve extrair retiradas");
+assert.equal(materialsPreview.backup.data.entries.length, 1, "PDF de materiais deve extrair entradas");
+assert.equal(materialsPreview.backup.data.consumption.length, 1, "PDF de materiais deve extrair saídas/consumo");
+assert.equal(materialsPreview.duplicateCount, 1, "Registros repetidos no PDF de materiais devem ser deduplicados");
+assert.equal(materialsPreview.backup.data.withdrawals[0].withdrawalDate, "2026-06-30", "Data historica da retirada deve ser preservada");
+assert.deepEqual(
+  materialsPreview.backup.data.withdrawals[0].items.map((item: any) => `${item.quantity}x ${item.productName}`),
+  ["1x Furadeira", "2x Extensão elétrica", "15x Viaplus 1000 (18 kg)"],
+  "Itens quebrados em multiplas linhas devem permanecer no mesmo registro",
+);
+assert.equal(materialsPreview.backup.data.entries[0].status, "registrado", "Entrada deve manter status operacional de movimentação concluída");
+assert.equal(materialsPreview.backup.data.consumption[0].type, "SAÍDA", "Saída/consumo deve virar movimentação de saída");
+assert.equal(__testPdfRestoreParsing.parseMaterialItems("2x Extensão elétrica, 15x Viaplus 1000 (18 kg)")[1].productName, "Viaplus 1000 (18 kg)");
 const applicator = { role: "funcionario", permissions: { registrarMaterials: true } };
 assert.equal(canAccess(applicator, "viewDashboard"), false);
 assert.equal(getDefaultLandingPath(applicator), "/controle-materiais");

@@ -1,8 +1,28 @@
-﻿# Changelog - ERP IMPPEL
+# Changelog - ERP IMPPEL
 
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-20] - Importacao PDF do Controle de Materiais
+
+### Corrigido
+
+- Implementado parser especifico para PDFs `tipo=materiais` gerados pelo ERP.
+- A previa agora separa retiradas, entradas e saidas/consumo do Controle de Materiais.
+- Linhas quebradas de itens no PDF passam a ser agrupadas no mesmo registro operacional.
+- Datas historicas do PDF sao preservadas como data da retirada ou movimentacao.
+- Deduplicacao passou a considerar tipo, data, responsavel, itens, quantidades, observacao e hash de origem.
+- A rota `/api/backup/restore/materiais` agora aceita `withdrawals`, `entries` e `consumption` e aplica cada grupo pelo fluxo correto.
+
+### Seguranca
+
+- Produtos sem vinculo no estoque nao sao inventados nem gravados com `inventoryId = 0`.
+- Responsaveis nao encontrados ficam ignorados no restore com detalhe em `unresolved`.
+- Importacao opera em merge seguro e registra origem nas observacoes das movimentacoes.
+
+### Validacao
+
+- Adicionados testes sinteticos para parser de materiais, multiplos itens, quebra de linha, entrada, saida/consumo, status, data historica e duplicidade.
 ## [2026-07-16] - Criacao da documentacao oficial
 
 ### Adicionado

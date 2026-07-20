@@ -454,6 +454,211 @@ function parseStock(fileName: string, selectedType: BackupType, report: ReturnTy
   return preview;
 }
 
+type ParsedMaterialPdfItem = { productName: string; quantity: number; unit: string };
+type ParsedMaterialPdfRecord = {
+  kind: "withdrawal" | "entry" | "consumption";
+  date: string;
+  responsible: string;
+  itemsText: string;
+  typeText: string;
+  notes: string;
+  statusText: string;
+  page: number;
+  rowY: number;
+};
+
+function normalizeMaterialStatus(kind: ParsedMaterialPdfRecord["kind"], statusText = "") {
+  const normalized = normalizeText(statusText);
+  if (kind === "withdrawal") {
+    if (normalized.includes("retornado")) return "retornado";
+    if (normalized.includes("parcial")) return "parcial";
+    return "pendente";
+  }
+  if (kind === "entry") return "registrado";
+  return "consumo";
+}
+
+function classifyMaterialRecord(responsible: string, typeText = "") {
+  const source = normalizeText(`${responsible} ${typeText}`);
+  if (source.includes("entrada")) return "entry" as const;
+  if (source.includes("saida") || source.includes("consumo")) return "consumption" as const;
+  return "withdrawal" as const;
+}
+
+function parseMaterialItems(value = ""): ParsedMaterialPdfItem[] {
+  const text = value.replace(/\s+/g, " ").replace(/\s+,/g, ",").trim();
+  if (!text) return [];
+  const matches = [...text.matchAll(/(\d+(?:[,.]\d+)?)\s*x\s*/gi)];
+  const items: ParsedMaterialPdfItem[] = [];
+  for (let index = 0; index < matches.length; index++) {
+    const match = matches[index];
+    const next = matches[index + 1];
+    const quantity = Number(String(match[1] || "0").replace(",", "."));
+    const start = (match.index || 0) + match[0].length;
+    const end = next?.index ?? text.length;
+    const productName = text.slice(start, end).replace(/^\s*[,;-]+\s*/, "").replace(/\s*[,;-]+\s*$/, "").trim();
+    if (!productName || !Number.isFinite(quantity) || quantity <= 0) continue;
+    items.push({ productName, quantity: Math.ceil(quantity), unit: "unid" });
+  }
+  return items;
+}
+
+function materialRecordKey(record: ParsedMaterialPdfRecord, items: ParsedMaterialPdfItem[]) {
+  const itemsKey = items.map(item => `${normalizeText(item.productName)}:${item.quantity}`).sort().join("|");
+  return `${record.kind}|${record.date}|${normalizeText(record.responsible)}|${itemsKey}|${normalizeText(record.notes)}|${normalizeText(record.statusText)}`;
+}
+
+function parseMaterials(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>, rows: PdfRow[], rawText: string) {
+  const preview = basePreview(fileName, selectedType, report);
+  const withdrawals: any[] = [];
+  const entries: any[] = [];
+  const consumption: any[] = [];
+  const seen = new Set<string>();
+  const records: ParsedMaterialPdfRecord[] = [];
+  let currentDate = "";
+  let current: ParsedMaterialPdfRecord | null = null;
+
+  const flush = () => {
+    if (!current) return;
+    const items = parseMaterialItems(current.itemsText);
+    if (!current.date || !current.responsible || items.length === 0) {
+      preview.pendingCount++;
+      preview.pending.push(`${current.date || "sem data"} · ${current.responsible || "sem responsável"}: itens não extraídos com segurança.`);
+      preview.rows.push({ name: current.responsible || "Registro pendente", detail: current.itemsText || "Sem itens reconhecidos", status: "pendente" });
+      current = null;
+      return;
+    }
+    const key = materialRecordKey(current, items);
+    if (seen.has(key)) {
+      preview.duplicateCount++;
+      preview.ignored.push(`Registro duplicado no PDF: ${current.responsible} em ${current.date}`);
+      current = null;
+      return;
+    }
+    seen.add(key);
+    const sourceHash = normalizeKey(key).slice(0, 120);
+    const status = normalizeMaterialStatus(current.kind, current.statusText);
+    const base = {
+      source: "ERP_PDF_MATERIAIS",
+      sourceHash,
+      date: current.date,
+      month: monthLabel(current.date),
+      responsible: current.responsible,
+      notes: current.notes || "Importação PDF Controle de Materiais",
+      status,
+      items,
+      originalType: current.typeText || null,
+      originalStatus: current.statusText || null,
+      fileName,
+    };
+    records.push(current);
+    if (current.kind === "withdrawal") {
+      withdrawals.push({
+        ...base,
+        username: current.responsible,
+        userId: 0,
+        workOrderId: null,
+        jobId: null,
+        clientName: null,
+        withdrawalDate: current.date,
+        withdrawalPhoto: "restauracao-pdf-materiais",
+        withdrawalSignature: "restauracao-pdf-materiais",
+        returnPhoto: null,
+        returnSignature: null,
+        returnNotes: null,
+      });
+      preview.rows.push({ name: current.responsible, detail: `${current.date} · Retirada · ${items.map(item => `${item.quantity}x ${item.productName}`).join(", ")}`, status: "novo" });
+    } else if (current.kind === "entry") {
+      entries.push({ ...base, type: "ENTRADA" });
+      preview.rows.push({ name: "Entradas", detail: `${current.date} · ${items.map(item => `${item.quantity}x ${item.productName}`).join(", ")}`, status: "novo" });
+    } else {
+      consumption.push({ ...base, type: "SAÍDA" });
+      preview.rows.push({ name: "Saídas/Consumo", detail: `${current.date} · ${items.map(item => `${item.quantity}x ${item.productName}`).join(", ")}`, status: "novo" });
+    }
+    current = null;
+  };
+
+  for (const row of rows) {
+    const rowText = row.items.map(item => item.text).join(" ").replace(/\s+/g, " ").trim();
+    if (!rowText) continue;
+    const dateOnly = validDateBr(rowText);
+    if (dateOnly) {
+      flush();
+      currentDate = dateOnly;
+      continue;
+    }
+    if (/^(IMPPEL ERP|Controle de Materiais|Responsável|Responsavel|Itens|Tipo|Origem|Observação|Observacao|Status|Total de registros|tipo=materiais)/i.test(rowText)) continue;
+
+    const responsible = cell(row, 35, 185);
+    const itemsText = cell(row, 185, 500);
+    const typeText = cell(row, 500, 595);
+    const notes = cell(row, 595, 735);
+    const statusText = cell(row, 735, 840);
+    const hasItemPattern = /\d+(?:[,.]\d+)?\s*x\s+\S/i.test(rowText);
+    const startsRecord = Boolean(currentDate && responsible && (itemsText || hasItemPattern) && !/^\d+(?:[,.]\d+)?\s*x\b/i.test(responsible));
+
+    if (startsRecord) {
+      flush();
+      const fallbackItems = itemsText || rowText.replace(responsible, "").replace(typeText, "").replace(notes, "").replace(statusText, "").trim();
+      current = {
+        kind: classifyMaterialRecord(responsible, typeText),
+        date: currentDate,
+        responsible,
+        itemsText: fallbackItems,
+        typeText,
+        notes,
+        statusText,
+        page: row.page,
+        rowY: row.y,
+      };
+      continue;
+    }
+
+    if (current) {
+      const continuationItems = itemsText || (hasItemPattern ? rowText : "");
+      if (continuationItems) current.itemsText = `${current.itemsText} ${continuationItems}`.trim();
+      else if (notes || rowText) current.notes = `${current.notes} ${notes || rowText}`.trim();
+      if (!current.typeText && typeText) {
+        current.typeText = typeText;
+        current.kind = classifyMaterialRecord(current.responsible, typeText);
+      }
+      if (!current.statusText && statusText) current.statusText = statusText;
+      continue;
+    }
+
+    if (currentDate && hasItemPattern) {
+      preview.pendingCount++;
+      preview.pending.push(`${currentDate}: linha com itens sem responsável: ${rowText}`);
+      preview.rows.push({ name: "Registro pendente", detail: rowText, status: "pendente" });
+    }
+  }
+  flush();
+
+  preview.extracted = withdrawals.length + entries.length + consumption.length;
+  preview.newCount = preview.extracted;
+  preview.backup = {
+    type: "materiais",
+    version: "erp-pdf-preview",
+    exportedAt: new Date().toISOString(),
+    data: { withdrawals, entries, consumption },
+    meta: {
+      parser: "parseMaterials",
+      records: records.length,
+      sourceFile: fileName,
+      rawMarkerFound: normalizeText(rawText).includes("tipo=materiais"),
+    },
+  };
+  preview.canApply = preview.extracted > 0 && preview.errorCount === 0;
+  if (report.headerTotal && preview.extracted !== report.headerTotal) {
+    const diff = Math.max(0, report.headerTotal - preview.extracted - preview.pendingCount - preview.duplicateCount);
+    if (diff > 0) {
+      preview.pendingCount += diff;
+      preview.warnings.push(`PDF informa ${report.headerTotal} registros; ${preview.extracted} foram extraídos com segurança.`);
+    }
+  }
+  preview.warnings.push(`Materiais: ${withdrawals.length} retirada(s), ${entries.length} entrada(s), ${consumption.length} saída(s)/consumo extraídas.`);
+  return preview;
+}
 function unsupportedPreview(fileName: string, selectedType: BackupType, report: ReturnType<typeof detectReport>) {
   const preview = basePreview(fileName, selectedType, report);
   preview.pendingCount = report.headerTotal || 1;
@@ -476,6 +681,7 @@ export async function previewErpPdfBuffer(input: { fileName: string; selectedTyp
   if (report.type === "produtos") return parseProducts(input.fileName, input.selectedType, report, rows);
   if (report.type === "servicos") return parseServices(input.fileName, input.selectedType, report, rows);
   if (report.type === "estoque" || report.type === "movimentacoes") return parseStock(input.fileName, input.selectedType, report, rows);
+  if (report.type === "materiais") return parseMaterials(input.fileName, input.selectedType, report, rows, rawText);
   return unsupportedPreview(input.fileName, input.selectedType, report);
 }
 
@@ -485,5 +691,7 @@ export const __testPdfRestoreParsing = {
   parseProducts,
   parseServices,
   parseStock,
+  parseMaterials,
+  parseMaterialItems,
   detectReport,
 };

@@ -1,4 +1,4 @@
-﻿# Backlog - ERP IMPPEL
+# Backlog - ERP IMPPEL
 
 Este arquivo concentra tarefas futuras e pendencias planejadas do ERP IMPPEL.
 O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser registradas aqui.
@@ -87,3 +87,15 @@ Os itens V.L.A.E.G. foram migrados como historico e precisam ser reavaliados ant
 
 - Avaliar reducao do bundle frontend com code splitting/dynamic imports.
 - Atualizar base Browserslist/caniuse-lite em sprint de manutencao.
+
+## Itens concluidos em 2026-07-20
+
+- Parser PDF do modulo Controle de Materiais (`tipo=materiais`) implementado para preview e merge seguro.
+- Restore de materiais passou a separar retiradas, entradas e saidas/consumo.
+
+## Backlog tecnico relacionado a materiais
+
+### Melhoria
+
+- Avaliar uma camada transacional unica para restores complexos que envolvem varias tabelas, usando uma abstracao de storage compativel com PostgreSQL e storage em memoria de testes.
+- Evoluir a interface de mapeamento manual de produtos/responsaveis pendentes quando PDFs antigos trouxerem nomes divergentes do catalogo atual.
