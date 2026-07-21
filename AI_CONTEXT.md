@@ -22,6 +22,15 @@ Antes de qualquer implementacao, ler:
 
 Nunca ignorar o Prompt Mestre.
 
+## Atualizacao 2026-07-21
+
+- `server/admin-bootstrap.ts` garante o Admin no startup de forma idempotente.
+- O Admin usa `DEFAULT_ADMIN_USERNAME` e `DEFAULT_ADMIN_PASSWORD`; a senha vem do ambiente e e gravada com bcrypt.
+- `server/material-restore-service.ts` concentra normalizacao, resolucao de Inventory e fingerprint deterministico para restore de Controle de Materiais.
+- `storage.createInventoryMovement(..., { applyToStock: false })` deve ser usado para movimentos historicos restaurados quando o saldo ja veio do PDF de Estoque.
+- Responsaveis historicos como `Nao trabalha para nos` nao devem virar usuario de login nem usar `userId=0`.
+- Validacao em PostgreSQL descartavel continua obrigatoria antes de aprovar restore real para uso diario.
+
 ## Arquitetura
 
 - Frontend: React 18, Vite, TypeScript, Wouter, TanStack Query, TailwindCSS, shadcn/ui.

@@ -174,7 +174,7 @@ export interface IStorage {
   getInventoryMovements(): Promise<InventoryMovement[]>;
   getInventoryMovementsByProduct(inventoryId: number): Promise<InventoryMovement[]>;
   getInventoryMovement(id: number): Promise<InventoryMovement | undefined>;
-  createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }): Promise<InventoryMovement>;
+  createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }, options?: { applyToStock?: boolean }): Promise<InventoryMovement>;
   updateInventoryMovement(id: number, data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }): Promise<InventoryMovement | undefined>;
   deleteInventoryMovement(id: number): Promise<void>;
 
@@ -551,12 +551,14 @@ export class DatabaseStorage implements IStorage {
     const [mov] = await db.select().from(inventoryMovements).where(eq(inventoryMovements.id, id));
     return mov;
   }
-  async createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }): Promise<InventoryMovement> {
+  async createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }, options: { applyToStock?: boolean } = {}): Promise<InventoryMovement> {
     const [mov] = await db.insert(inventoryMovements).values(data).returning();
-    const delta = data.type === "ENTRADA" ? data.quantity : -data.quantity;
-    await db.update(inventory)
-      .set({ quantity: sql`COALESCE(${inventory.quantity}, 0) + ${delta}` })
-      .where(eq(inventory.id, data.inventoryId));
+    if (options.applyToStock !== false) {
+      const delta = data.type === "ENTRADA" ? data.quantity : -data.quantity;
+      await db.update(inventory)
+        .set({ quantity: sql`COALESCE(${inventory.quantity}, 0) + ${delta}` })
+        .where(eq(inventory.id, data.inventoryId));
+    }
     return mov;
   }
   async updateInventoryMovement(id: number, data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }): Promise<InventoryMovement | undefined> {
@@ -1444,10 +1446,12 @@ export function createMemoryStorage(): IStorage {
     },
     getInventoryMovementsByProduct: async (inventoryId: number) => data.inventoryMovements.filter(row => row.inventoryId === inventoryId),
     getInventoryMovement: async (id: number) => data.inventoryMovements.find(row => row.id === id),
-    createInventoryMovement: async (row: any) => {
+    createInventoryMovement: async (row: any, options: { applyToStock?: boolean } = {}) => {
       const movement = insert("inventoryMovements", row || {});
-      const item = data.inventory.find(inv => inv.id === movement.inventoryId);
-      if (item) item.quantity = Number(item.quantity || 0) + (movement.type === "ENTRADA" ? Number(movement.quantity || 0) : -Number(movement.quantity || 0));
+      if (options.applyToStock !== false) {
+        const item = data.inventory.find(inv => inv.id === movement.inventoryId);
+        if (item) item.quantity = Number(item.quantity || 0) + (movement.type === "ENTRADA" ? Number(movement.quantity || 0) : -Number(movement.quantity || 0));
+      }
       return movement;
     },
     updateInventoryMovement: async (id: number, updates: any) => {

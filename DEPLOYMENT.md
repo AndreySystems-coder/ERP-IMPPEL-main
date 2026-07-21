@@ -159,6 +159,16 @@ O ERP deve aceitar:
 
 A senha informada para producao deve ser configurada como variavel de ambiente e nunca commitada.
 
+No startup, o backend executa bootstrap idempotente:
+
+- se Admin nao existir, cria usando bcrypt;
+- se Admin ja existir, nao duplica;
+- se existir `admin` legado, normaliza para `Admin`;
+- senha bcrypt existente e preservada;
+- se o primeiro Admin precisar ser criado e `DEFAULT_ADMIN_PASSWORD` estiver ausente, o servidor falha com erro claro.
+
+Para checklist operacional completo, usar tambem `DEPLOYMENT_CHECKLIST.md`.
+
 Se o Admin ja existir no banco, o sistema nao deve duplicar usuario.
 
 ## Checklist final de producao

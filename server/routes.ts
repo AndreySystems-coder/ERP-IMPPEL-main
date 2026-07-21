@@ -24,6 +24,14 @@ import { getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWit
 import { getEffectiveMaterialSaleDiscountLimit } from "@shared/materialSalesPolicy";
 import { buildMobileNotesPreview, summarizeMobileRows, type MobileImportPreviewRow } from "@shared/mobileNotesImport";
 import { previewErpPdfBuffer } from "./pdf-restore";
+import { ensureDefaultAdmin } from "./admin-bootstrap";
+import {
+  createMaterialRestoreFingerprint,
+  isHistoricalMaterialResponsible,
+  normalizeMaterialName,
+  normalizeRestoreText,
+  resolveMaterialRestoreItems,
+} from "./material-restore-service";
 
 const BCRYPT_ROUNDS = 10;
 const operationalResetTokens = new Map<string, number>();
@@ -116,20 +124,7 @@ function normalizeRestoreDependencyKey(value: unknown) {
   return String(value || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function normalizeMaterialMatchKey(value: unknown) {
-  return normalizeRestoreDependencyKey(value)
-    .replace(/(\d+(?:[,.]\d+)?)\s*x\s*(\d+)/g, "$1x$2")
-    .replace(/(\d+)\s*mm\b/g, "$1 mm")
-    .replace(/[()]/g, " ")
-    .replace(/[.,;:/_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function isHistoricalMaterialResponsible(value: unknown) {
-  const normalized = normalizeRestoreDependencyKey(value);
-  return normalized === "nao trabalha para nos" || normalized === "nao trabalha conosco";
-}
+const normalizeMaterialMatchKey = normalizeMaterialName;
 
 function uniqueRestoreValues(values: unknown[]) {
   const seen = new Set<string>();
@@ -736,38 +731,8 @@ export async function registerRoutes(
       }
     }
     
-    const DEFAULT_USERNAME = process.env.DEFAULT_ADMIN_USERNAME || "Admin";
-    const DEFAULT_PASSWORD =
-      process.env.DEFAULT_ADMIN_PASSWORD ||
-      (process.env.NODE_ENV === "production" ? "" : "dev-admin-password-change-me");
-
-    if (!DEFAULT_PASSWORD) {
-      throw new Error("DEFAULT_ADMIN_PASSWORD must be set before seeding the first admin user in production.");
-    }
-
-    let adminUser =
-      (await storage.getUserByUsername(DEFAULT_USERNAME)) ||
-      (await storage.getUserByUsername("admin")); // migrate lowercase legacy
-
-    if (!adminUser) {
-      const hashed = await bcrypt.hash(DEFAULT_PASSWORD, BCRYPT_ROUNDS);
-      await storage.createUser({ username: DEFAULT_USERNAME, password: hashed, role: "admin" });
-    } else {
-      // Ensure role is admin and username is canonical without resetting an existing password silently.
-      const isHashed = adminUser.password.startsWith("$2");
-      if (!isHashed) {
-        await storage.updateUser(adminUser.id, {
-          username: DEFAULT_USERNAME,
-          password: await bcrypt.hash(adminUser.password || DEFAULT_PASSWORD, BCRYPT_ROUNDS),
-          role: "admin",
-        });
-      } else if (adminUser.role !== "admin" || adminUser.username !== DEFAULT_USERNAME) {
-        await storage.updateUser(adminUser.id, {
-          username: DEFAULT_USERNAME,
-          role: "admin",
-        });
-      }
-    }
+    const adminBootstrap = await ensureDefaultAdmin(storage);
+    console.log(`[bootstrap] Admin ${adminBootstrap.action}: ${adminBootstrap.username}#${adminBootstrap.userId}`);
 
     await ensureDefaultRoles();
 
@@ -814,8 +779,7 @@ export async function registerRoutes(
     }
   }
   
-  // Call seed async (fire and forget for now, or await if preferred)
-  seedDatabase().catch(console.error);
+  await seedDatabase();
 
   const toPublicUser = (user: any, extras: Record<string, unknown> = {}) => {
     const { password: _password, ...publicUser } = user || {};
@@ -4311,43 +4275,22 @@ export async function registerRoutes(
         storage.getMaterialWithdrawals(),
         storage.getInventoryMovements(),
       ]);
-      const inventoryByExactName = new Map(inventory.map((item: any) => [String(item.name || "").trim(), item]));
-      const inventoryByNormalizedName = new Map(inventory.map((item: any) => [normalizeMaterialMatchKey(item.name), item]));
       const usersByUsername = new Map(users.map((user: any) => [normalizeRestoreKey(user.username), user]));
       const historicalResponsibleUser = users.find((user: any) => user.id === req.session.userId) || users.find((user: any) => user.role === "admin") || users[0] || null;
-      const resolveInventory = (item: any) => {
-        const explicit = Number(item.inventoryId || 0);
-        if (explicit > 0) return inventory.find((row: any) => Number(row.id) === explicit) || null;
-        const name = String(item.productName || item.materialName || item.name || "").trim();
-        return inventoryByExactName.get(name) || inventoryByNormalizedName.get(normalizeMaterialMatchKey(name)) || null;
-      };
       const resolveItems = (items: any[]) => {
-        const resolved: any[] = [];
-        const unresolved: string[] = [];
-        for (const item of items) {
-          const product = resolveInventory(item);
-          const quantity = Math.ceil(Number(item.quantity || 0));
-          const rawName = String(item.productName || item.materialName || item.name || "sem nome").trim();
-          if (!product || quantity <= 0) {
-            unresolved.push(rawName);
-            continue;
-          }
-          resolved.push({
-            withdrawalId: 0,
-            inventoryId: Number(product.id),
-            productName: String(product.name),
-            unit: product.unit || item.unit || "unid",
-            quantity,
-            returnedQuantity: item.returnedQuantity ? Math.ceil(Number(item.returnedQuantity)) : null,
-            condition: item.condition || "bom",
-          });
-        }
-        return { resolved, unresolved };
+        const result = resolveMaterialRestoreItems(inventory, items);
+        return {
+          resolved: result.resolved.map(({ sourceName: _sourceName, resolution: _resolution, ...item }) => item),
+          unresolved: result.unresolved,
+        };
       };
 
       const existingWithdrawalKeys = new Set(existingWithdrawals.map((withdrawal: any) =>
         withdrawalKey(withdrawal, Array.isArray(withdrawal.items) ? withdrawal.items : [])
       ));
+      const existingWithdrawalFingerprints = new Set(existingWithdrawals
+        .map((withdrawal: any) => String(withdrawal.notes || "").match(/fingerprint:([a-f0-9]{64})/i)?.[1])
+        .filter(Boolean));
       const existingMovementKeys = new Set(existingMovements.map((movement: any) => [
         Number(movement.inventoryId),
         movement.type,
@@ -4355,6 +4298,9 @@ export async function registerRoutes(
         movement.date,
         normalizeRestoreKey(movement.notes),
       ].join("|")));
+      const existingMovementFingerprints = new Set(existingMovements
+        .map((movement: any) => String(movement.notes || "").match(/fingerprint:([a-f0-9]{64})/i)?.[1])
+        .filter(Boolean));
 
       let withdrawalsCreated = 0;
       let restoredComplete = 0;
@@ -4384,16 +4330,29 @@ export async function registerRoutes(
             unresolvedItems,
           });
         }
+        const date = withdrawal.withdrawalDate || withdrawal.date || new Date().toISOString().split("T")[0];
+        const restoredUsername = user?.username || username;
+        const auditUser = user || historicalResponsibleUser;
+        const withdrawalFingerprint = createMaterialRestoreFingerprint({
+          backupType: "controle-materiais",
+          sourceHash: withdrawal.sourceHash,
+          date,
+          operationType: "retirada",
+          responsible: restoredUsername,
+          historicalResponsibleName: isHistoricalResponsible ? username : null,
+          items: resolvedItems,
+          origin: withdrawal.origin,
+          observation: withdrawal.notes,
+          logicalIndex: withdrawal.logicalIndex,
+        });
         const key = withdrawalKey(withdrawal, resolvedItems);
-        if (existingWithdrawalKeys.has(key)) {
+        if (existingWithdrawalKeys.has(key) || existingWithdrawalFingerprints.has(withdrawalFingerprint)) {
           skipped++;
           duplicates.push(`Retirada duplicada: ${username} em ${withdrawal.withdrawalDate || withdrawal.date || "sem data"}`);
           continue;
         }
         existingWithdrawalKeys.add(key);
-        const date = withdrawal.withdrawalDate || withdrawal.date || new Date().toISOString().split("T")[0];
-        const restoredUsername = user?.username || username;
-        const auditUser = user || historicalResponsibleUser;
+        existingWithdrawalFingerprints.add(withdrawalFingerprint);
         const restored = await storage.createMaterialWithdrawal({
           userId: Number(auditUser.id),
           username: restoredUsername,
@@ -4404,7 +4363,7 @@ export async function registerRoutes(
           status: withdrawal.status || "pendente",
           withdrawalPhoto: withdrawal.withdrawalPhoto || "restauracao-pdf-materiais",
           withdrawalSignature: withdrawal.withdrawalSignature || "restauracao-pdf-materiais",
-          notes: `Importação PDF Controle de Materiais | hash:${withdrawal.sourceHash || "sem-hash"}${withdrawal.notes ? " | " + withdrawal.notes : ""}${unresolvedItems.length ? " | ITENS_NAO_RESTAURADOS: " + unresolvedItems.join(", ") : ""}`,
+          notes: `Importação PDF Controle de Materiais | hash:${withdrawal.sourceHash || "sem-hash"} | fingerprint:${withdrawalFingerprint}${withdrawal.notes ? " | " + withdrawal.notes : ""}${unresolvedItems.length ? " | ITENS_NAO_RESTAURADOS: " + unresolvedItems.join(", ") : ""}`,
           returnPhoto: withdrawal.returnPhoto || null,
           returnSignature: withdrawal.returnSignature || null,
           returnNotes: withdrawal.returnNotes || null,
@@ -4414,11 +4373,25 @@ export async function registerRoutes(
         else restoredComplete++;
         unresolved.push(...unresolvedItems.map(name => `Material não restaurado parcialmente: ${name}`));
         for (const item of restored.items || resolvedItems) {
-          const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | Retirada #${restored.id} | hash:${withdrawal.sourceHash || "sem-hash"} | Responsavel: ${restoredUsername}${isHistoricalResponsible ? " | Responsavel historico sem conta de usuario" : ""}`;
+          const movementFingerprint = createMaterialRestoreFingerprint({
+            backupType: "controle-materiais",
+            sourceHash: withdrawal.sourceHash,
+            date,
+            operationType: "retirada-item",
+            responsible: restoredUsername,
+            historicalResponsibleName: isHistoricalResponsible ? username : null,
+            items: [item],
+            origin: withdrawal.origin,
+            observation: withdrawal.notes,
+            logicalIndex: withdrawal.logicalIndex,
+          });
+          if (existingMovementFingerprints.has(movementFingerprint)) continue;
+          existingMovementFingerprints.add(movementFingerprint);
+          const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | Saldo ja refletido no PDF de Estoque | Retirada #${restored.id} | hash:${withdrawal.sourceHash || "sem-hash"} | fingerprint:${movementFingerprint} | Responsavel: ${restoredUsername}${isHistoricalResponsible ? " | Responsavel historico sem conta de usuario" : ""}`;
           const keyMovement = [Number(item.inventoryId), "SAÍDA", Number(item.quantity), date, normalizeRestoreKey(notes)].join("|");
           if (existingMovementKeys.has(keyMovement)) continue;
           existingMovementKeys.add(keyMovement);
-          await storage.createInventoryMovement({ inventoryId: item.inventoryId, productName: item.productName, type: "SAÍDA", quantity: item.quantity, date, month: safeMonth(date, withdrawal.month), notes });
+          await storage.createInventoryMovement({ inventoryId: item.inventoryId, productName: item.productName, type: "SAÍDA", quantity: item.quantity, date, month: safeMonth(date, withdrawal.month), notes }, { applyToStock: false });
           movementsCreated++;
         }
       }
@@ -4441,7 +4414,24 @@ export async function registerRoutes(
           unresolved.push(...unresolvedItems.map(name => `Material não restaurado parcialmente: ${name}`));
           for (const item of resolvedItems) {
             const date = record.date || new Date().toISOString().split("T")[0];
-            const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | ${type === "ENTRADA" ? "Entrada" : "Saída/Consumo"} | hash:${record.sourceHash || "sem-hash"}${record.notes ? " | " + record.notes : ""}`;
+            const movementFingerprint = createMaterialRestoreFingerprint({
+              backupType: "controle-materiais",
+              sourceHash: record.sourceHash,
+              date,
+              operationType: type === "ENTRADA" ? "entrada" : "saida-consumo",
+              responsible: record.username || record.responsible || (type === "ENTRADA" ? "Entradas" : "Saídas/Consumo"),
+              items: [item],
+              origin: record.origin,
+              observation: record.notes,
+              logicalIndex: record.logicalIndex,
+            });
+            if (existingMovementFingerprints.has(movementFingerprint)) {
+              skipped++;
+              duplicates.push(`${type} duplicada por fingerprint: ${item.productName} em ${date}`);
+              continue;
+            }
+            existingMovementFingerprints.add(movementFingerprint);
+            const notes = `Origem: RESTAURACAO_PDF_MATERIAIS | Saldo ja refletido no PDF de Estoque | ${type === "ENTRADA" ? "Entrada" : "Saída/Consumo"} | hash:${record.sourceHash || "sem-hash"} | fingerprint:${movementFingerprint}${record.notes ? " | " + record.notes : ""}`;
             const key = [Number(item.inventoryId), type, Number(item.quantity), date, normalizeRestoreKey(notes)].join("|");
             if (existingMovementKeys.has(key)) {
               skipped++;
@@ -4449,7 +4439,7 @@ export async function registerRoutes(
               continue;
             }
             existingMovementKeys.add(key);
-            await storage.createInventoryMovement({ inventoryId: item.inventoryId, productName: item.productName, type, quantity: item.quantity, date, month: safeMonth(date, record.month), notes });
+            await storage.createInventoryMovement({ inventoryId: item.inventoryId, productName: item.productName, type, quantity: item.quantity, date, month: safeMonth(date, record.month), notes }, { applyToStock: false });
             movementsCreated++;
           }
         }

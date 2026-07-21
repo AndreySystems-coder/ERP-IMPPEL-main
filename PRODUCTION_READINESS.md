@@ -1,14 +1,14 @@
 # Production Readiness - ERP IMPPEL
 
-Data da auditoria: 2026-07-20
-Commit auditado localmente antes desta correcao: `f1b8709 Prepare ERP for production publishing`
-Commit remoto confirmado antes desta correcao: `f1b8709 Prepare ERP for production publishing`
+Data da auditoria: 2026-07-21
+Commit base auditado antes desta sprint: `d067b4259f63d26e5a10c32fa8bc46165d6c78ba`
+Commit remoto confirmado antes desta sprint: `d067b4259f63d26e5a10c32fa8bc46165d6c78ba`
 
 ## Resumo executivo
 
 Status geral: ⚠ Pronto para publicacao apos validacao do banco real e restore em PostgreSQL descartavel.
 
-O codigo compila, o build passa e os testes automatizados principais passaram. A estabilizacao da importacao PDF melhorou seguranca operacional, dependencias de restore e nomenclatura. A preparacao final corrigiu cookies seguros em producao, `trust proxy`, 404 JSON para `/api/*` inexistente e evitou redefinicao silenciosa da senha bcrypt do Admin existente. A correcao do Controle de Materiais adicionou confirmacao parcial explicita, classificacao por registro e matching operacional via estoque. Permanecem como bloqueios externos: validar banco/URL publicados e executar a sequencia completa dos PDFs reais em PostgreSQL descartavel.
+O codigo compila, o build passa e os testes automatizados principais passaram. A estabilizacao da importacao PDF melhorou seguranca operacional, dependencias de restore e nomenclatura. A preparacao final corrigiu cookies seguros em producao, `trust proxy`, 404 JSON para `/api/*` inexistente e evitou redefinicao silenciosa da senha bcrypt do Admin existente. A correcao do Controle de Materiais adicionou confirmacao parcial explicita, classificacao por registro, matching operacional via estoque, fingerprints e movimentos historicos sem reaplicar saldo ja refletido pelo PDF de Estoque. Permanecem como bloqueios externos: validar banco/URL publicados e executar a sequencia completa dos PDFs reais em PostgreSQL descartavel.
 
 ## Checklist de producao
 
@@ -19,7 +19,8 @@ O codigo compila, o build passa e os testes automatizados principais passaram. A
 - ⚠ Controle de Materiais restore real: preview dos PDFs reais foi validado localmente, mas a importacao completa e idempotente ainda precisa ser executada em PostgreSQL descartavel.
 - ⚠ Estoque PDF: parser possui faixa `540-615` para quantidade, cobrindo `X~544`; o unico PDF local encontrado extraiu 96 itens e 0 movimentacoes, diferente do caso Replit 72/44.
 - ✅ Servicos PDF: possiveis duplicidades agora geram aviso em vez de descarte automatico.
-- ✅ Usuarios/Admin: criacao do Admin existe e nao redefine senha bcrypt existente ao normalizar username/role.
+- ✅ Usuarios/Admin: bootstrap oficial cria Admin em banco novo quando `DEFAULT_ADMIN_PASSWORD` existe, nao duplica e nao redefine senha bcrypt existente.
+- ✅ Controle de Materiais x Estoque: movimentos historicos restaurados por PDF podem ser gravados sem alterar saldo usando `applyToStock: false`.
 - ✅ Sessoes/Cookies: sessoes usam PostgreSQL quando `DATABASE_URL` existe; cookie usa `secure=true` em producao, `sameSite=lax` e `httpOnly`.
 - ✅ APIs: rotas inexistentes sob `/api` retornam 404 JSON antes do fallback SPA.
 - ✅ Build: `npm run build` passou.

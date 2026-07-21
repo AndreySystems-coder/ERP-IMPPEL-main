@@ -91,7 +91,15 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 
 - Severidade: Critico para aprovacao final da restauracao.
 - Causa raiz: o ambiente local desta sessao nao possui `DATABASE_URL` de teste descartavel para executar a sequencia completa em PostgreSQL real.
-- Impacto: o parser, a classificacao e os testes automatizados passaram, mas a aprovacao operacional final exige restaurar os cinco PDFs reais em banco PostgreSQL descartavel, repetir a importacao e comparar duplicidade/saldos.
-- Arquivos envolvidos: `server/routes.ts`, `server/pdf-restore.ts`, `client/src/components/CompleteBackupManager.tsx`.
+- Impacto: o parser, a classificacao, o bootstrap Admin e os testes automatizados passaram, mas a aprovacao operacional final exige restaurar os cinco PDFs reais em banco PostgreSQL descartavel, repetir a importacao e comparar duplicidade/saldos.
+- Arquivos envolvidos: `server/routes.ts`, `server/pdf-restore.ts`, `server/material-restore-service.ts`, `server/admin-bootstrap.ts`, `client/src/components/CompleteBackupManager.tsx`.
 - Workaround: executar a validacao em Replit/dev com banco clonado ou PostgreSQL temporario, nunca em producao.
 - Status: pendente de ambiente externo; nao bloqueia commit da correcao, mas bloqueia aprovacao final `CONTROLE DE MATERIAIS VALIDADO PARA RESTAURACAO`.
+
+### KI-010 - Restore PDF ainda nao possui tabela dedicada de import jobs/fingerprints
+
+- Severidade: Medio.
+- Causa raiz: o schema atual nao possui tabela especifica para auditoria persistente de import jobs e fingerprints; a sprint atual registrou fingerprints em observacoes e reutilizou historicos existentes sem migration ampla.
+- Impacto: a deduplicacao ficou mais deterministica para o fluxo atual, mas relatorios de importacao de longo prazo ainda dependem de campos textuais e historicos ja existentes.
+- Arquivos envolvidos: `shared/schema.ts`, `server/routes.ts`, `server/material-restore-service.ts`.
+- Plano: criar migration segura para `import_jobs`/`import_fingerprints` em sprint dedicada com PostgreSQL descartavel, validando restore real antes de producao.

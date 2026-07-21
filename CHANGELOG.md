@@ -3,6 +3,26 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-21] - Oficializacao do bootstrap Admin e restore seguro de materiais
+
+### Corrigido
+
+- Bootstrap do Admin foi extraido para servico oficial e idempotente, executado no startup antes de liberar as rotas.
+- Banco novo passa a criar `Admin` automaticamente quando `DEFAULT_ADMIN_PASSWORD` estiver configurada, usando bcrypt e sem duplicar usuario.
+- Admin legado `admin` e normalizado para `Admin` sem redefinir senha bcrypt existente.
+- Resolucao de itens do restore de Controle de Materiais foi centralizada em servico oficial com ID explicito, nome exato e nome normalizado.
+- Fingerprint deterministico foi adicionado para registros/movimentos restaurados de Controle de Materiais.
+- Movimentos historicos vindos do PDF de Controle de Materiais sao gravados sem reaplicar impacto no saldo, preservando a precedencia do saldo atual restaurado pelo PDF de Estoque.
+- Responsavel historico continua sem virar usuario de login e sem gerar `userId=0`.
+
+### Documentacao
+
+- Adicionado `DEPLOYMENT_CHECKLIST.md` com variaveis, migrations, Admin, sessoes, importacao de backups e validacao pos-deploy.
+
+### Validacao
+
+- Testes automatizados foram adicionados para Admin idempotente, resolucao de inventory por nome exato/normalizado, material bloqueado, responsavel historico sem login, fingerprint deterministico e movimento historico sem alterar saldo.
+
 ## [2026-07-20] - Restore seguro de Controle de Materiais por PDF
 
 ### Corrigido

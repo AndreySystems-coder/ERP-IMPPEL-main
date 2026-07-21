@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
+import bcrypt from "bcryptjs";
 
 process.env.NODE_ENV = "development";
 
 const { createMemoryStorage } = await import("../server/storage");
+const { ensureDefaultAdmin } = await import("../server/admin-bootstrap");
+const {
+  createMaterialRestoreFingerprint,
+  isHistoricalMaterialResponsible,
+  resolveMaterialRestoreItems,
+} = await import("../server/material-restore-service");
 const { canAccess, getDefaultLandingPath } = await import("../client/src/lib/permissions");
 const { generateInitialPassword } = await import("../shared/operationalUsers");
 const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMaterialItem, shouldRestoreReturnedQuantityToStock } = await import("../shared/materialReturnPolicy");
@@ -11,8 +18,85 @@ const { buildReturnableToolSummary } = await import("../shared/returnableToolSum
 const { buildMobileNotesPreview } = await import("../shared/mobileNotesImport");
 const { __testPdfRestoreParsing } = await import("../server/pdf-restore");
 
+const previousAdminUsername = process.env.DEFAULT_ADMIN_USERNAME;
+const previousAdminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+process.env.DEFAULT_ADMIN_USERNAME = "Admin";
+process.env.DEFAULT_ADMIN_PASSWORD = "senha-admin-sintetica";
+
+const emptyAdminStorage = createMemoryStorage();
+const firstBootstrap = await ensureDefaultAdmin(emptyAdminStorage);
+assert.equal(firstBootstrap.action, "created", "banco vazio deve criar Admin automaticamente");
+assert.equal((await emptyAdminStorage.getUsers()).length, 1, "bootstrap não pode criar usuários extras");
+assert.equal(await bcrypt.compare("senha-admin-sintetica", (await emptyAdminStorage.getUsers())[0].password), true, "senha do Admin deve ser bcrypt");
+for (let index = 0; index < 10; index++) await ensureDefaultAdmin(emptyAdminStorage);
+assert.equal((await emptyAdminStorage.getUsers()).length, 1, "startups repetidos não podem duplicar Admin");
+
+const commonUserStorage = createMemoryStorage();
+await commonUserStorage.createUser({ username: "aplicador.teste", password: "legado", role: "funcionario" } as any);
+const commonBootstrap = await ensureDefaultAdmin(commonUserStorage);
+assert.equal(commonBootstrap.action, "created", "banco com usuários comuns deve criar somente o Admin ausente");
+assert.equal((await commonUserStorage.getUsers()).filter(user => user.username === "Admin").length, 1, "Admin deve existir uma única vez");
+assert.equal((await commonUserStorage.getUsers()).filter(user => user.username === "aplicador.teste").length, 1, "bootstrap não pode apagar usuário comum");
+
+const existingAdminStorage = createMemoryStorage();
+await existingAdminStorage.createUser({ username: "admin", password: await bcrypt.hash("senha-existente", 4), role: "funcionario", fullName: "Outro Nome", status: "ativo" } as any);
+const existingBootstrap = await ensureDefaultAdmin(existingAdminStorage);
+const canonicalAdmin = (await existingAdminStorage.getUsers())[0];
+assert.equal(existingBootstrap.action, "updated", "Admin legado deve ser normalizado sem duplicar");
+assert.equal(canonicalAdmin.username, "Admin", "username do Admin deve ser canonicalizado");
+assert.equal(canonicalAdmin.role, "admin", "role do Admin deve ser admin");
+assert.equal(await bcrypt.compare("senha-existente", canonicalAdmin.password), true, "bootstrap não deve redefinir hash existente");
+
+if (previousAdminUsername === undefined) delete process.env.DEFAULT_ADMIN_USERNAME;
+else process.env.DEFAULT_ADMIN_USERNAME = previousAdminUsername;
+if (previousAdminPassword === undefined) delete process.env.DEFAULT_ADMIN_PASSWORD;
+else process.env.DEFAULT_ADMIN_PASSWORD = previousAdminPassword;
+
 const storage = createMemoryStorage();
 const inventory = await storage.createInventoryItem({ name: "Primer teste", type: "material", unit: "un", quantity: 5, minStock: 1, pricePerUnit: 10 });
+const exactInventory = await storage.createInventoryItem({ name: "Viapol Manta Torodin 4 mm", type: "material", unit: "un", quantity: 10, minStock: 1, pricePerUnit: 0 });
+const normalizedInventory = await storage.createInventoryItem({ name: "Impertela 1,05x50", type: "material", unit: "un", quantity: 5, minStock: 1, pricePerUnit: 0 });
+const materialResolution = resolveMaterialRestoreItems(await storage.getInventoryItems(), [
+  { productName: "Viapol Manta Torodin 4 mm", quantity: 2 },
+  { productName: "Impertela 1,05 x 50", quantity: 1 },
+  { productName: "Material inexistente", quantity: 1 },
+]);
+assert.equal(materialResolution.resolved.length, 2, "materiais devem resolver por nome exato e normalizado");
+assert.equal(materialResolution.resolved[0].inventoryId, exactInventory.id, "nome exato deve resolver inventoryId válido");
+assert.equal(materialResolution.resolved[1].inventoryId, normalizedInventory.id, "nome normalizado deve resolver inventoryId válido");
+assert.deepEqual(materialResolution.unresolved, ["Material inexistente"], "material sem correspondência deve ficar bloqueado para revisão");
+assert.equal(isHistoricalMaterialResponsible("Não trabalha para nós"), true, "responsável histórico deve ser identificado sem criar login");
+assert.equal((await storage.getUsers()).some(user => user.username === "Não trabalha para nós"), false, "responsável histórico não pode virar conta de acesso");
+const fingerprintOne = createMaterialRestoreFingerprint({
+  backupType: "controle-materiais",
+  sourceHash: "ca8ed68c167f",
+  date: "2026-06-30",
+  operationType: "retirada-item",
+  responsible: "alexsandro.santos",
+  items: materialResolution.resolved,
+  origin: "Registro Rapido",
+  observation: "Lequinho - raspador",
+});
+const fingerprintTwo = createMaterialRestoreFingerprint({
+  backupType: "controle-materiais",
+  sourceHash: "ca8ed68c167f",
+  date: "2026-06-30",
+  operationType: "retirada-item",
+  responsible: "alexsandro.santos",
+  items: [...materialResolution.resolved].reverse(),
+  origin: "Registro Rapido",
+  observation: "Lequinho - raspador",
+});
+assert.equal(fingerprintOne, fingerprintTwo, "fingerprint deve ser determinístico independentemente da ordem dos itens");
+await storage.createInventoryMovement({
+  inventoryId: exactInventory.id,
+  productName: exactInventory.name,
+  type: "SAÍDA",
+  quantity: 2,
+  date: "2026-06-30",
+  notes: `RESTORE HISTORICO fingerprint:${fingerprintOne}`,
+}, { applyToStock: false });
+assert.equal((await storage.getInventoryItems()).find(item => item.id === exactInventory.id)?.quantity, 10, "movimento histórico de restore não deve alterar saldo já restaurado pelo Estoque");
 const product = await storage.createProduct({ name: "Primer teste", inventoryId: inventory.id, unit: "un", salePrice: 20, maxDiscount: 10, active: true });
 const sale = await storage.createMaterialSale({
   createdByUserId: 2,
@@ -25,12 +109,13 @@ const sale = await storage.createMaterialSale({
   status: "pendente",
 });
 
+const saleMovementBaseline = (await storage.getInventoryMovements()).length;
 const approved = await storage.approveMaterialSale(sale.id, { id: 1, username: "admin" });
 assert.equal(approved?.status, "aprovada");
 assert.equal((await storage.getInventoryItems())[0].quantity, 3);
-assert.equal((await storage.getInventoryMovements()).length, 1);
+assert.equal((await storage.getInventoryMovements()).length, saleMovementBaseline + 1);
 await storage.approveMaterialSale(sale.id, { id: 1, username: "admin" });
-assert.equal((await storage.getInventoryMovements()).length, 1, "aprovação repetida duplicou a baixa");
+assert.equal((await storage.getInventoryMovements()).length, saleMovementBaseline + 1, "aprovação repetida duplicou a baixa");
 assert.equal(getEffectiveMaterialSaleDiscountLimit({ maxDiscount: 0 }, 10), 10, "produto sem limite proprio deve usar limite geral");
 assert.equal(getEffectiveMaterialSaleDiscountLimit({ maxDiscount: null }, 10), 10, "produto sem limite configurado deve usar limite geral");
 assert.equal(getEffectiveMaterialSaleDiscountLimit({ maxDiscount: 5 }, 10), 5, "limite proprio menor deve prevalecer");
@@ -445,4 +530,4 @@ assert.equal(canAccess(applicator, "viewDashboard"), false);
 assert.equal(getDefaultLandingPath(applicator), "/controle-materiais");
 assert.equal(getDefaultLandingPath({ role: "admin" }), "/dashboard");
 
-console.log("Fluxos operacionais validados: aprovação idempotente, baixa de estoque, senha fixa, ferramentas retornaveis, regra consumivel/retornavel e entrada por cargo.");
+console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel e entrada por cargo.");

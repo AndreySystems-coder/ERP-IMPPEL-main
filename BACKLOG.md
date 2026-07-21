@@ -17,12 +17,14 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Formalizar, em cada proxima sprint, se o ambiente analisado e Desenvolvimento ou Producao antes de qualquer operacao de banco.
 - Garantir que toda alteracao futura em estoque preserve a regra: quantidade somente por movimentacao.
 - Manter verificacao de backup/restauracao para funcionalidades criticas.
+- Homologar restore dos cinco PDFs reais em PostgreSQL descartavel, com segunda importacao e comparacao de saldo/idempotencia.
 
 ### Medio
 
 - Consolidar a documentacao historica de `docs/` nos arquivos oficiais conforme novas sprints forem acontecendo.
 - Revisar se `docs/gemini.md`, `docs/PASSO A PASSO/protocolo_vlaeg.md` e outros documentos auxiliares ainda devem ser mantidos como referencia tecnica.
 - Avaliar criacao de um indice de arquitetura caso a auditoria das proximas sprints identifique necessidade.
+- Criar migration para tabela dedicada de `import_jobs`/`import_fingerprints`, substituindo fingerprints em observacoes por auditoria estruturada.
 
 ### Melhoria
 
