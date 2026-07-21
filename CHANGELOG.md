@@ -3,6 +3,21 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-21] - Contrato definitivo do backup PDF de Controle de Materiais
+
+### Corrigido
+
+- Controle de Materiais passou a usar um contrato compartilhado em `shared/materialControlBackup.ts` para exportacao, PDF e parser.
+- O exportador PDF deixou de montar linhas em formato proprio e passou a imprimir exatamente as linhas operacionais que o parser reconstrói.
+- O parser de Controle de Materiais agora devolve `data.rows` e `data.days` no mesmo modelo usado pela exportacao.
+- O ciclo automatizado `contrato -> linhas de PDF -> parser -> contrato` foi adicionado aos testes operacionais.
+- A estrutura continua compativel com PDFs antigos, mantendo `withdrawals`, `entries` e `consumption`.
+
+### Validacao
+
+- `npx tsc --noEmit --incremental false` passou.
+- `npm run test:operational` passou com teste de round-trip do contrato de Controle de Materiais.
+
 ## [2026-07-21] - Oficializacao do bootstrap Admin e restore seguro de materiais
 
 ### Corrigido

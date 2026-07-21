@@ -1,3 +1,5 @@
+import { buildMaterialControlContract } from "@shared/materialControlBackup";
+
 type BackupType =
   | "usuarios"
   | "estoque"
@@ -783,11 +785,24 @@ function parseMaterials(fileName: string, selectedType: BackupType, report: Retu
 
   preview.extracted = withdrawals.length + entries.length + consumption.length;
   preview.newCount = preview.extracted;
+  const materialContract = buildMaterialControlContract({
+    withdrawals,
+    entries,
+    consumption,
+    exportedAt: new Date().toISOString(),
+  });
   preview.backup = {
     type: "materiais",
     version: "erp-pdf-preview",
-    exportedAt: new Date().toISOString(),
-    data: { withdrawals, entries, consumption },
+    exportedAt: materialContract.exportedAt,
+    filters: materialContract.filters,
+    data: {
+      withdrawals,
+      entries,
+      consumption,
+      rows: materialContract.data.rows,
+      days: materialContract.data.days,
+    },
     meta: {
       parser: "parseMaterials",
       records: records.length,

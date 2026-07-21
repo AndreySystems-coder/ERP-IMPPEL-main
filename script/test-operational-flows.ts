@@ -16,6 +16,7 @@ const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMater
 const { getEffectiveMaterialSaleDiscountLimit } = await import("../shared/materialSalesPolicy");
 const { buildReturnableToolSummary } = await import("../shared/returnableToolSummary");
 const { buildMobileNotesPreview } = await import("../shared/mobileNotesImport");
+const { buildMaterialControlContract } = await import("../shared/materialControlBackup");
 const { __testPdfRestoreParsing } = await import("../server/pdf-restore");
 
 const previousAdminUsername = process.env.DEFAULT_ADMIN_USERNAME;
@@ -468,6 +469,48 @@ assert.deepEqual(
 assert.equal(materialsPreview.backup.data.entries[0].status, "registrado", "Entrada deve manter status operacional de movimentação concluída");
 assert.equal(materialsPreview.backup.data.consumption[0].type, "SAÍDA", "Saída/consumo deve virar movimentação de saída");
 assert.equal(__testPdfRestoreParsing.parseMaterialItems("2x Extensão elétrica, 15x Viaplus 1000 (18 kg)")[1].productName, "Viaplus 1000 (18 kg)");
+
+const contractSource = buildMaterialControlContract({
+  withdrawals: [{
+    username: "wellington.pires",
+    withdrawalDate: "2026-06-30",
+    status: "pendente",
+    notes: "Importado via Registro Rapido #ca8ed68c167f",
+    items: [
+      { productName: "Furadeira", quantity: 1 },
+      { productName: "Extensão elétrica", quantity: 2 },
+    ],
+  }],
+  movements: [
+    { productName: "Broxa", type: "ENTRADA", quantity: 3, date: "2026-06-30", notes: "Registro rápido/estoque" },
+    { productName: "Viaplus 1000", type: "SAÍDA", quantity: 4, date: "2026-06-30", notes: "Registro rápido/estoque" },
+  ],
+  period: "all",
+  exportedAt: "2026-07-21T12:00:00.000Z",
+});
+const contractRowsForPdf = [
+  pdfRow([[40, "30/06/2026"]], 700),
+  pdfRow([[46, "Responsável"], [142, "Itens"], [391, "Tipo"], [477, "Origem/Observação"], [681, "Status"]], 690),
+  ...contractSource.data.rows.map((row: any, index: number) => pdfRow([
+    [46, row.responsible],
+    [142, row.itemsText],
+    [391, row.type],
+    [477, row.notes],
+    [681, row.status],
+  ], 680 - index * 10)),
+];
+const contractRoundTripPreview = __testPdfRestoreParsing.parseMaterials(
+  "controle-materiais-contrato.pdf",
+  "materiais",
+  report("materiais", contractSource.data.rows.length),
+  contractRowsForPdf,
+  "IMPPEL ERP\ntipo=materiais\nControle de Materiais",
+);
+assert.deepEqual(
+  contractRoundTripPreview.backup.data.rows.map((row: any) => [row.date, row.responsible, row.itemsText, row.type, row.status]),
+  contractSource.data.rows.map((row: any) => [row.date, row.responsible, row.itemsText, row.type, row.status]),
+  "Contrato Controle de Materiais deve sobreviver ao ciclo exportar PDF -> importar PDF",
+);
 const realLayoutMaterialRows = [
   pdfRow([[40, "30/06/2026"]], 700),
   pdfRow([[46, "Responsável"], [142, "Itens"], [391, "Tipo"], [477, "Origem/Observação"], [681, "Status"]], 680),
@@ -530,4 +573,4 @@ assert.equal(canAccess(applicator, "viewDashboard"), false);
 assert.equal(getDefaultLandingPath(applicator), "/controle-materiais");
 assert.equal(getDefaultLandingPath({ role: "admin" }), "/dashboard");
 
-console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel e entrada por cargo.");
+console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel e entrada por cargo.");

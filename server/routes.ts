@@ -23,6 +23,7 @@ import {
 import { getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWithdrawalPending, normalizeReturnCondition, shouldRestoreReturnedQuantityToStock } from "@shared/materialReturnPolicy";
 import { getEffectiveMaterialSaleDiscountLimit } from "@shared/materialSalesPolicy";
 import { buildMobileNotesPreview, summarizeMobileRows, type MobileImportPreviewRow } from "@shared/mobileNotesImport";
+import { buildMaterialControlContract } from "@shared/materialControlBackup";
 import { previewErpPdfBuffer } from "./pdf-restore";
 import { ensureDefaultAdmin } from "./admin-bootstrap";
 import {
@@ -316,62 +317,7 @@ function buildMaterialControlExportPayload(params: {
   year?: string;
   month?: string;
 }) {
-  const period = params.period === "month" || params.period === "year" ? params.period : "all";
-  const year = params.year && /^\d{4}$/.test(params.year) ? params.year : undefined;
-  const month = params.month && /^\d{1,2}$/.test(params.month) ? params.month.padStart(2, "0") : undefined;
-  const label = period === "month" && year && month
-    ? `${MONTHS_PT_BR[Number(month) - 1]}/${year}`
-    : period === "year" && year
-      ? year
-      : "Todos os meses";
-
-  const withdrawals = params.withdrawals.filter(withdrawal =>
-    isMaterialPeriodMatch(operationalDate(withdrawal.withdrawalDate || withdrawal.createdAt), period, year, month)
-  );
-  const entries = params.movements.filter(movement => {
-    const type = String(movement.type || "").toUpperCase();
-    return type === "ENTRADA" && isMaterialPeriodMatch(operationalDate(movement.date), period, year, month);
-  });
-  const consumption = params.movements.filter(movement => {
-    const type = String(movement.type || "").toUpperCase();
-    const isConsumption = type === "SAÍDA" || type === "SAIDA";
-    const fromWithdrawal = String(movement.notes || "").toLowerCase().includes("retirada #");
-    return isConsumption && !fromWithdrawal && isMaterialPeriodMatch(operationalDate(movement.date), period, year, month);
-  });
-  const days = new Map<string, { withdrawals: any[]; entries: any[]; consumption: any[] }>();
-  for (const withdrawal of withdrawals) {
-    const date = operationalDate(withdrawal.withdrawalDate || withdrawal.createdAt);
-    const group = days.get(date) || { withdrawals: [], entries: [], consumption: [] };
-    group.withdrawals.push(withdrawal);
-    days.set(date, group);
-  }
-  for (const movement of entries) {
-    const date = operationalDate(movement.date);
-    const group = days.get(date) || { withdrawals: [], entries: [], consumption: [] };
-    group.entries.push(movement);
-    days.set(date, group);
-  }
-  for (const movement of consumption) {
-    const date = operationalDate(movement.date);
-    const group = days.get(date) || { withdrawals: [], entries: [], consumption: [] };
-    group.consumption.push(movement);
-    days.set(date, group);
-  }
-
-  return {
-    type: "materiais",
-    version: "1.1",
-    exportedAt: new Date().toISOString(),
-    filters: { period, year: year || null, month: month || null, label },
-    data: {
-      withdrawals,
-      entries,
-      consumption,
-      days: Array.from(days.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, group]) => ({ date, ...group })),
-    },
-  };
+  return buildMaterialControlContract(params);
 }
 
 const DEFAULT_SALARY_DISCOUNT_RULES = [

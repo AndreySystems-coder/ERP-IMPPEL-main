@@ -15,7 +15,8 @@ O codigo compila, o build passa e os testes automatizados principais passaram. A
 - ⚠ Banco: `DATABASE_URL` e obrigatorio fora de `NODE_ENV=development`; nao havia banco real validado nesta sessao.
 - ✅ Backup completo: testes automatizados validaram 18 modulos, 38 arquivos e 10 anexos sinteticos.
 - ⚠ Restore PDF: parser e preview estao funcionais em testes locais, mas restore real em banco de producao nao foi executado nesta homologacao.
-- ✅ Controle de Materiais PDF: parser real validado anteriormente para 110 blocos operacionais; estabilizacao adicionou dependencias e bloqueio seguro.
+- ✅ Controle de Materiais PDF: parser real validado anteriormente para 110 blocos operacionais; estabilizacao adicionou dependencias, bloqueio seguro e contrato compartilhado exportacao/parser.
+- ✅ Contrato PDF de Materiais: teste automatizado cobre round-trip `contrato -> linhas PDF -> parser -> contrato`.
 - ⚠ Controle de Materiais restore real: preview dos PDFs reais foi validado localmente, mas a importacao completa e idempotente ainda precisa ser executada em PostgreSQL descartavel.
 - ⚠ Estoque PDF: parser possui faixa `540-615` para quantidade, cobrindo `X~544`; o unico PDF local encontrado extraiu 96 itens e 0 movimentacoes, diferente do caso Replit 72/44.
 - ✅ Servicos PDF: possiveis duplicidades agora geram aviso em vez de descarte automatico.

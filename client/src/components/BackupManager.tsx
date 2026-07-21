@@ -4,6 +4,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { asArray } from "@/lib/safeData";
 import { getMaterialReturnPolicyLabel } from "@shared/materialReturnPolicy";
+import { buildMaterialControlContract } from "@shared/materialControlBackup";
 import {
   Download, Upload, FileText, AlertTriangle, CheckCircle2, X,
   ShieldAlert,
@@ -140,7 +141,7 @@ function getRecordCount(type: BackupType, backup: any): number {
   if (type === "estoque") return asArray(d.items).length;
   if (type === "produtos") return asArray(d.products).length;
   if (type === "servicos") return asArray(d.services).length;
-  if (type === "materiais") return asArray(d.withdrawals).length + asArray(d.entries).length + asArray(d.consumption).length;
+  if (type === "materiais") return asArray(d.rows).length || (asArray(d.withdrawals).length + asArray(d.entries).length + asArray(d.consumption).length);
   if (type === "clientes") return asArray(d.clients).length;
   if (type === "orcamentos") return asArray(d.jobs).length;
   if (type === "ordens-servico") return asArray(d.workOrders).length;
@@ -314,15 +315,22 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
       styles: baseStyle, headStyles: headStyle, alternateRowStyles: altRow,
     });
   } else if (type === "materiais") {
-    const withdrawals = asArray<any>(backup.data?.withdrawals);
-    const entries = asArray<any>(backup.data?.entries);
-    const consumption = asArray<any>(backup.data?.consumption);
-    const days = asArray<any>(backup.data?.days);
+    const materialContract = buildMaterialControlContract({
+      withdrawals: backup.data?.withdrawals,
+      entries: backup.data?.entries,
+      consumption: backup.data?.consumption,
+      period: backup.filters?.period,
+      year: backup.filters?.year,
+      month: backup.filters?.month,
+      exportedAt: backup.exportedAt,
+    });
+    const rows = asArray<any>(materialContract.data?.rows);
+    const days = asArray<any>(materialContract.data?.days);
     const periodLabel = backup.filters?.label ? `Período: ${backup.filters.label}` : "Período: Todos os meses";
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.text(periodLabel, 14, 32);
-    if (!withdrawals.length && !entries.length && !consumption.length) {
+    if (!rows.length) {
       doc.setFontSize(12);
       doc.text("Nenhum registro encontrado para este período.", 14, 44);
     } else if (days.length) {
@@ -334,32 +342,13 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
         doc.text(fmtDate(day.date), 14, y);
         y += 4;
         const rows: string[][] = [];
-        for (const withdrawal of asArray<any>(day.withdrawals)) {
-          const items = asArray<any>(withdrawal.items);
+        for (const row of asArray<any>(day.rows)) {
           rows.push([
-            withdrawal.username || "—",
-            items.map(item => `${item.quantity}x ${item.productName}`).join(", ") || "—",
-            "Retirada",
-            withdrawal.notes || "—",
-            withdrawal.status || "—",
-          ]);
-        }
-        if (asArray<any>(day.entries).length) {
-          rows.push([
-            "Entradas",
-            asArray<any>(day.entries).map(item => `${item.quantity}x ${item.productName}`).join(", "),
-            "Entrada",
-            "Registro rápido/estoque",
-            "registrado",
-          ]);
-        }
-        if (asArray<any>(day.consumption).length) {
-          rows.push([
-            "Saídas/Consumo",
-            asArray<any>(day.consumption).map(item => `${item.quantity}x ${item.productName}`).join(", "),
-            "Saída",
-            "Registro rápido/estoque",
-            "consumo",
+            row.responsible || "—",
+            row.itemsText || "—",
+            row.type || "—",
+            row.notes || "—",
+            row.status || "—",
           ]);
         }
         autoTable(doc, {
@@ -376,8 +365,8 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
     } else {
       autoTable(doc, {
         startY: 38,
-        head: [["#", "Data", "Técnico", "OS", "Materiais", "Status"]],
-        body: withdrawals.map((w: any) => [w.id, fmtDate(w.withdrawalDate || w.createdAt), w.username || "—", w.workOrderId ? `#${w.workOrderId}` : "—", asArray<any>(w.items).map((i: any) => `${i.productName} (${i.quantity})`).join(", "), w.status]),
+        head: [["Data", "Responsável", "Itens", "Tipo", "Origem/Observação", "Status"]],
+        body: rows.map((row: any) => [fmtDate(row.date), row.responsible || "—", row.itemsText || "—", row.type || "—", row.notes || "—", row.status || "—"]),
         styles: { fontSize: 7, cellPadding: 2 }, headStyles: headStyle, alternateRowStyles: altRow,
       });
     }

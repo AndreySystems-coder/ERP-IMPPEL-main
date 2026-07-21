@@ -24,6 +24,9 @@ Nunca ignorar o Prompt Mestre.
 
 ## Atualizacao 2026-07-21
 
+- `shared/materialControlBackup.ts` e o contrato oficial do backup PDF de Controle de Materiais. Exportador e parser devem usar `data.rows`/`data.days` desse contrato.
+- O PDF de Controle de Materiais deve escrever apenas colunas que o parser le: `Responsavel`, `Itens`, `Tipo`, `Origem/Observacao`, `Status`, agrupadas por data.
+- Manter compatibilidade com `withdrawals`, `entries` e `consumption`, mas novas evolucoes devem preservar o round-trip via contrato compartilhado.
 - `server/admin-bootstrap.ts` garante o Admin no startup de forma idempotente.
 - O Admin usa `DEFAULT_ADMIN_USERNAME` e `DEFAULT_ADMIN_PASSWORD`; a senha vem do ambiente e e gravada com bcrypt.
 - `server/material-restore-service.ts` concentra normalizacao, resolucao de Inventory e fingerprint deterministico para restore de Controle de Materiais.
