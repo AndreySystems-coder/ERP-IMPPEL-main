@@ -65,10 +65,10 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 
 - Severidade: Melhoria.
 - Causa raiz: PDFs antigos carregam nomes textuais de materiais e responsaveis; o restore seguro nao deve criar produtos ou usuarios automaticamente.
-- Impacto: registros cujo produto ou responsavel nao exista no ERP atual sao ignorados no merge e retornam em `unresolved` para revisao.
-- Arquivos envolvidos: `server/pdf-restore.ts`, `server/routes.ts`.
-- Workaround: restaurar ou cadastrar previamente catalogo, estoque e usuarios antes de aplicar PDF de Controle de Materiais.
-- Status: comportamento seguro implementado; mapeamento manual pode ser evoluido em sprint futura.
+- Impacto: registros cujo produto ou responsavel nao exista no ERP atual exigem resolucao manual antes da gravacao.
+- Arquivos envolvidos: `server/pdf-restore.ts`, `server/routes.ts`, `server/material-pdf-import-service.ts`, `client/src/components/CompleteBackupManager.tsx`.
+- Workaround: importar previamente Usuarios/Cargos e Estoque; quando restar divergencia, usar os seletores manuais no preview de Controle de Materiais.
+- Status: mitigado com preview resolvivel pelo mesmo mecanismo do Registro Rapido; ainda depende de homologacao em PostgreSQL descartavel com os PDFs reais.
 
 ### KI-007 - Total do cabecalho do PDF de materiais tem granularidade diferente dos blocos operacionais
 
@@ -101,5 +101,5 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Severidade: Medio.
 - Causa raiz: o schema atual nao possui tabela especifica para auditoria persistente de import jobs e fingerprints; a sprint atual registrou fingerprints em observacoes e reutilizou historicos existentes sem migration ampla.
 - Impacto: a deduplicacao ficou mais deterministica para o fluxo atual, mas relatorios de importacao de longo prazo ainda dependem de campos textuais e historicos ja existentes.
-- Arquivos envolvidos: `shared/schema.ts`, `server/routes.ts`, `server/material-restore-service.ts`.
+- Arquivos envolvidos: `shared/schema.ts`, `server/routes.ts`, `server/material-restore-service.ts`, `server/material-pdf-import-service.ts`.
 - Plano: criar migration segura para `import_jobs`/`import_fingerprints` em sprint dedicada com PostgreSQL descartavel, validando restore real antes de producao.

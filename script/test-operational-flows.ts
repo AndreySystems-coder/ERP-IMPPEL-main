@@ -10,6 +10,10 @@ const {
   isHistoricalMaterialResponsible,
   resolveMaterialRestoreItems,
 } = await import("../server/material-restore-service");
+const {
+  applyMaterialPdfImportRows,
+  buildMaterialPdfImportPreview,
+} = await import("../server/material-pdf-import-service");
 const { canAccess, getDefaultLandingPath } = await import("../client/src/lib/permissions");
 const { generateInitialPassword } = await import("../shared/operationalUsers");
 const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMaterialItem, shouldRestoreReturnedQuantityToStock } = await import("../shared/materialReturnPolicy");
@@ -98,6 +102,62 @@ await storage.createInventoryMovement({
   notes: `RESTORE HISTORICO fingerprint:${fingerprintOne}`,
 }, { applyToStock: false });
 assert.equal((await storage.getInventoryItems()).find(item => item.id === exactInventory.id)?.quantity, 10, "movimento histórico de restore não deve alterar saldo já restaurado pelo Estoque");
+
+const materialPdfStorage = createMemoryStorage();
+const pdfUser = await materialPdfStorage.createUser({ username: "wellington.pires", password: "x", role: "funcionario", fullName: "Wellington Pires" } as any);
+const pdfFuradeira = await materialPdfStorage.createInventoryItem({ name: "Furadeira", type: "ferramenta", unit: "un", quantity: 3, minStock: 0, pricePerUnit: 0 });
+const pdfExtensao = await materialPdfStorage.createInventoryItem({ name: "Extensão elétrica", type: "ferramenta", unit: "un", quantity: 2, minStock: 0, pricePerUnit: 0 });
+const materialPdfBackup = {
+  withdrawals: [{
+    sourceHash: "pdf-row-1",
+    withdrawalDate: "2026-06-30",
+    username: "wellington.pires",
+    notes: "OS 15",
+    status: "pendente",
+    items: [
+      { productName: "Furadeira", quantity: 1 },
+      { productName: "Sika Re tipo III 4mm", quantity: 1 },
+    ],
+  }],
+  entries: [{ sourceHash: "pdf-row-2", date: "2026-06-30", notes: "Compra", items: [{ productName: "Extensão elétrica", quantity: 1 }] }],
+  consumption: [{ sourceHash: "pdf-row-3", date: "2026-06-30", notes: "Consumo", items: [{ productName: "Responsável", quantity: 0 }] }],
+};
+const materialPdfPreview = buildMaterialPdfImportPreview(materialPdfBackup, {
+  inventory: await materialPdfStorage.getInventoryItems(),
+  users: await materialPdfStorage.getUsers(),
+  aliases: await materialPdfStorage.getMobileImportAliases(),
+  existingWithdrawals: await materialPdfStorage.getMaterialWithdrawals(),
+  existingMovements: await materialPdfStorage.getInventoryMovements(),
+});
+assert.equal(materialPdfPreview.summary.total, 3, "preview PDF de materiais deve manter registros estruturados");
+assert.equal(materialPdfPreview.summary.ready, 1, "entrada com material reconhecido deve ficar pronta");
+assert.equal(materialPdfPreview.summary.pending, 2, "material desconhecido e item invalido devem ficar pendentes");
+assert.equal(materialPdfPreview.rows.some(row => row.rawItem === "Sika Re tipo III 4mm" && !row.inventoryId), true, "Sika Re tipo III 4mm deve exigir seleção manual");
+const resolvedPdfRows = materialPdfPreview.rows.map(row => {
+  if (row.rawItem === "Sika Re tipo III 4mm") {
+    return { ...row, inventoryId: pdfExtensao.id, itemName: pdfExtensao.name, itemConfidence: 100, status: "ok", warnings: [] };
+  }
+  if (row.rawItem === "Responsável") return { ...row, ignored: true, status: "ignorado" };
+  return row;
+});
+const materialPdfApply = await applyMaterialPdfImportRows({
+  rows: resolvedPdfRows,
+  storage: materialPdfStorage,
+  sessionUserId: pdfUser.id,
+  applyToStock: false,
+});
+assert.equal(materialPdfApply.summary.retiradasCriadas, 1, "PDF resolvido deve criar retirada pelo fluxo compartilhado");
+assert.equal(materialPdfApply.summary.movimentacoesCriadas, 3, "PDF resolvido deve criar movimentos historicos de retirada e entrada");
+assert.equal((await materialPdfStorage.getInventoryItems()).find(item => item.id === pdfFuradeira.id)?.quantity, 3, "restore historico por PDF nao deve alterar saldo da ferramenta");
+const materialPdfDuplicatePreview = buildMaterialPdfImportPreview(materialPdfBackup, {
+  inventory: await materialPdfStorage.getInventoryItems(),
+  users: await materialPdfStorage.getUsers(),
+  aliases: await materialPdfStorage.getMobileImportAliases(),
+  existingWithdrawals: await materialPdfStorage.getMaterialWithdrawals(),
+  existingMovements: await materialPdfStorage.getInventoryMovements(),
+});
+assert.equal(materialPdfDuplicatePreview.summary.duplicates >= 1, true, "segunda importacao do mesmo PDF deve sinalizar duplicidade semantica");
+
 const product = await storage.createProduct({ name: "Primer teste", inventoryId: inventory.id, unit: "un", salePrice: 20, maxDiscount: 10, active: true });
 const sale = await storage.createMaterialSale({
   createdByUserId: 2,

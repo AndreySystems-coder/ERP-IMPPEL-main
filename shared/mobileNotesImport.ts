@@ -38,6 +38,7 @@ export type MobileImportPreviewRow = {
   rawItem: string;
   inventoryId: number | null;
   itemName: string | null;
+  unit?: string | null;
   itemConfidence: number;
   rawEmployee?: string | null;
   userId?: number | null;
@@ -47,6 +48,10 @@ export type MobileImportPreviewRow = {
   warnings: string[];
   stockWarning?: string | null;
   ignored?: boolean;
+  sourceRecordId?: string | null;
+  sourceHash?: string | null;
+  duplicate?: boolean;
+  duplicateReason?: string | null;
 };
 
 export type MobileImportPreview = {
@@ -158,7 +163,7 @@ function userLabel(user: MobileImportUser) {
   return [user.username, user.fullName, user.jobTitle, user.roleLabel].filter(Boolean).join(" ");
 }
 
-function findUser(raw: string, users: MobileImportUser[], aliases: MobileImportAlias[]) {
+export function resolveMobileImportUser(raw: string, users: MobileImportUser[], aliases: MobileImportAlias[] = []) {
   const key = normalize(raw);
   const savedAlias = aliases.find(alias => normalize(alias.alias) === key);
   if (savedAlias) {
@@ -175,7 +180,7 @@ function findUser(raw: string, users: MobileImportUser[], aliases: MobileImportA
   return { user: match.value, score: match.score };
 }
 
-function findInventory(raw: string, inventory: MobileImportInventoryItem[]) {
+export function resolveMobileImportInventory(raw: string, inventory: MobileImportInventoryItem[]) {
   const inventoryItems = inventory.filter(item => item.source !== "product");
   const productItems = inventory.filter(item => item.source === "product");
   const inventoryMatch = bestMatch(raw, inventoryItems, item => item.name);
@@ -239,10 +244,10 @@ export function buildMobileNotesPreview(input: {
     const employeeLine = line.match(/^(.+?)\s*[-–:]\s*(.+)$/);
     if (employeeLine && !line.startsWith("+")) {
       const employeeText = employeeLine[1].trim();
-      const userMatch = findUser(employeeText, input.users, input.aliases || []);
+      const userMatch = resolveMobileImportUser(employeeText, input.users, input.aliases || []);
       for (const part of employeeLine[2].split(/[,;]/).map(value => value.trim()).filter(Boolean)) {
         const parsed = parseQuantityItem(part);
-        const itemMatch = findInventory(parsed.name, input.inventory);
+        const itemMatch = resolveMobileImportInventory(parsed.name, input.inventory);
         const warnings: string[] = [];
         if (!userMatch.user || userMatch.score < 70) warnings.push("Funcionário pendente");
         if (!itemMatch.item || itemMatch.score < 70) warnings.push("Item ainda não cadastrado.");
@@ -273,7 +278,7 @@ export function buildMobileNotesPreview(input: {
       ignored.push({ ...base, type: "saida", quantity: 0, rawItem: line, inventoryId: null, itemName: null, itemConfidence: 0, status: "ignorado", warnings: ["Linha não reconhecida"], ignored: true });
       continue;
     }
-    const itemMatch = findInventory(parsed.name, input.inventory);
+    const itemMatch = resolveMobileImportInventory(parsed.name, input.inventory);
     const warnings = itemMatch.score >= 70 ? [] : ["Item ainda não cadastrado."];
     if (itemMatch.catalogOnly) warnings.push("Material encontrado no catálogo; selecione o item de estoque");
     rows.push({

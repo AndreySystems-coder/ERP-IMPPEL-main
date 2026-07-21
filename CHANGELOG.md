@@ -3,6 +3,22 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-21] - Importacao PDF de Controle de Materiais pelo fluxo do Registro Rapido
+
+### Corrigido
+
+- Preview do PDF de Controle de Materiais passou a usar os mesmos resolvedores de funcionario/material do Registro Rapido.
+- Controle de Materiais foi adicionado ao seletor principal de importacao por PDF.
+- Pendencias de funcionario e material agora aparecem em cards de preview com seletores manuais antes da confirmacao.
+- Confirmacao do PDF de materiais passou a enviar as linhas resolvidas, revalidar IDs no backend e importar somente registros prontos.
+- Importacao historica de materiais continua criando retiradas e movimentacoes com `applyToStock: false`, preservando saldos finais vindos do backup de Estoque.
+- Segunda importacao passa a usar fingerprint semantico com unidade, responsavel, data, tipo e itens para evitar duplicidade.
+- Pendencias continuam visiveis apos importar registros resolvidos, sem exigir novo upload do PDF.
+
+### Validacao
+
+- Testes operacionais adicionados para preview, pendencia de material, resolucao manual, importacao historica sem alterar saldo e duplicidade semantica.
+
 ## [2026-07-21] - Contrato definitivo do backup PDF de Controle de Materiais
 
 ### Corrigido

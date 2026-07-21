@@ -56,6 +56,31 @@ type PdfRestorePreview = {
     warnings: string[];
     blockedReasons: string[];
   };
+  materialImport?: {
+    hash: string;
+    summary: {
+      total: number;
+      ready: number;
+      pending: number;
+      duplicates: number;
+      blocked: number;
+      importableRows: number;
+    };
+    records: Array<{
+      temporaryId: string;
+      originalData: { date: string; responsible: string; type: string; notes: string; status: string };
+      resolvedUser: { id: number; username: string } | null;
+      unresolvedUser: string | null;
+      status: "ready" | "pending" | "duplicate" | "blocked";
+      duplicate: boolean;
+      errors: string[];
+      items: Array<any>;
+    }>;
+    rows: Array<any>;
+    users: Array<{ id: number; username: string; fullName?: string | null }>;
+    inventory: Array<{ id: number; name: string; unit?: string | null; quantity?: number | null }>;
+    warnings: string[];
+  };
   backup?: any;
   canApply: boolean;
 };
@@ -66,6 +91,7 @@ const PDF_RESTORE_MODULES: PdfRestoreModule[] = [
   { id: "servicos", type: "servicos", label: "Catálogo de Serviços" },
   { id: "estoque", type: "estoque", label: "Estoque" },
   { id: "movimentacoes", type: "estoque", label: "Movimentações de Estoque" },
+  { id: "materiais", type: "materiais", label: "Controle de Materiais" },
 ];
 
 type PdfImportHistoryEntry = {
@@ -418,6 +444,99 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
     }
   };
 
+  const recomputeMaterialPreviewState = (preview: PdfRestorePreview): PdfRestorePreview => {
+    if (!preview.materialImport) return preview;
+    const rows = preview.materialImport.rows || [];
+    const records = preview.materialImport.records.map(record => {
+      const recordRows = rows.filter(row => row.sourceRecordId === record.temporaryId);
+      const duplicate = recordRows.some(row => row.duplicate);
+      const pending = recordRows.some(row =>
+        row.status !== "ok" ||
+        !row.inventoryId ||
+        !row.date ||
+        (row.type === "retirada" && !row.userId)
+      );
+      return {
+        ...record,
+        items: recordRows,
+        resolvedUser: recordRows.find(row => row.userId)?.userId
+          ? { id: Number(recordRows.find(row => row.userId)?.userId), username: String(recordRows.find(row => row.userId)?.username || "") }
+          : null,
+        unresolvedUser: pending && recordRows.some(row => row.type === "retirada" && !row.userId) ? record.originalData.responsible : null,
+        status: duplicate ? "duplicate" as const : pending ? "pending" as const : "ready" as const,
+        duplicate,
+      };
+    });
+    const importableRows = rows.filter(row => row.status === "ok" && !row.duplicate && row.inventoryId && (row.type !== "retirada" || row.userId)).length;
+    const next = {
+      ...preview,
+      materialImport: {
+        ...preview.materialImport,
+        records,
+        rows,
+        summary: {
+          ...preview.materialImport.summary,
+          ready: records.filter(record => record.status === "ready").length,
+          pending: records.filter(record => record.status === "pending").length,
+          duplicates: records.filter(record => record.status === "duplicate").length,
+          blocked: records.filter(record => record.status === "duplicate").length,
+          importableRows,
+        },
+      },
+      canApply: importableRows > 0,
+      fullyApplicableCount: records.filter(record => record.status === "ready").length,
+      partiallyApplicableCount: records.filter(record => record.status === "pending").length,
+      duplicateCount: records.filter(record => record.status === "duplicate").length,
+      pendingCount: records.filter(record => record.status === "pending").length,
+      unresolvedItemCount: rows.filter(row => !row.inventoryId).length,
+    };
+    return next;
+  };
+
+  const updateMaterialRows = (previewIndex: number, updater: (rows: any[], preview: PdfRestorePreview) => any[]) => {
+    setPreviews(current => current.map((preview, index) => {
+      if (index !== previewIndex || !preview.materialImport) return preview;
+      const rows = updater(preview.materialImport.rows || [], preview);
+      return recomputeMaterialPreviewState({
+        ...preview,
+        materialImport: { ...preview.materialImport, rows },
+      });
+    }));
+  };
+
+  const resolveMaterialRecordUser = (previewIndex: number, recordId: string, userId: string) => {
+    updateMaterialRows(previewIndex, (rows, preview) => {
+      const user = preview.materialImport?.users.find(candidate => Number(candidate.id) === Number(userId));
+      return rows.map(row => row.sourceRecordId === recordId
+        ? {
+            ...row,
+            userId: user ? Number(user.id) : null,
+            username: user?.username || null,
+            userConfidence: user ? 100 : row.userConfidence,
+            status: row.inventoryId && user ? "ok" : "duvidoso",
+            warnings: (row.warnings || []).filter((warning: string) => !warning.toLowerCase().includes("funcionário")),
+          }
+        : row);
+    });
+  };
+
+  const resolveMaterialItem = (previewIndex: number, rowId: string, inventoryId: string) => {
+    updateMaterialRows(previewIndex, (rows, preview) => {
+      const item = preview.materialImport?.inventory.find(candidate => Number(candidate.id) === Number(inventoryId));
+      return rows.map(row => row.id === rowId
+        ? {
+            ...row,
+            inventoryId: item ? Number(item.id) : null,
+            itemName: item?.name || null,
+            unit: item?.unit || "unid",
+            itemConfidence: item ? 100 : row.itemConfidence,
+            status: item && (row.type !== "retirada" || row.userId) ? "ok" : "duvidoso",
+            warnings: (row.warnings || []).filter((warning: string) => !warning.toLowerCase().includes("material")),
+          }
+        : row);
+    });
+  };
+
   const restore = async () => {
     const applicable = previews.filter(preview => preview.canApply && preview.backup && preview.restoreType);
     if (!applicable.length) return;
@@ -426,16 +545,22 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
     setMessage("");
     try {
       let imported = 0;
+      let materialPendingAfterImport = 0;
       for (const preview of applicable) {
         const response = await fetch(`/api/backup/restore/${preview.restoreType}?mode=merge`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...preview.backup, allowPartial: allowPartial && preview.requiresPartialConfirmation }),
+          body: JSON.stringify({
+            ...preview.backup,
+            materialImport: preview.restoreType === "materiais" ? { rows: preview.materialImport?.rows || [] } : undefined,
+            allowPartial: allowPartial && preview.requiresPartialConfirmation,
+          }),
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.message || `Falha ao importar ${preview.fileName}.`);
         imported += Number(result.created || 0) + Number(result.updated || 0) + Number(result.movementsCreated || 0);
+        materialPendingAfterImport += Number(result.summary?.pendentesRestantes || result.unresolvedItems || 0);
       }
       setHistory(savePdfImportHistory({
         id: Date.now().toString(36),
@@ -449,11 +574,23 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
         status: "Concluído",
         backupGenerated: Boolean(safetyBackup),
       }));
-      setMessage(`${applicable.length} PDF(s) importado(s) em modo merge.`);
+      setMessage(materialPendingAfterImport > 0
+        ? `${applicable.length} PDF(s) processado(s). Registros prontos importados; ${materialPendingAfterImport} pendência(s) continuam no preview.`
+        : `${applicable.length} PDF(s) importado(s) em modo merge.`);
       setConfirmation("");
-      setPreviews([]);
-      setSafetyBackup(null);
-      setFiles([]);
+      if (materialPendingAfterImport <= 0) {
+        setPreviews([]);
+        setSafetyBackup(null);
+        setFiles([]);
+      } else {
+        setPreviews(current => current.map(preview => preview.materialImport ? {
+          ...preview,
+          materialImport: {
+            ...preview.materialImport,
+            rows: preview.materialImport.rows.map(row => row.status === "ok" && !row.duplicate ? { ...row, duplicate: true, duplicateReason: "Importado nesta confirmação", status: "bloqueado", warnings: [...(row.warnings || []), "Importado nesta confirmação"] } : row),
+          },
+        } : preview).map(recomputeMaterialPreviewState));
+      }
       onRestored();
     } catch (error: any) {
       setHistory(savePdfImportHistory({
@@ -562,7 +699,7 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
                 </div>
               ))}
             </div>
-            {previews.map(preview => (
+            {previews.map((preview, previewIndex) => (
               <div key={preview.fileName} className="rounded-md border border-slate-100">
                 <div className="border-b bg-slate-50 px-3 py-2 text-sm">
                   <strong>{preview.fileName}</strong>
@@ -588,6 +725,76 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
                     </div>
                   ))}
                 </div>
+                {preview.materialImport && (
+                  <div className="space-y-3 border-t border-amber-100 bg-amber-50 px-3 py-3 text-xs text-slate-800">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full bg-white px-2 py-1 font-semibold">Total: {preview.materialImport.summary.total}</span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-1 font-semibold text-emerald-800">Prontos: {preview.materialImport.summary.ready}</span>
+                      <span className="rounded-full bg-amber-100 px-2 py-1 font-semibold text-amber-800">Pendentes: {preview.materialImport.summary.pending}</span>
+                      <span className="rounded-full bg-slate-200 px-2 py-1 font-semibold text-slate-700">Duplicados: {preview.materialImport.summary.duplicates}</span>
+                    </div>
+                    <div className="max-h-96 space-y-3 overflow-y-auto">
+                      {preview.materialImport.records.slice(0, 80).map(record => (
+                        <div key={record.temporaryId} className="rounded-md border border-amber-200 bg-white p-3">
+                          <div className="grid gap-2 sm:grid-cols-5">
+                            <div>
+                              <p className="font-bold text-slate-900">{record.originalData.date || "Data pendente"}</p>
+                              <p className="text-slate-500">{record.originalData.type} · {record.originalData.status || "sem status"}</p>
+                            </div>
+                            <div className="sm:col-span-2">
+                              <p className="font-semibold">Responsável do PDF</p>
+                              <p className="text-slate-600">{record.originalData.responsible || "—"}</p>
+                            </div>
+                            <label className="sm:col-span-2">
+                              <span className="font-semibold">Funcionário resolvido</span>
+                              <select
+                                value={record.items.find(item => item.userId)?.userId || ""}
+                                onChange={event => resolveMaterialRecordUser(previewIndex, record.temporaryId, event.target.value)}
+                                disabled={record.originalData.type !== "retirada" || record.duplicate}
+                                className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100"
+                              >
+                                <option value="">{record.originalData.type === "retirada" ? "Selecionar funcionário" : "Não se aplica"}</option>
+                                {preview.materialImport?.users.map(user => (
+                                  <option key={user.id} value={user.id}>{user.username}{user.fullName ? ` · ${user.fullName}` : ""}</option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          <div className="mt-3 space-y-2">
+                            {record.items.map(item => (
+                              <div key={item.id} className="grid gap-2 rounded bg-slate-50 p-2 sm:grid-cols-6">
+                                <div className="sm:col-span-2">
+                                  <p className="font-semibold">{item.quantity}x {item.rawItem}</p>
+                                  <p className="text-slate-500">{item.warnings?.join(" · ") || "Resolvido"}</p>
+                                </div>
+                                <label className="sm:col-span-3">
+                                  <span className="font-semibold">Material do estoque</span>
+                                  <select
+                                    value={item.inventoryId || ""}
+                                    onChange={event => resolveMaterialItem(previewIndex, item.id, event.target.value)}
+                                    disabled={record.duplicate}
+                                    className="mt-1 h-9 w-full rounded-md border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100"
+                                  >
+                                    <option value="">Selecionar material</option>
+                                    {preview.materialImport?.inventory.map(inventoryItem => (
+                                      <option key={inventoryItem.id} value={inventoryItem.id}>{inventoryItem.name} · disp. {inventoryItem.quantity ?? 0} {inventoryItem.unit || "un"}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <div>
+                                  <p className="font-semibold">Status</p>
+                                  <p className={record.duplicate ? "font-bold text-slate-600" : item.status === "ok" ? "font-bold text-emerald-700" : "font-bold text-amber-700"}>
+                                    {record.duplicate ? "Duplicado" : item.status === "ok" ? "Pronto" : "Pendente"}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {preview.dependencies && (
                   <div className="border-t border-blue-100 bg-blue-50 px-3 py-3 text-xs text-blue-950">
                     <h4 className="font-bold">Dependências encontradas</h4>

@@ -33,6 +33,11 @@ import {
   normalizeRestoreText,
   resolveMaterialRestoreItems,
 } from "./material-restore-service";
+import {
+  applyMaterialPdfImportRows,
+  buildMaterialPdfImportPreview,
+  normalizeMaterialPdfRows,
+} from "./material-pdf-import-service";
 
 const BCRYPT_ROUNDS = 10;
 const operationalResetTokens = new Map<string, number>();
@@ -141,11 +146,14 @@ function uniqueRestoreValues(values: unknown[]) {
 }
 
 async function attachPdfRestoreDependencies(preview: any) {
-  const [users, products, services, inventory] = await Promise.all([
+  const [users, products, services, inventory, aliases, existingWithdrawals, existingMovements] = await Promise.all([
     storage.getUsers(),
     storage.getProducts(),
     storage.getServices(),
     storage.getInventoryItems(),
+    storage.getMobileImportAliases(),
+    storage.getMaterialWithdrawals(),
+    storage.getInventoryMovements(),
   ]);
   const checks: any[] = [];
   const warnings: string[] = [];
@@ -171,37 +179,27 @@ async function attachPdfRestoreDependencies(preview: any) {
     const inventoryKeys = new Set(inventory.map((item: any) => normalizeMaterialMatchKey(item.name)).filter(Boolean));
     const missingUsers = responsibleNames.filter(name => !userKeys.has(normalizeRestoreDependencyKey(name)));
     const missingInventory = materialNames.filter(name => !inventoryKeys.has(normalizeMaterialMatchKey(name)));
-    const classifyRecord = (record: any, requiresUser: boolean) => {
-      const rawItems = Array.isArray(record.items) ? record.items : [];
-      const unresolvedItems = rawItems
-        .map((item: any) => String(item.productName || item.materialName || item.name || "").trim())
-        .filter((name: string) => name && !inventoryKeys.has(normalizeMaterialMatchKey(name)));
-      const resolvedCount = rawItems.length - unresolvedItems.length;
-      const responsible = record.username || record.responsible;
-      const userOk = !requiresUser || isHistoricalMaterialResponsible(responsible) || userKeys.has(normalizeRestoreDependencyKey(responsible));
-      if (!userOk || resolvedCount <= 0) return { status: "blocked", unresolvedItems };
-      if (unresolvedItems.length > 0) return { status: "partial", unresolvedItems };
-      return { status: "full", unresolvedItems };
-    };
-    const classifications = [
-      ...withdrawals.map((record: any) => classifyRecord(record, true)),
-      ...entries.map((record: any) => classifyRecord(record, false)),
-      ...consumption.map((record: any) => classifyRecord(record, false)),
-    ];
-    const fullyApplicableCount = classifications.filter(item => item.status === "full").length;
-    const partiallyApplicableCount = classifications.filter(item => item.status === "partial").length;
-    const blockedCount = classifications.filter(item => item.status === "blocked").length;
-    const unresolvedItemCount = classifications.reduce((sum, item) => sum + item.unresolvedItems.length, 0);
+    const materialImport = buildMaterialPdfImportPreview(data, { inventory, users, aliases, existingWithdrawals, existingMovements });
+    const fullyApplicableCount = materialImport.summary.ready;
+    const partiallyApplicableCount = materialImport.summary.pending;
+    const blockedCount = materialImport.summary.blocked;
+    const unresolvedItemCount = materialImport.rows.filter(row => !row.inventoryId).length;
 
-    addCheck("Usuários", true, responsibleNames.length - missingUsers.length, missingUsers, missingUsers.length ? "Importe Usuários e Cargos antes do Controle de Materiais." : "Responsáveis encontrados.");
+    addCheck("Usuários", false, responsibleNames.length - missingUsers.length, missingUsers, missingUsers.length ? "Responsáveis ausentes devem ser selecionados manualmente no preview." : "Responsáveis encontrados.");
     addCheck("Catálogo de Produtos", false, products.length, [], products.length ? "Catálogo disponível para conferência comercial." : "Catálogo vazio; Controle de Materiais usa Estoque como fonte operacional.");
-    addCheck("Estoque", true, materialNames.length - missingInventory.length, missingInventory, missingInventory.length ? "Importe Estoque antes do Controle de Materiais." : "Materiais encontrados no estoque.");
+    addCheck("Estoque", false, materialNames.length - missingInventory.length, missingInventory, missingInventory.length ? "Materiais ausentes devem ser selecionados manualmente no preview ou cadastrados antes de importar." : "Materiais encontrados no estoque.");
     addCheck("Catálogo de Serviços", false, services.length, [], services.length ? "Serviços disponíveis." : "Serviços não são obrigatórios para este PDF.");
     preview.fullyApplicableCount = fullyApplicableCount;
     preview.partiallyApplicableCount = partiallyApplicableCount;
     preview.blockedCount = blockedCount;
     preview.unresolvedItemCount = unresolvedItemCount;
-    preview.requiresPartialConfirmation = partiallyApplicableCount > 0 || blockedCount > 0 || unresolvedItemCount > 0;
+    preview.requiresPartialConfirmation = false;
+    preview.materialImport = materialImport;
+    preview.rows = materialImport.records.map((record: any) => ({
+      name: record.originalData.responsible || record.originalData.type,
+      detail: `${record.originalData.date} · ${record.originalData.type} · ${record.items.map((item: any) => `${item.quantity}x ${item.itemName || item.rawItem}`).join(", ")}`,
+      status: record.duplicate ? "duplicado" : record.status === "ready" ? "pronto" : "pendente",
+    }));
     preview.backup = {
       ...preview.backup,
       meta: {
@@ -212,6 +210,7 @@ async function attachPdfRestoreDependencies(preview: any) {
           blockedCount,
           unresolvedItemCount,
           matchingSource: "inventory",
+          previewHash: materialImport.hash,
         },
       },
     };
@@ -232,9 +231,12 @@ async function attachPdfRestoreDependencies(preview: any) {
     preview.pending.push(...blockedReasons.map(reason => `Dependência ausente: ${reason}`));
     preview.warnings.push("Importação bloqueada: conclua as dependências indicadas antes de aplicar este PDF.");
   }
-  if (preview?.restoreType === "materiais" && Number(preview.fullyApplicableCount || 0) + Number(preview.partiallyApplicableCount || 0) <= 0) {
+  if (preview?.restoreType === "materiais" && Number(preview.materialImport?.summary?.importableRows || 0) <= 0) {
     preview.canApply = false;
     preview.warnings.push("Importação bloqueada: nenhum registro aplicável foi encontrado contra as dependências atuais.");
+  } else if (preview?.restoreType === "materiais") {
+    preview.canApply = true;
+    preview.warnings.push(...(preview.materialImport?.warnings || []));
   }
   preview.warnings.push(...warnings);
   return preview;
@@ -4194,6 +4196,28 @@ export async function registerRoutes(
       const allowPartial = req.body?.allowPartial === true;
       if (!data || (!Array.isArray(data.withdrawals) && !Array.isArray(data.entries) && !Array.isArray(data.consumption))) {
         return res.status(400).json({ message: "Formato de backup inválido" });
+      }
+
+      if (req.body?.materialImport?.rows) {
+        const rows = normalizeMaterialPdfRows(req.body.materialImport.rows);
+        const result = await applyMaterialPdfImportRows({
+          rows,
+          storage,
+          sessionUserId: Number(req.session.userId || 0),
+          sourceHash: req.body?.meta?.restoreClassification?.previewHash || req.body?.meta?.sourceFile || req.body?.exportedAt,
+          applyToStock: false,
+        });
+        return res.json({
+          message: "Controle de materiais importado por PDF em modo merge seguro.",
+          updated: 0,
+          created: result.summary.retiradasCriadas,
+          movementsCreated: result.summary.movimentacoesCriadas,
+          skipped: result.summary.duplicadosIgnorados,
+          duplicateRecords: result.summary.duplicadosIgnorados,
+          unresolvedItems: result.summary.pendentesRestantes,
+          summary: result.summary,
+          pendingRows: rows.filter(row => row.status !== "ok" || row.duplicate || !row.inventoryId || (row.type === "retirada" && !row.userId)).slice(0, 80),
+        });
       }
 
       const normalizeRestoreKey = (value: any) => String(value || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
