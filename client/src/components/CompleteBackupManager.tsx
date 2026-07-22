@@ -65,6 +65,11 @@ type PdfRestorePreview = {
       duplicates: number;
       blocked: number;
       importableRows: number;
+      occurrences?: number;
+      uniqueMaterials?: number;
+      uniqueResponsibleNames?: number;
+      unresolvedMaterials?: number;
+      unresolvedUsers?: number;
     };
     records: Array<{
       temporaryId: string;
@@ -74,6 +79,13 @@ type PdfRestorePreview = {
       status: "ready" | "pending" | "duplicate" | "blocked";
       duplicate: boolean;
       errors: string[];
+      pendingDetails?: Array<{
+        originalText: string;
+        type: string;
+        reason: string;
+        candidates: Array<{ label: string; score: number }>;
+        action: string;
+      }>;
       items: Array<any>;
     }>;
     rows: Array<any>;
@@ -546,7 +558,9 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
     try {
       let imported = 0;
       let materialPendingAfterImport = 0;
+      const importReports: string[] = [];
       for (const preview of applicable) {
+        const startedAt = performance.now();
         const response = await fetch(`/api/backup/restore/${preview.restoreType}?mode=merge`, {
           method: "POST",
           credentials: "include",
@@ -561,6 +575,8 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
         if (!response.ok) throw new Error(result.message || `Falha ao importar ${preview.fileName}.`);
         imported += Number(result.created || 0) + Number(result.updated || 0) + Number(result.movementsCreated || 0);
         materialPendingAfterImport += Number(result.summary?.pendentesRestantes || result.unresolvedItems || 0);
+        const report = result.importReport || result.summary || {};
+        importReports.push(`${pdfRestoreLabel(preview)}: ${Number(result.created || 0)} retirada(s), ${Number(result.movementsCreated || 0)} movimento(s), ${Number(report.pendencias || result.summary?.pendentesRestantes || 0)} pendência(s), ${Number(report.duplicados || result.summary?.duplicadosIgnorados || 0)} duplicado(s), ${Math.round(performance.now() - startedAt)} ms.`);
       }
       setHistory(savePdfImportHistory({
         id: Date.now().toString(36),
@@ -575,8 +591,8 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
         backupGenerated: Boolean(safetyBackup),
       }));
       setMessage(materialPendingAfterImport > 0
-        ? `${applicable.length} PDF(s) processado(s). Registros prontos importados; ${materialPendingAfterImport} pendência(s) continuam no preview.`
-        : `${applicable.length} PDF(s) importado(s) em modo merge.`);
+        ? `${applicable.length} PDF(s) processado(s). Registros prontos importados; ${materialPendingAfterImport} pendência(s) continuam no preview. ${importReports.join(" ")}`
+        : `${applicable.length} PDF(s) importado(s) em modo merge. ${importReports.join(" ")}`);
       setConfirmation("");
       if (materialPendingAfterImport <= 0) {
         setPreviews([]);
@@ -734,6 +750,13 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
                       <span className="rounded-full bg-slate-200 px-2 py-1 font-semibold text-slate-700">Duplicados: {preview.materialImport.summary.duplicates}</span>
                     </div>
                     <div className="max-h-96 space-y-3 overflow-y-auto">
+                      <div className="grid gap-2 rounded-md border border-amber-200 bg-white p-3 sm:grid-cols-5">
+                        <div><strong>{preview.materialImport.summary.occurrences || preview.materialImport.rows.length}</strong><p className="text-slate-500">ocorrências avaliadas</p></div>
+                        <div><strong>{preview.materialImport.summary.uniqueMaterials || 0}</strong><p className="text-slate-500">materiais únicos</p></div>
+                        <div><strong>{preview.materialImport.summary.uniqueResponsibleNames || 0}</strong><p className="text-slate-500">responsáveis</p></div>
+                        <div><strong>{preview.materialImport.summary.unresolvedMaterials || 0}</strong><p className="text-slate-500">materiais a confirmar</p></div>
+                        <div><strong>{preview.materialImport.summary.unresolvedUsers || 0}</strong><p className="text-slate-500">responsáveis a confirmar</p></div>
+                      </div>
                       {preview.materialImport.records.slice(0, 80).map(record => (
                         <div key={record.temporaryId} className="rounded-md border border-amber-200 bg-white p-3">
                           <div className="grid gap-2 sm:grid-cols-5">
@@ -790,6 +813,22 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
                               </div>
                             ))}
                           </div>
+                          {record.pendingDetails && record.pendingDetails.length > 0 && (
+                            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2">
+                              <p className="font-bold text-amber-900">Pendências deste registro</p>
+                              <div className="mt-2 space-y-2">
+                                {record.pendingDetails.map((detail, index) => (
+                                  <div key={`${detail.originalText}-${index}`} className="rounded bg-white p-2">
+                                    <p><strong>Texto original:</strong> {detail.originalText || "—"}</p>
+                                    <p><strong>Tipo:</strong> {detail.type}</p>
+                                    <p><strong>Motivo:</strong> {detail.reason}</p>
+                                    <p><strong>Ação sugerida:</strong> {detail.action}</p>
+                                    <p><strong>Possíveis correspondências:</strong> {detail.candidates.length ? detail.candidates.map(candidate => `${candidate.label} (${candidate.score})`).join(" · ") : "nenhuma correspondência segura"}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

@@ -41,6 +41,13 @@ type MaterialPdfPreviewRecord = {
   status: "ready" | "pending" | "duplicate" | "blocked";
   duplicate: boolean;
   errors: string[];
+  pendingDetails?: Array<{
+    originalText: string;
+    type: string;
+    reason: string;
+    candidates: Array<{ label: string; score: number }>;
+    action: string;
+  }>;
 };
 
 type PreviewContext = {
@@ -129,6 +136,25 @@ function userCandidates(users: any[]): MobileImportUser[] {
     roleLabel: user.roleLabel,
     role: user.role,
   }));
+}
+
+function candidateList<T>(
+  query: string,
+  candidates: T[],
+  label: (candidate: T) => string,
+) {
+  const key = normalizeRestoreText(query);
+  if (!key) return [];
+  return candidates
+    .map(candidate => {
+      const candidateLabel = label(candidate);
+      const candidateKey = normalizeRestoreText(candidateLabel);
+      const score = candidateKey === key ? 100 : candidateKey.includes(key) || key.includes(candidateKey) ? 70 : 0;
+      return { label: candidateLabel, score };
+    })
+    .filter(candidate => candidate.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
 }
 
 function existingFingerprints(existingWithdrawals: any[], existingMovements: any[]) {
@@ -221,6 +247,33 @@ export function buildMaterialPdfImportPreview(data: any, context: PreviewContext
     }
 
     rows.push(...itemRows);
+    const pendingDetails = [
+      ...(unresolvedUser ? [{
+        originalText: record.responsible || "sem responsável",
+        type: "funcionário",
+        reason: "Responsável da retirada não foi encontrado com score seguro no cadastro de usuários.",
+        candidates: candidateList(record.responsible, users, user => `${user.username}${user.fullName ? ` · ${user.fullName}` : ""}`),
+        action: "Selecione o funcionário correto no preview ou cadastre o usuário antes da importação.",
+      }] : []),
+      ...itemRows
+        .filter(row => !row.inventoryId || row.warnings?.some(warning => warning.toLowerCase().includes("material")))
+        .map(row => ({
+          originalText: row.rawItem || row.rawText,
+          type: "material",
+          reason: !row.rawItem ? "Nome do material ausente na linha do PDF." : "Material não encontrado no Estoque com score seguro.",
+          candidates: candidateList(row.rawItem || row.rawText, inventory, item => item.name),
+          action: "Selecione o material correto no preview ou cadastre o item no Estoque antes da importação.",
+        })),
+      ...itemRows
+        .filter(row => row.warnings?.some(warning => warning.toLowerCase().includes("quantidade")))
+        .map(row => ({
+          originalText: row.rawText,
+          type: "quantidade",
+          reason: "Quantidade ausente ou inválida na linha do PDF.",
+          candidates: [],
+          action: "Revise o PDF original e ignore/corrija o item antes de importar.",
+        })),
+    ];
     records.push({
       temporaryId,
       originalData: {
@@ -236,6 +289,7 @@ export function buildMaterialPdfImportPreview(data: any, context: PreviewContext
       status: duplicate ? "duplicate" : recordErrors.length || itemRows.some(row => row.status !== "ok") ? "pending" : "ready",
       duplicate,
       errors: recordErrors,
+      pendingDetails,
     });
     order++;
   }
@@ -244,8 +298,13 @@ export function buildMaterialPdfImportPreview(data: any, context: PreviewContext
   const pendingRecords = records.filter(record => record.status === "pending").length;
   const duplicateRecords = records.filter(record => record.status === "duplicate").length;
   const blockedRecords = records.filter(record => record.status === "blocked").length;
+  const uniqueMaterialNames = new Set(rows.map(row => normalizeRestoreText(row.rawItem)).filter(Boolean)).size;
+  const uniqueResponsibleNames = new Set(records.map(record => normalizeRestoreText(record.originalData.responsible)).filter(Boolean)).size;
+  const unresolvedMaterials = new Set(rows.filter(row => !row.inventoryId).map(row => normalizeRestoreText(row.rawItem)).filter(Boolean)).size;
+  const unresolvedUsers = new Set(records.filter(record => record.unresolvedUser).map(record => normalizeRestoreText(record.unresolvedUser || "")).filter(Boolean)).size;
   if (pendingRecords) warnings.push(`${pendingRecords} registro(s) aguardam resolução manual antes de importar.`);
   if (duplicateRecords) warnings.push(`${duplicateRecords} registro(s) já foram importados e serão ignorados.`);
+  warnings.push(`${rows.length} ocorrência(s) avaliada(s), ${uniqueMaterialNames} material(is) único(s), ${uniqueResponsibleNames} responsável(is), ${unresolvedMaterials} material(is) e ${unresolvedUsers} responsável(is) precisam de confirmação.`);
 
   return {
     hash: materialImportHash(data),
@@ -256,6 +315,11 @@ export function buildMaterialPdfImportPreview(data: any, context: PreviewContext
       duplicates: duplicateRecords,
       blocked: blockedRecords,
       importableRows: rows.filter(row => row.status === "ok" && !row.duplicate && row.inventoryId && (row.type !== "retirada" || row.userId)).length,
+      occurrences: rows.length,
+      uniqueMaterials: uniqueMaterialNames,
+      uniqueResponsibleNames,
+      unresolvedMaterials,
+      unresolvedUsers,
     },
     records,
     rows,
@@ -316,6 +380,7 @@ export async function applyMaterialPdfImportRows(input: {
   const movements: any[] = [];
   const withdrawals: any[] = [];
   let skippedDuplicates = 0;
+  const startedAt = Date.now();
 
   const groups = new Map<string, MobileImportPreviewRow[]>();
   for (const row of importable) {
@@ -440,9 +505,24 @@ export async function applyMaterialPdfImportRows(input: {
       registrosImportados: withdrawals.length + movements.length,
       retiradasCriadas: withdrawals.length,
       movimentacoesCriadas: movements.length,
+      entradasCriadas: movements.filter(movement => movement.type === "ENTRADA").length,
+      saidasCriadas: movements.filter(movement => movement.type !== "ENTRADA").length,
       duplicadosIgnorados: skippedDuplicates,
       pendentesRestantes: pending.length,
       aliasesSalvos: savedAliases.length,
+      linhasAvaliadas: input.rows.length,
+      linhasImportaveis: importable.length,
+      tempoMs: Date.now() - startedAt,
+      relatorio: {
+        modulo: "Controle de Materiais",
+        retiradas: withdrawals.length,
+        movimentos: movements.length,
+        entradas: movements.filter(movement => movement.type === "ENTRADA").length,
+        saidas: movements.filter(movement => movement.type !== "ENTRADA").length,
+        pendencias: pending.length,
+        duplicados: skippedDuplicates,
+        aliases: savedAliases.length,
+      },
     },
   };
 }

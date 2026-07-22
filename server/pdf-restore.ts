@@ -262,7 +262,7 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
       preview.ignored.push("Admin será preservado e não será sobrescrito.");
     } else if (!cargo) {
       preview.pendingCount++;
-      preview.pending.push(`${login}: cargo/perfil/status não foram extraídos com segurança.`);
+      preview.pending.push(`${login}: cargo ausente no PDF. Perfil extraído: ${perfil || "não identificado"}. Status extraído: ${status || "não identificado"}. Ação sugerida: confirmar o cargo antes de importar.`);
     } else {
       preview.newCount++;
     }
@@ -279,7 +279,7 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
   preview.existingCount = 1;
   preview.backup = { type: "usuarios", version: "erp-pdf-preview", exportedAt: new Date().toISOString(), data: { users, roles } };
   preview.canApply = users.some(user => user.username !== "Admin") || roles.length > 0;
-  if (preview.pendingCount) preview.warnings.push("Alguns usuários ficaram pendentes por quebra de coluna no PDF.");
+  if (preview.pendingCount) preview.warnings.push("Alguns usuários ficaram pendentes porque o cargo não foi lido com segurança no PDF. Confirme o cargo antes de importar.");
   return preview;
 }
 

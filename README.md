@@ -1,92 +1,138 @@
 # ERP IMPPEL
 
-ERP operacional da IMPPEL Impermeabilização, focado em orçamento, execução de obras, controle de materiais, estoque, CRM/WhatsApp, garantias, pós-venda e financeiro.
+ERP operacional da IMPPEL Impermeabilizacao para orçamento, obras, controle de materiais, estoque, ferramentas retornaveis, usuarios, backup/restauracao e operacao diaria da equipe.
 
-## Visão Geral
+Esta base representa a versao 1.0 congelada para implantacao no Replit oficial da empresa. Apos esta release, novas evolucoes devem entrar como versoes 1.x.
 
-O sistema organiza o fluxo principal da operação:
+## Arquitetura
 
-Lead → CRM/WhatsApp → Orçamento → Ordem de Serviço → Retirada/consumo de materiais → Estoque → Finalização → Garantia/Pós-venda → Pagamento → Financeiro.
+- Frontend: React 18, Vite, Wouter, TailwindCSS, shadcn/ui e React Query.
+- Backend: Express.js com APIs JSON.
+- Banco: PostgreSQL.
+- ORM/schema: Drizzle ORM em `shared/schema.ts`.
+- Autenticacao: `express-session`; em ambiente com `DATABASE_URL`, sessoes persistem no PostgreSQL via `connect-pg-simple`.
+- Build: `npm run build` gera frontend em `dist/public` e backend em `dist/index.cjs`.
+- Inicio em producao: `npm start` executa `node dist/index.cjs`.
 
-O objetivo desta versão é servir como piloto interno controlado, com foco em estabilidade, rastreabilidade e uso mobile pelos funcionários.
+## Modulos principais
 
-## Tecnologias
+- Login, sessoes e bootstrap idempotente do Admin.
+- Usuarios, cargos e permissoes por perfil.
+- Produtos, servicos e estoque.
+- Ferramentas e Equipamentos com total, disponivel, em campo, danificado, perdido e manutencao.
+- Controle de Materiais com retiradas, devolucoes, fotos, assinaturas, historico e movimentacoes.
+- Registro Rapido e Contagem Rapida.
+- Vendas de materiais com permissao e validacao de estoque.
+- Orcamentos, OS, obras, calendario, garantias, pos-venda e financeiro.
+- Backup completo, exportacoes PDF e restore por PDF com preview e merge.
 
-- Frontend: React 18, Vite, Wouter, TailwindCSS, shadcn/ui
-- Backend: Express.js
-- Banco de dados: PostgreSQL
-- ORM: Drizzle ORM
-- Autenticação: sessão Express com armazenamento em PostgreSQL quando `DATABASE_URL` está configurada
+## Variaveis de ambiente
 
-## Instalação
-
-```bash
-npm install
-```
-
-Crie um arquivo `.env` com base em `.env.example` e configure as variáveis necessárias.
-
-## Variáveis de Ambiente
+Crie `.env` local ou configure Secrets no provedor. Nunca envie valores reais ao GitHub.
 
 ```bash
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
-SESSION_SECRET=change-this-to-a-long-random-secret
+SESSION_SECRET=segredo-longo-e-aleatorio
 DEFAULT_ADMIN_USERNAME=Admin
-DEFAULT_ADMIN_PASSWORD=change-this-before-production
+DEFAULT_ADMIN_PASSWORD=senha-inicial-segura
 PORT=5000
+NODE_ENV=production
 ```
 
-Observações:
+Observacoes:
 
-- `DATABASE_URL` é obrigatório para usar PostgreSQL.
-- `SESSION_SECRET` é obrigatório em produção.
-- `DEFAULT_ADMIN_PASSWORD` deve ser definido antes do primeiro deploy em produção/Replit.
-- O arquivo `.env` não deve ser enviado ao GitHub.
+- `DATABASE_URL` e obrigatorio para PostgreSQL persistente.
+- `SESSION_SECRET` e obrigatorio em producao.
+- `DEFAULT_ADMIN_PASSWORD` deve existir antes do primeiro startup em banco vazio.
+- O Admin e criado automaticamente se nao existir; se ja existir, nao e duplicado.
 
-## Rodar em Desenvolvimento
+## Instalar e rodar localmente
 
 ```bash
+npm install
 npm run dev
 ```
 
-A aplicação sobe na porta definida por `PORT` ou, por padrão, em `5000`.
+A aplicacao sobe na porta `PORT` ou `5000`.
 
-## Build e Produção
+## Banco de dados
+
+Aplicar schema no banco configurado:
+
+```bash
+npm run db:push
+```
+
+Antes de rodar, confirme se `DATABASE_URL` aponta para Desenvolvimento ou Producao. Nao rode em banco real sem backup e confirmacao.
+
+## Build e producao
 
 ```bash
 npm run build
 npm start
 ```
 
-## Banco de Dados
-
-Para aplicar o schema no banco configurado:
+## Testes
 
 ```bash
-npm run db:push
+npx tsc --noEmit --incremental false
+npm run build
+npm run test
+npm run test:backup
+npm run test:operational
+git diff --check
 ```
 
-Não rode esse comando sem conferir se `DATABASE_URL` aponta para o banco correto.
+## Backup e restauracao
 
-## Replit
+Ordem recomendada para importar PDFs em ambiente novo:
 
-O projeto já possui `.replit` configurado para Node.js 20 e PostgreSQL 16.
+1. Usuarios e Cargos.
+2. Catalogo de Produtos.
+3. Catalogo de Servicos.
+4. Estoque.
+5. Controle de Materiais.
 
-Checklist no Replit:
+Sempre gere preview antes de confirmar. O restore opera em merge seguro, nao inventa usuarios, materiais ou cargos, nao cria fotos/assinaturas falsas e preserva duplicidades por fingerprints.
 
-- Importar o repositório do GitHub.
-- Configurar Secrets: `DATABASE_URL`, `SESSION_SECRET`, `DEFAULT_ADMIN_PASSWORD` e, opcionalmente, `DEFAULT_ADMIN_USERNAME`.
-- Rodar `npm install`.
-- Rodar `npm run db:push` quando o banco estiver correto.
-- Testar com `npm run dev`.
-- Para deploy, usar o build configurado: `npm run build` e `node ./dist/index.cjs`.
+## Como publicar no Replit
 
-## Piloto Interno
+1. Importar o repositorio GitHub oficial.
+2. Criar ou conectar PostgreSQL.
+3. Configurar Secrets: `DATABASE_URL`, `SESSION_SECRET`, `DEFAULT_ADMIN_USERNAME`, `DEFAULT_ADMIN_PASSWORD`.
+4. Rodar `npm install`.
+5. Confirmar banco correto.
+6. Rodar `npm run db:push`.
+7. Iniciar com `npm run dev` para validacao.
+8. Fazer login com Admin.
+9. Importar PDFs na ordem recomendada.
+10. Resolver pendencias no preview.
+11. Importar novamente os mesmos PDFs para confirmar ausencia de duplicidade.
+12. Gerar backup completo inicial e guardar fora do GitHub.
 
-Antes de liberar para uso diário:
+## Atualizar o ERP
 
-- Criar usuário administrador com senha forte via `DEFAULT_ADMIN_PASSWORD`.
-- Testar o fluxo completo: lead, orçamento, OS, materiais, estoque, garantia/pós-venda, pagamento e financeiro.
-- Validar permissões de acesso com usuários reais.
-- Conferir dados de contato dos clientes antes de acionar WhatsApp/pós-venda.
-- Fazer backup do banco antes de testes com dados reais.
+```bash
+git pull --ff-only origin main
+npm install
+npm run build
+npm run test
+```
+
+Depois reinicie o ambiente. GitHub sincroniza codigo; dados do banco nao sao sincronizados automaticamente.
+
+## Trocar senha
+
+Use a tela oficial de usuarios/reset de senha. Nao edite hash manualmente no banco. Para banco novo, altere `DEFAULT_ADMIN_PASSWORD` antes do primeiro startup.
+
+## Documentacao oficial
+
+- `PROMPT_MESTRE.md`
+- `BACKLOG.md`
+- `CHANGELOG.md`
+- `KNOWN_ISSUES.md`
+- `ROADMAP.md`
+- `DEPLOY_CHECKLIST.md`
+- `RELEASE_NOTES_v1.0.md`
+- `DEPLOYMENT.md`
+- `AI_CONTEXT.md`

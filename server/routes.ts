@@ -4208,6 +4208,15 @@ export async function registerRoutes(
           sourceHash: req.body?.meta?.restoreClassification?.previewHash || req.body?.meta?.sourceFile || req.body?.exportedAt,
           applyToStock: false,
         });
+        console.info("[restore:pdf:materiais]", JSON.stringify({
+          module: "Controle de Materiais",
+          createdWithdrawals: result.summary.retiradasCriadas,
+          createdMovements: result.summary.movimentacoesCriadas,
+          pending: result.summary.pendentesRestantes,
+          duplicates: result.summary.duplicadosIgnorados,
+          aliases: result.summary.aliasesSalvos,
+          durationMs: result.summary.tempoMs,
+        }));
         return res.json({
           message: "Controle de materiais importado por PDF em modo merge seguro.",
           updated: 0,
@@ -4217,6 +4226,7 @@ export async function registerRoutes(
           duplicateRecords: result.summary.duplicadosIgnorados,
           unresolvedItems: result.summary.pendentesRestantes,
           summary: result.summary,
+          importReport: result.summary.relatorio,
           pendingRows: rows.filter(row => row.status !== "ok" || row.duplicate || !row.inventoryId || (row.type === "retirada" && !row.userId)).slice(0, 80),
         });
       }

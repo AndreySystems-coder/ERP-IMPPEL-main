@@ -3,6 +3,24 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-22] - Release engineering 1.0
+
+### Adicionado
+
+- Criado `DEPLOY_CHECKLIST.md` com passo a passo de implantacao no Replit oficial, configuracao de PostgreSQL, secrets, schema, importacao dos PDFs e backup inicial.
+- Criado `RELEASE_NOTES_v1.0.md` com novidades, correcoes, limitacoes e pendencias dependentes da empresa.
+
+### Corrigido
+
+- Preview de Usuarios/Cargos passou a informar especificamente quando o cargo esta ausente, sem mensagem generica de `cargo/perfil/status`.
+- Preview de Controle de Materiais passou a expor ocorrencias avaliadas, materiais unicos, responsaveis, pendencias detalhadas, possiveis correspondencias, score e acao sugerida.
+- Resultado de importacao PDF de Controle de Materiais passou a devolver relatorio detalhado e registrar resumo estruturado no log do backend.
+- README foi atualizado para refletir arquitetura, instalacao, variaveis, banco, testes, backup, restore, publicacao no Replit e atualizacao do ERP.
+
+### Escopo
+
+- Nenhuma regra de negocio, schema, API publica, fingerprint, alias, score de matching, `applyToStock` ou parser de aplicacao foi alterado para forcar importacoes.
+
 ## [2026-07-22] - Correcao final de homologacao de backup e estoque
 
 ### Corrigido

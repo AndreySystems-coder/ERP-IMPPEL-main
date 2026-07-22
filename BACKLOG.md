@@ -31,6 +31,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Manter CHANGELOG.md atualizado a cada sprint com commits, testes e impacto funcional.
 - Manter KNOWN_ISSUES.md como fonte viva de riscos, workarounds e pendencias.
 - Manter ROADMAP.md alinhado com prioridades reais do ERP em producao.
+- Apos congelamento da base 1.0, iniciar novas evolucoes apenas como versoes 1.x em sprints separadas.
 
 ## Migrado de docs/task_plan.md
 

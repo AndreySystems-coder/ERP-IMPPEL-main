@@ -94,7 +94,7 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Impacto: o parser, a classificacao, o bootstrap Admin e os testes automatizados passaram, mas a aprovacao operacional final exige restaurar os cinco PDFs reais em banco PostgreSQL descartavel, repetir a importacao e comparar duplicidade/saldos.
 - Arquivos envolvidos: `server/routes.ts`, `server/pdf-restore.ts`, `server/material-restore-service.ts`, `server/admin-bootstrap.ts`, `client/src/components/CompleteBackupManager.tsx`.
 - Workaround: executar a validacao em Replit/dev com banco clonado ou PostgreSQL temporario, nunca em producao.
-- Status: pendente de ambiente externo; correcoes automatizadas de midia historica, valores monetarios, data de nascimento e saldo negativo foram aplicadas, mas a aprovacao final `CONTROLE DE MATERIAIS VALIDADO PARA RESTAURACAO` ainda depende de PostgreSQL descartavel com PDFs reais.
+- Status: pendente de ambiente externo; release 1.0 documenta a implantacao e melhora previews/relatorios, mas a aprovacao final `CONTROLE DE MATERIAIS VALIDADO PARA RESTAURACAO` ainda depende de PostgreSQL descartavel com PDFs reais.
 
 ### KI-010 - Restore PDF ainda nao possui tabela dedicada de import jobs/fingerprints
 
