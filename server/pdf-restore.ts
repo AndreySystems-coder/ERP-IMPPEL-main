@@ -1,4 +1,5 @@
 import { buildMaterialControlContract } from "@shared/materialControlBackup";
+import { parseBrazilianMoney } from "@shared/money";
 
 type BackupType =
   | "usuarios"
@@ -99,15 +100,7 @@ function normalizeKey(value: string) {
 }
 
 function parseMoney(value = "") {
-  const clean = value.replace(/\s+/g, " ").replace(/^R\$\s*/i, "").trim();
-  if (!clean || clean === "—" || clean === "-") return 0;
-
-  if (clean.includes(",")) {
-    return Number(clean.replace(/\./g, "").replace(",", ".")) || 0;
-  }
-
-  const match = clean.match(/(\d[\d.]*)/);
-  return match ? Number(match[1]) || 0 : 0;
+  return parseBrazilianMoney(value, 0);
 }
 
 function parsePercent(value = "") {
@@ -697,8 +690,8 @@ function parseMaterials(fileName: string, selectedType: BackupType, report: Retu
         jobId: null,
         clientName: null,
         withdrawalDate: current.date,
-        withdrawalPhoto: "restauracao-pdf-materiais",
-        withdrawalSignature: "restauracao-pdf-materiais",
+        withdrawalPhoto: null,
+        withdrawalSignature: null,
         returnPhoto: null,
         returnSignature: null,
         returnNotes: null,

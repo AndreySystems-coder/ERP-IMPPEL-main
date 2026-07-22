@@ -38,6 +38,7 @@ import {
   buildMaterialPdfImportPreview,
   normalizeMaterialPdfRows,
 } from "./material-pdf-import-service";
+import { parseBrazilianMoney } from "@shared/money";
 
 const BCRYPT_ROUNDS = 10;
 const operationalResetTokens = new Map<string, number>();
@@ -73,14 +74,7 @@ function normalizeMoneyReais(value: unknown, options: { fallback?: number; field
   if (value === null || value === undefined || value === "") return fallback;
   let normalized: number;
   if (typeof value === "string") {
-    const raw = value.trim();
-    if (!raw) return fallback;
-    const hasComma = raw.includes(",");
-    const cleaned = raw.replace(/[^\d,.-]/g, "");
-    const decimalNormalized = hasComma
-      ? cleaned.replace(/\./g, "").replace(",", ".")
-      : cleaned;
-    normalized = Number(decimalNormalized);
+    normalized = parseBrazilianMoney(value, fallback);
   } else {
     normalized = Number(value);
   }
@@ -429,7 +423,7 @@ function resolveSaleInventoryItem(product: any, inventoryItems: any[]) {
 
 const operationalEmployeeSchema = z.object({
   nomeCompleto: z.string().min(2),
-  dataNascimento: z.string().min(8).optional(),
+  dataNascimento: z.string().optional(),
   cargo: z.string().optional(),
   perfil: z.string().optional(),
   status: z.string().optional(),
@@ -893,11 +887,12 @@ export async function registerRoutes(
           if (existing) {
             if (!updateExisting) { result.existing++; continue; }
             const updates: any = { fullName: employee.nomeCompleto, birthDate: employee.dataNascimento, role: profile, roleId: assignedRole.id, jobTitle: assignedRole.label, status };
-            if (resetPasswords) { updates.password = await bcrypt.hash(employee.senhaInicial, BCRYPT_ROUNDS); updates.mustChangePassword = false; }
+            if (resetPasswords && employee.senhaInicial) { updates.password = await bcrypt.hash(employee.senhaInicial, BCRYPT_ROUNDS); updates.mustChangePassword = false; }
             await storage.updateUser(existing.id, updates);
             result.updated++;
             continue;
           }
+          if (!employee.senhaInicial) throw new Error("Senha inicial ausente: informe data de nascimento ou senha inicial para criar usuário.");
           await storage.createUser({
             username: employee.login,
             password: await bcrypt.hash(employee.senhaInicial, BCRYPT_ROUNDS),
@@ -3852,7 +3847,7 @@ export async function registerRoutes(
 
       const restoreBirthDate = (user: any, initialPassword: string) => {
         const supplied = String(user?.birthDate || user?.dataNascimento || user?.birth_date || "").trim();
-        if (supplied) return supplied;
+        if (supplied) return normalizeOperationalEmployee({ nomeCompleto: "Validação Temporária", dataNascimento: supplied }).dataNascimento;
         const digits = initialPassword.replace(/\D/g, "");
         return digits.length === 8 ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}` : null;
       };
@@ -4337,8 +4332,8 @@ export async function registerRoutes(
           clientName: withdrawal.clientName || null,
           withdrawalDate: date,
           status: withdrawal.status || "pendente",
-          withdrawalPhoto: withdrawal.withdrawalPhoto || "restauracao-pdf-materiais",
-          withdrawalSignature: withdrawal.withdrawalSignature || "restauracao-pdf-materiais",
+          withdrawalPhoto: withdrawal.withdrawalPhoto || null,
+          withdrawalSignature: withdrawal.withdrawalSignature || null,
           notes: `Importação PDF Controle de Materiais | hash:${withdrawal.sourceHash || "sem-hash"} | fingerprint:${withdrawalFingerprint}${withdrawal.notes ? " | " + withdrawal.notes : ""}${unresolvedItems.length ? " | ITENS_NAO_RESTAURADOS: " + unresolvedItems.join(", ") : ""}`,
           returnPhoto: withdrawal.returnPhoto || null,
           returnSignature: withdrawal.returnSignature || null,

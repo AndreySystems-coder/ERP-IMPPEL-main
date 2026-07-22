@@ -174,7 +174,7 @@ export interface IStorage {
   getInventoryMovements(): Promise<InventoryMovement[]>;
   getInventoryMovementsByProduct(inventoryId: number): Promise<InventoryMovement[]>;
   getInventoryMovement(id: number): Promise<InventoryMovement | undefined>;
-  createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }, options?: { applyToStock?: boolean }): Promise<InventoryMovement>;
+  createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }, options?: { applyToStock?: boolean; allowNegativeStock?: boolean }): Promise<InventoryMovement>;
   updateInventoryMovement(id: number, data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }): Promise<InventoryMovement | undefined>;
   deleteInventoryMovement(id: number): Promise<void>;
 
@@ -551,7 +551,15 @@ export class DatabaseStorage implements IStorage {
     const [mov] = await db.select().from(inventoryMovements).where(eq(inventoryMovements.id, id));
     return mov;
   }
-  async createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }, options: { applyToStock?: boolean } = {}): Promise<InventoryMovement> {
+  async createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }, options: { applyToStock?: boolean; allowNegativeStock?: boolean } = {}): Promise<InventoryMovement> {
+    if (options.applyToStock !== false && data.type !== "ENTRADA" && options.allowNegativeStock !== true) {
+      const [item] = await db.select().from(inventory).where(eq(inventory.id, data.inventoryId));
+      const available = Number(item?.quantity || 0);
+      const requested = Number(data.quantity || 0);
+      if (!item || requested > available) {
+        throw new Error(`Estoque insuficiente para ${data.productName}: solicitado ${requested}, disponível ${available}.`);
+      }
+    }
     const [mov] = await db.insert(inventoryMovements).values(data).returning();
     if (options.applyToStock !== false) {
       const delta = data.type === "ENTRADA" ? data.quantity : -data.quantity;
@@ -1446,7 +1454,15 @@ export function createMemoryStorage(): IStorage {
     },
     getInventoryMovementsByProduct: async (inventoryId: number) => data.inventoryMovements.filter(row => row.inventoryId === inventoryId),
     getInventoryMovement: async (id: number) => data.inventoryMovements.find(row => row.id === id),
-    createInventoryMovement: async (row: any, options: { applyToStock?: boolean } = {}) => {
+    createInventoryMovement: async (row: any, options: { applyToStock?: boolean; allowNegativeStock?: boolean } = {}) => {
+      if (options.applyToStock !== false && row?.type !== "ENTRADA" && options.allowNegativeStock !== true) {
+        const item = data.inventory.find(inv => Number(inv.id) === Number(row.inventoryId));
+        const available = Number(item?.quantity || 0);
+        const requested = Number(row?.quantity || 0);
+        if (!item || requested > available) {
+          throw new Error(`Estoque insuficiente para ${row?.productName || "item"}: solicitado ${requested}, disponível ${available}.`);
+        }
+      }
       const movement = insert("inventoryMovements", row || {});
       if (options.applyToStock !== false) {
         const item = data.inventory.find(inv => inv.id === movement.inventoryId);

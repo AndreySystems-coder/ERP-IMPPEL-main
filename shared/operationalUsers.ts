@@ -27,7 +27,7 @@ export type NormalizedOperationalEmployee = {
   login: string;
   senhaInicial: string;
   nomeCompleto: string;
-  dataNascimento: string;
+  dataNascimento: string | null;
   cargo: string;
   perfil: "Funcionário" | "Administrador";
   status: "Ativo" | "Inativo";
@@ -66,13 +66,14 @@ export function normalizeOperationalEmployee(input: OperationalEmployeeInput): N
   if (!nomeCompleto) throw new Error("Nome completo é obrigatório.");
   const initialDigits = String(input.senhaInicial || "").replace(/\D/g, "");
   const dateFromInitialPassword = initialDigits.length === 8 ? `${initialDigits.slice(0, 2)}/${initialDigits.slice(2, 4)}/${initialDigits.slice(4)}` : "";
-  const dataNascimento = normalizeBirthDate(String(input.dataNascimento || dateFromInitialPassword));
+  const birthDateSource = String(input.dataNascimento || dateFromInitialPassword || "").trim();
+  const dataNascimento = birthDateSource ? normalizeBirthDate(birthDateSource) : null;
   const perfil = String(input.perfil || "Funcionário").toLowerCase().startsWith("admin") ? "Administrador" : "Funcionário";
   const status = String(input.status || "Ativo").toLowerCase() === "inativo" ? "Inativo" : "Ativo";
   const suppliedLogin = String(input.login || "").trim();
   return {
     login: suppliedLogin ? suppliedLogin.split(".").map(normalizeLoginPart).filter(Boolean).join(".") : generateEmployeeLogin(nomeCompleto),
-    senhaInicial: initialDigits || generateInitialPassword(dataNascimento),
+    senhaInicial: initialDigits || (dataNascimento ? generateInitialPassword(dataNascimento) : ""),
     nomeCompleto,
     dataNascimento,
     cargo: String(input.cargo || TECHNICAL_TEAM_ROLE.label).trim() || TECHNICAL_TEAM_ROLE.label,

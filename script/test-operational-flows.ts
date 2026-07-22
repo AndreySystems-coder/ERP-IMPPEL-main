@@ -15,7 +15,8 @@ const {
   buildMaterialPdfImportPreview,
 } = await import("../server/material-pdf-import-service");
 const { canAccess, getDefaultLandingPath } = await import("../client/src/lib/permissions");
-const { generateInitialPassword } = await import("../shared/operationalUsers");
+const { generateInitialPassword, normalizeOperationalEmployee } = await import("../shared/operationalUsers");
+const { parseBrazilianMoney } = await import("../shared/money");
 const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMaterialItem, shouldRestoreReturnedQuantityToStock } = await import("../shared/materialReturnPolicy");
 const { getEffectiveMaterialSaleDiscountLimit } = await import("../shared/materialSalesPolicy");
 const { buildReturnableToolSummary } = await import("../shared/returnableToolSummary");
@@ -102,6 +103,19 @@ await storage.createInventoryMovement({
   notes: `RESTORE HISTORICO fingerprint:${fingerprintOne}`,
 }, { applyToStock: false });
 assert.equal((await storage.getInventoryItems()).find(item => item.id === exactInventory.id)?.quantity, 10, "movimento histórico de restore não deve alterar saldo já restaurado pelo Estoque");
+await assert.rejects(
+  () => storage.createInventoryMovement({
+    inventoryId: normalizedInventory.id,
+    productName: normalizedInventory.name,
+    type: "SAÍDA",
+    quantity: 6,
+    date: "2026-06-30",
+    notes: "Teste de proteção contra estoque negativo",
+  }),
+  /Estoque insuficiente/,
+  "movimentacao manual acima do estoque deve ser bloqueada na camada de storage",
+);
+assert.equal((await storage.getInventoryItems()).find(item => item.id === normalizedInventory.id)?.quantity, 5, "saldo deve permanecer intacto quando movimento manual e bloqueado");
 
 const materialPdfStorage = createMemoryStorage();
 const pdfUser = await materialPdfStorage.createUser({ username: "wellington.pires", password: "x", role: "funcionario", fullName: "Wellington Pires" } as any);
@@ -150,6 +164,9 @@ assert.equal(materialPdfApply.summary.retiradasCriadas, 1, "PDF resolvido deve c
 assert.equal(materialPdfApply.summary.movimentacoesCriadas, 3, "PDF resolvido deve criar movimentos historicos de retirada e entrada");
 assert.equal(materialPdfApply.summary.aliasesSalvos, 1, "aliases repetidos na mesma importacao devem ser deduplicados por batch");
 assert.equal((await materialPdfStorage.getMobileImportAliases()).filter(alias => alias.alias === "wellington.pires").length, 1, "mesmo responsavel repetido no PDF nao pode criar alias duplicado");
+const restoredPdfWithdrawal = (await materialPdfStorage.getMaterialWithdrawals())[0];
+assert.equal(restoredPdfWithdrawal.withdrawalPhoto, null, "restore historico por PDF nao deve criar foto falsa");
+assert.equal(restoredPdfWithdrawal.withdrawalSignature, null, "restore historico por PDF nao deve criar assinatura falsa");
 assert.equal((await materialPdfStorage.getInventoryItems()).find(item => item.id === pdfFuradeira.id)?.quantity, 3, "restore historico por PDF nao deve alterar saldo da ferramenta");
 const materialPdfDuplicatePreview = buildMaterialPdfImportPreview(materialPdfBackup, {
   inventory: await materialPdfStorage.getInventoryItems(),
@@ -225,6 +242,13 @@ await assert.rejects(
 assert.equal((await storage.getInventoryItems()).find(item => item.id === duplicatedStock.id)?.quantity, 1, "saldo deve permanecer intacto quando itens duplicados excedem estoque");
 
 assert.equal(generateInitialPassword("24/12/1996"), "24121996", "senha fixa operacional deve usar DDMMAAAA");
+assert.equal(normalizeOperationalEmployee({ nomeCompleto: "Funcionario Sem Data", login: "funcionario.sem.data" }).dataNascimento, null, "data de nascimento ausente deve ser aceita como null");
+assert.equal(normalizeOperationalEmployee({ nomeCompleto: "Funcionario Sem Data", login: "funcionario.sem.data", dataNascimento: "" }).dataNascimento, null, "data de nascimento vazia deve ser aceita como null");
+assert.throws(
+  () => normalizeOperationalEmployee({ nomeCompleto: "Funcionario Data Invalida", login: "funcionario.data.invalida", dataNascimento: "31/02/2026" }),
+  /Data de nascimento inválida/,
+  "data de nascimento invalida deve continuar rejeitada",
+);
 assert.equal(isConsumableMaterialItem({ productName: "Viaplus 1000" }), true, "Viaplus deve ser consumivel");
 const returnableToolNames = ["Aplicador de PU", "Marreta", "Talhadeira", "Lixadeira", "Furadeira", "Batedor para furadeira", "Mangueira", "Extensao", "Bomba de agua", "Soprador", "Vassoura"];
 for (const toolName of returnableToolNames) {
@@ -407,6 +431,12 @@ assert.equal(__testPdfRestoreParsing.parseMoney("R$ 990.00"), 990);
 assert.equal(__testPdfRestoreParsing.parseMoney("R$ 1923.00"), 1923);
 assert.equal(__testPdfRestoreParsing.parseMoney("R$ 95.15"), 95.15);
 assert.equal(__testPdfRestoreParsing.parseMoney("R$ 1.234,56"), 1234.56);
+assert.equal(parseBrazilianMoney("R$ 9.746,00"), 9746, "valor brasileiro com milhar e centavos deve ficar em reais");
+assert.equal(parseBrazilianMoney("9.746,00"), 9746, "valor sem simbolo com milhar e centavos deve ficar em reais");
+assert.equal(parseBrazilianMoney("136,44"), 136.44, "valor com virgula decimal deve preservar centavos");
+assert.equal(parseBrazilianMoney("39.20"), 39.2, "valor com ponto decimal deve preservar centavos sem multiplicar por 100");
+assert.equal(parseBrazilianMoney("2.800,00"), 2800, "valor 2.800,00 deve virar 2800 reais");
+assert.equal(parseBrazilianMoney("39,20"), 39.2, "valor 39,20 deve virar 39.20 reais");
 
 const productRows = Array.from({ length: 45 }, (_, index) => {
   const names = ["Viaplus 1000", "Viaplus 7000", "Barra de Asfalto"];

@@ -94,7 +94,7 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Impacto: o parser, a classificacao, o bootstrap Admin e os testes automatizados passaram, mas a aprovacao operacional final exige restaurar os cinco PDFs reais em banco PostgreSQL descartavel, repetir a importacao e comparar duplicidade/saldos.
 - Arquivos envolvidos: `server/routes.ts`, `server/pdf-restore.ts`, `server/material-restore-service.ts`, `server/admin-bootstrap.ts`, `client/src/components/CompleteBackupManager.tsx`.
 - Workaround: executar a validacao em Replit/dev com banco clonado ou PostgreSQL temporario, nunca em producao.
-- Status: pendente de ambiente externo; nao bloqueia commit da correcao, mas bloqueia aprovacao final `CONTROLE DE MATERIAIS VALIDADO PARA RESTAURACAO`.
+- Status: pendente de ambiente externo; correcoes automatizadas de midia historica, valores monetarios, data de nascimento e saldo negativo foram aplicadas, mas a aprovacao final `CONTROLE DE MATERIAIS VALIDADO PARA RESTAURACAO` ainda depende de PostgreSQL descartavel com PDFs reais.
 
 ### KI-010 - Restore PDF ainda nao possui tabela dedicada de import jobs/fingerprints
 
@@ -103,3 +103,11 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Impacto: a deduplicacao ficou mais deterministica para o fluxo atual, mas relatorios de importacao de longo prazo ainda dependem de campos textuais e historicos ja existentes.
 - Arquivos envolvidos: `shared/schema.ts`, `server/routes.ts`, `server/material-restore-service.ts`, `server/material-pdf-import-service.ts`.
 - Plano: criar migration segura para `import_jobs`/`import_fingerprints` em sprint dedicada com PostgreSQL descartavel, validando restore real antes de producao.
+
+### KI-011 - Servicos com custo zerado ainda precisam de aviso visual dedicado
+
+- Severidade: Melhoria.
+- Causa raiz: o motor de margem ja alerta quando o custo total fica zerado, mas a interface ainda nao possui mensagem especifica para `Custo de mao de obra nao configurado` em servicos cadastrados com mao de obra `0`.
+- Impacto: o calculo nao deve ser considerado margem real quando custo operacional estiver incompleto; exige revisao de UX antes do uso comercial amplo.
+- Arquivos envolvidos: `shared/marginEngine.ts`, componentes de orcamento/servicos.
+- Plano: adicionar aviso visual dedicado em sprint de margem/orcamentos, sem misturar com a correcao cirurgica do restore de materiais.

@@ -3,6 +3,19 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-22] - Correcao final de homologacao de backup e estoque
+
+### Corrigido
+
+- Restore historico por PDF de Controle de Materiais deixou de gravar marcadores artificiais em `withdrawalPhoto` e `withdrawalSignature`; ausencia de midia agora permanece `null`.
+- Parser monetario passou a usar normalizacao compartilhada para valores brasileiros e decimais, evitando multiplicacao indevida por 100 em produtos, servicos, estoque e rotas de cadastro.
+- Importacao operacional de usuarios passou a aceitar `dataNascimento` ausente ou vazia como `null`, mantendo rejeicao de datas invalidas.
+- Storage passou a bloquear criacao de movimentacao de saida acima do saldo quando a movimentacao altera estoque, protegendo qualquer rota contra saldo negativo acidental.
+
+### Validacao
+
+- Testes operacionais adicionados para dinheiro em reais, usuario sem data de nascimento, restore historico sem foto/assinatura falsa e bloqueio de saida manual acima do estoque.
+
 ## [2026-07-21] - Importacao PDF de Controle de Materiais pelo fluxo do Registro Rapido
 
 ### Corrigido
