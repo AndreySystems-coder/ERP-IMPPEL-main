@@ -148,6 +148,8 @@ const materialPdfApply = await applyMaterialPdfImportRows({
 });
 assert.equal(materialPdfApply.summary.retiradasCriadas, 1, "PDF resolvido deve criar retirada pelo fluxo compartilhado");
 assert.equal(materialPdfApply.summary.movimentacoesCriadas, 3, "PDF resolvido deve criar movimentos historicos de retirada e entrada");
+assert.equal(materialPdfApply.summary.aliasesSalvos, 1, "aliases repetidos na mesma importacao devem ser deduplicados por batch");
+assert.equal((await materialPdfStorage.getMobileImportAliases()).filter(alias => alias.alias === "wellington.pires").length, 1, "mesmo responsavel repetido no PDF nao pode criar alias duplicado");
 assert.equal((await materialPdfStorage.getInventoryItems()).find(item => item.id === pdfFuradeira.id)?.quantity, 3, "restore historico por PDF nao deve alterar saldo da ferramenta");
 const materialPdfDuplicatePreview = buildMaterialPdfImportPreview(materialPdfBackup, {
   inventory: await materialPdfStorage.getInventoryItems(),

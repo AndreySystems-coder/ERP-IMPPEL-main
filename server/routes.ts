@@ -4194,11 +4194,17 @@ export async function registerRoutes(
     try {
       const { data } = req.body;
       const allowPartial = req.body?.allowPartial === true;
-      if (!data || (!Array.isArray(data.withdrawals) && !Array.isArray(data.entries) && !Array.isArray(data.consumption))) {
+      const hasMaterialImportRows = Array.isArray(req.body?.materialImport?.rows);
+      const hasLegacyMaterialBackup = data && (
+        Array.isArray(data.withdrawals) ||
+        Array.isArray(data.entries) ||
+        Array.isArray(data.consumption)
+      );
+      if (!hasMaterialImportRows && !hasLegacyMaterialBackup) {
         return res.status(400).json({ message: "Formato de backup inválido" });
       }
 
-      if (req.body?.materialImport?.rows) {
+      if (hasMaterialImportRows) {
         const rows = normalizeMaterialPdfRows(req.body.materialImport.rows);
         const result = await applyMaterialPdfImportRows({
           rows,

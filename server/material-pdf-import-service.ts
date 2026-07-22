@@ -408,14 +408,20 @@ export async function applyMaterialPdfImportRows(input: {
     }
   }
 
-  const aliasesToSave = input.rows
+  const existingAliasKeys = new Set(existingAliases.map((item: any) => normalizeRestoreText(item.alias)));
+  const aliasesToSave = Array.from(input.rows
     .filter(row => row.type === "retirada" && row.rawEmployee && row.userId && row.username)
-    .map(row => ({ alias: String(row.rawEmployee), userId: Number(row.userId), username: String(row.username) }));
+    .reduce((map, row) => {
+      const alias = String(row.rawEmployee || "").trim();
+      const aliasKey = normalizeRestoreText(alias);
+      if (!alias || !aliasKey || existingAliasKeys.has(aliasKey) || map.has(aliasKey)) return map;
+      map.set(aliasKey, { alias, userId: Number(row.userId), username: String(row.username) });
+      return map;
+    }, new Map<string, { alias: string; userId: number; username: string }>()).values());
   const savedAliases: any[] = [];
   for (const aliasInput of aliasesToSave) {
     const aliasKey = normalizeRestoreText(aliasInput.alias);
-    const existing = existingAliases.find((item: any) => normalizeRestoreText(item.alias) === aliasKey);
-    if (existing) continue;
+    if (existingAliasKeys.has(aliasKey)) continue;
     savedAliases.push(await input.storage.createMobileImportAlias({
       alias: aliasInput.alias,
       userId: aliasInput.userId,
@@ -423,6 +429,7 @@ export async function applyMaterialPdfImportRows(input: {
       createdByUserId: Number(sessionUser?.id || aliasInput.userId),
       createdByUsername: String(sessionUser?.username || aliasInput.username),
     }));
+    existingAliasKeys.add(aliasKey);
   }
 
   return {
