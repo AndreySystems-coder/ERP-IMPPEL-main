@@ -39,6 +39,8 @@ import {
   normalizeMaterialPdfRows,
 } from "./material-pdf-import-service";
 import { parseBrazilianMoney } from "@shared/money";
+import { DEFAULT_ROLE_PERMISSIONS, normalizeRoleName } from "@shared/rolePermissions";
+import { restoreUsersAndRolesFromBackup } from "./user-restore-service";
 
 const BCRYPT_ROUNDS = 10;
 const operationalResetTokens = new Map<string, number>();
@@ -456,49 +458,6 @@ const DEFAULT_EMPLOYEE_PERMISSIONS = new Set([
   "registrarMaterials",
 ]);
 
-const DEFAULT_ROLE_PERMISSIONS: Array<{ name: string; label: string; permissions: Record<string, boolean> }> = [
-  {
-    name: "administrativo_financeiro",
-    label: "Administrativo / Financeiro",
-    permissions: {
-      viewDashboard: true, viewFinancials: true, viewPayments: true, viewCashFlow: true, viewFinancialSettings: true,
-      viewClients: true, viewQuotes: true, viewWorks: true, viewWorkOrders: true, viewBackups: true, viewExports: true,
-    },
-  },
-  {
-    name: "comercial_atendimento",
-    label: "Comercial / Atendimento",
-    permissions: {
-      viewCrm: true, viewLeads: true, viewCrmWhatsapp: true, viewClients: true,
-      viewQuotes: true, viewQuoteTemplates: true, viewQuoteRules: true, viewWorks: true, viewWorkOrders: true,
-    },
-  },
-  {
-    name: "marketing_redes_sociais",
-    label: "Marketing / Redes Sociais",
-    permissions: {
-      viewDashboard: true, viewCrm: true, viewLeads: true, viewCrmWhatsapp: true, viewClients: true, viewPostSale: true,
-    },
-  },
-  {
-    name: "equipe_tecnica",
-    label: "Equipe Técnica",
-    permissions: {
-      viewWorks: true, viewWorkOrders: true, viewObraRegistro: true,
-      viewTeam: true, registrarMaterials: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true,
-    },
-  },
-  {
-    name: "gestor_obras",
-    label: "Gestor de Obras",
-    permissions: {
-      viewDashboard: true, viewWorks: true, viewWorkOrders: true, viewAllWorkOrders: true, editWorkOrders: true,
-      viewObraRegistro: true, viewCalendar: true, viewTeam: true, viewProductivity: true, registrarMaterials: true,
-      viewAllMaterials: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true,
-    },
-  },
-];
-
 const COMPATIBLE_PERMISSIONS: Record<string, string[]> = {
   viewCrm: ["viewLeads", "viewCrmWhatsapp", "viewClients"],
   viewQuotes: ["viewQuoteTemplates", "viewQuoteRules"],
@@ -518,10 +477,6 @@ const COMPATIBLE_PERMISSIONS: Record<string, string[]> = {
 function permissionMatches(permissions: Record<string, boolean>, permission: string) {
   if (permissions[permission]) return true;
   return (COMPATIBLE_PERMISSIONS[permission] || []).some((key) => permissions[key]);
-}
-
-function normalizeRoleName(value: string) {
-  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
 function parsePermissionPayload(value: unknown) {
@@ -3828,97 +3783,8 @@ export async function registerRoutes(
       if (!Array.isArray(data?.users) || !Array.isArray(data?.roles)) {
         return res.status(400).json({ message: "Formato de backup de usuários inválido" });
       }
-
-      const restoreInitialPassword = (user: any) => {
-        const explicit = String(user?.senhaInicial || user?.initialPassword || "").trim();
-        if (explicit && !/^(Senha alterada|Não disponível|—)$/i.test(explicit)) {
-          const digits = explicit.replace(/\D/g, "");
-          if (digits.length === 8) {
-            if (/^\d{4}/.test(explicit) && Number(digits.slice(4, 6)) <= 12) {
-              return `${digits.slice(6, 8)}${digits.slice(4, 6)}${digits.slice(0, 4)}`;
-            }
-            return digits;
-          }
-        }
-        const birthDate = String(user?.birthDate || user?.dataNascimento || user?.birth_date || "").trim();
-        if (!birthDate) return "";
-        try { return generateInitialPassword(birthDate); } catch { return ""; }
-      };
-
-      const restoreBirthDate = (user: any, initialPassword: string) => {
-        const supplied = String(user?.birthDate || user?.dataNascimento || user?.birth_date || "").trim();
-        if (supplied) return normalizeOperationalEmployee({ nomeCompleto: "Validação Temporária", dataNascimento: supplied }).dataNascimento;
-        const digits = initialPassword.replace(/\D/g, "");
-        return digits.length === 8 ? `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}` : null;
-      };
-
-      const existingRoles = await storage.getRoles();
-      const rolesByName = new Map(existingRoles.map(role => [role.name.toLocaleLowerCase("pt-BR"), role]));
-      const restoredRoles = new Map<string, number>();
-      const restoredRoleIds = new Map<number, number>();
-      let rolesCreated = 0, rolesUpdated = 0, created = 0, updated = 0, skipped = 0;
-
-      for (const role of data.roles) {
-        if (!role?.name || !role?.label) { skipped++; continue; }
-        const key = String(role.name).toLocaleLowerCase("pt-BR");
-        const permissions = typeof role.permissions === "string" ? role.permissions : JSON.stringify(role.permissions || {});
-        const existing = rolesByName.get(key);
-        if (existing) {
-          await storage.updateRole(existing.id, { label: role.label, permissions, isDefault: Boolean(role.isDefault) });
-          restoredRoles.set(key, existing.id);
-          if (role.id) restoredRoleIds.set(Number(role.id), existing.id);
-          rolesUpdated++;
-        } else {
-          const saved = await storage.createRole({ name: role.name, label: role.label, permissions, isDefault: Boolean(role.isDefault) });
-          restoredRoles.set(key, saved.id);
-          if (role.id) restoredRoleIds.set(Number(role.id), saved.id);
-          rolesCreated++;
-        }
-      }
-
-      for (const user of data.users) {
-        const username = String(user?.username || user?.login || "").trim();
-        const passwordHash = String(user?.passwordHash || "");
-        const initialPassword = restoreInitialPassword(user);
-        if (!username) { skipped++; continue; }
-        if (username.toLocaleLowerCase("pt-BR") === "admin") { skipped++; continue; }
-        const roleName = user.roleName || user.cargo;
-        const roleId = roleName
-          ? restoredRoles.get(String(roleName).toLocaleLowerCase("pt-BR")) ||
-            restoredRoles.get(String(user.roleName || "").toLocaleLowerCase("pt-BR")) ||
-            null
-          : user.roleId
-            ? restoredRoleIds.get(Number(user.roleId)) || null
-            : null;
-        const existing = await findUserByUsername(username);
-        const hasBcrypt = /^\$2[aby]\$/.test(passwordHash);
-        const hasInitialPassword = Boolean(initialPassword);
-        if (!existing && !hasBcrypt && !hasInitialPassword) { skipped++; continue; }
-        const shouldResetInitialPassword = hasInitialPassword && (user.resetInitialPassword === true || !existing);
-        const values: any = {
-          username,
-          role: user.role === "admin" || user.perfil === "admin" ? "admin" : "funcionario",
-          roleId,
-          jobTitle: user.jobTitle || user.roleLabel || user.cargo || null,
-          fullName: user.fullName || user.nomeCompleto || null,
-          birthDate: restoreBirthDate(user, initialPassword),
-          status: user.status === "Inativo" || user.status === "inativo" ? "inativo" : "ativo",
-          mustChangePassword: false,
-        };
-        if (existing) {
-          if (existing.role === "admin") { skipped++; continue; }
-          if (hasBcrypt) values.password = passwordHash;
-          else if (shouldResetInitialPassword) values.password = await bcrypt.hash(initialPassword, BCRYPT_ROUNDS);
-          await storage.updateUser(existing.id, values);
-          updated++;
-        } else {
-          values.password = hasBcrypt ? passwordHash : await bcrypt.hash(initialPassword, BCRYPT_ROUNDS);
-          await storage.createUser(values);
-          created++;
-        }
-      }
-
-      res.json({ message: "Usuários e cargos restaurados com segurança.", created, updated, deleted: 0, skipped, rolesCreated, rolesUpdated });
+      const result = await restoreUsersAndRolesFromBackup({ data, storage });
+      res.json(result);
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

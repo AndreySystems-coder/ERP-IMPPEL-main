@@ -576,7 +576,11 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
         imported += Number(result.created || 0) + Number(result.updated || 0) + Number(result.movementsCreated || 0);
         materialPendingAfterImport += Number(result.summary?.pendentesRestantes || result.unresolvedItems || 0);
         const report = result.importReport || result.summary || {};
-        importReports.push(`${pdfRestoreLabel(preview)}: ${Number(result.created || 0)} retirada(s), ${Number(result.movementsCreated || 0)} movimento(s), ${Number(report.pendencias || result.summary?.pendentesRestantes || 0)} pendência(s), ${Number(report.duplicados || result.summary?.duplicadosIgnorados || 0)} duplicado(s), ${Math.round(performance.now() - startedAt)} ms.`);
+        if (preview.restoreType === "usuarios" && result.users && result.roles) {
+          importReports.push(`${pdfRestoreLabel(preview)}: ${Number(result.users.created || 0)} usuário(s) criado(s), ${Number(result.users.updated || 0)} atualizado(s), ${Number(result.users.requiresPasswordReset || 0)} exigem redefinição de senha, ${Number(result.users.invalid || 0)} inválido(s), ${Number(result.roles.created || 0)} cargo(s) criado(s), ${Number(result.roles.updated || 0)} cargo(s) atualizado(s), ${Math.round(performance.now() - startedAt)} ms. Usuários sem senha recuperável exigem redefinição pelo administrador antes do primeiro acesso.`);
+        } else {
+          importReports.push(`${pdfRestoreLabel(preview)}: ${Number(result.created || 0)} retirada(s), ${Number(result.movementsCreated || 0)} movimento(s), ${Number(report.pendencias || result.summary?.pendentesRestantes || 0)} pendência(s), ${Number(report.duplicados || result.summary?.duplicadosIgnorados || 0)} duplicado(s), ${Math.round(performance.now() - startedAt)} ms.`);
+        }
       }
       setHistory(savePdfImportHistory({
         id: Date.now().toString(36),
@@ -730,6 +734,17 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
                     <div><strong>{preview.partiallyApplicableCount || 0}</strong><p className="text-slate-500">registros parciais</p></div>
                     <div><strong>{preview.blockedCount || 0}</strong><p className="text-slate-500">registros bloqueados</p></div>
                     <div><strong>{preview.unresolvedItemCount || 0}</strong><p className="text-slate-500">itens não encontrados</p></div>
+                  </div>
+                )}
+                {preview.restoreType === "usuarios" && preview.backup?.data?.userSummary && (
+                  <div className="grid gap-2 border-b border-slate-100 bg-white px-3 py-3 text-xs sm:grid-cols-4 lg:grid-cols-7">
+                    <div><strong>{preview.backup.data.userSummary.total || 0}</strong><p className="text-slate-500">usuários lidos</p></div>
+                    <div><strong>{preview.backup.data.userSummary.requiresPasswordReset || 0}</strong><p className="text-slate-500">exigem redefinição</p></div>
+                    <div><strong>{preview.backup.data.userSummary.missingRole || 0}</strong><p className="text-slate-500">sem cargo no PDF</p></div>
+                    <div><strong>{preview.backup.data.userSummary.invalid || 0}</strong><p className="text-slate-500">logins rejeitados</p></div>
+                    <div><strong>{preview.backup.data.roleSummary?.total || 0}</strong><p className="text-slate-500">cargos lidos</p></div>
+                    <div><strong>{preview.backup.data.roleSummary?.permissionsExtracted || 0}</strong><p className="text-slate-500">permissões reconhecidas</p></div>
+                    <div><strong>{preview.backup.data.roleSummary?.permissionsPending || 0}</strong><p className="text-slate-500">permissões pendentes</p></div>
                   </div>
                 )}
                 <div className="max-h-60 divide-y divide-slate-100 overflow-y-auto">

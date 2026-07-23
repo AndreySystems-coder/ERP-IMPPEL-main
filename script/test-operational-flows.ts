@@ -23,6 +23,7 @@ const { buildReturnableToolSummary } = await import("../shared/returnableToolSum
 const { buildMobileNotesPreview } = await import("../shared/mobileNotesImport");
 const { buildMaterialControlContract } = await import("../shared/materialControlBackup");
 const { __testPdfRestoreParsing } = await import("../server/pdf-restore");
+const { restoreUsersAndRolesFromBackup } = await import("../server/user-restore-service");
 
 const previousAdminUsername = process.env.DEFAULT_ADMIN_USERNAME;
 const previousAdminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
@@ -511,14 +512,17 @@ assert.equal(stockPreview.backup.data.items.find((item: any) => item.name === "V
 const userRows = [
   pdfRow([[40, "Admin"], [160, "Senha alterada"], [260, "Administrador"], [480, "—"], [650, "admin"], [760, "Ativo"]], 700),
   pdfRow([[40, "joao.silva"], [160, "15022001"], [260, "Joao Silva"], [480, "Equipe Técnica"], [650, "funcionario"], [760, "Ativo"]], 690),
-  pdfRow([[40, "maria.souza"], [160, "Senha alterada"], [260, "Maria Souza"], [480, "Administrativo /"], [650, "funcionario"], [760, "Inativo"]], 680),
+  pdfRow([[40, "maria.souza"], [160, "Não disponível"], [260, "Maria Souza"], [480, "Administrativo /"], [650, "funcionario"], [760, "Inativo"]], 680),
+  pdfRow([[40, "novo.semsenha"], [160, "Não disponível"], [260, "Novo Sem Senha"], [480, "Equipe Técnica"], [650, "funcionario"], [760, "Ativo"]], 670),
+  pdfRow([[40, "sem.cargo"], [160, "01011990"], [260, "Sem Cargo"], [480, "—"], [650, "funcionario"], [760, "Ativo"]], 660),
+  pdfRow([[40, "Não trabalha para nós"], [160, "Não disponível"], [260, "Registro Especial"], [480, "—"], [650, "funcionario"], [760, "Ativo"]], 650),
 ];
 const userPreview = __testPdfRestoreParsing.parseUsers(
   "usuarios.pdf",
   "usuarios",
-  report("usuarios", 3),
+  report("usuarios", 6),
   userRows,
-  "Administrativo / Financeiro\nComercial / Atendimento\nMarketing / Redes Sociais\nEquipe Técnica\nGestão de EPIs,\nMateriais e Equipamentos\nGestão de Funcionários\nObras / Operações",
+  "Administrativo / Financeiro\nComercial / Atendimento\nMarketing / Redes Sociais\nEquipe Técnica\nGestor de Obras\nGestão de EPIs,\nMateriais e Equipamentos\nGestão de Funcionários\nObras / Operações",
 );
 const adminUser = userPreview.backup.data.users.find((user: any) => user.username === "Admin");
 const joaoUser = userPreview.backup.data.users.find((user: any) => user.username === "joao.silva");
@@ -526,9 +530,52 @@ const mariaUser = userPreview.backup.data.users.find((user: any) => user.usernam
 assert.equal(adminUser.role, "admin", "Admin deve continuar admin");
 assert.equal(joaoUser.role, "funcionario", "Funcionario deve continuar funcionario");
 assert.equal(mariaUser.status, "inativo", "Status Inativo deve ser preservado");
+assert.equal(mariaUser.credentialState, "password_not_exportable", "Senha nao disponivel deve ficar explicita no preview");
+assert.equal(mariaUser.requiresAdminPasswordReset, true, "Usuario sem senha exportavel deve exigir redefinicao pelo administrador");
 assert.equal(adminUser.cargo, null, "Cargo travessao do Admin deve virar null");
+assert.equal(userPreview.backup.data.userSummary.invalid, 1, "Login invalido deve aparecer no preview");
+assert.equal(userPreview.backup.data.userSummary.missingRole, 1, "Usuario sem cargo deve ficar classificado");
+assert.ok(userPreview.ignored.some((item: string) => item.includes("Não trabalha para nós")), "Registro especial invalido deve informar motivo");
+assert.equal(userPreview.backup.data.roleSummary.total, 9, "PDF de usuarios deve reconhecer 9 cargos");
+assert.equal(userPreview.backup.data.roleSummary.permissionsExtracted, 9, "Permissoes padrao dos 9 cargos devem ser reconhecidas");
+assert.equal(userPreview.backup.data.roles.find((role: any) => role.name === "equipe_tecnica").permissions.registrarMaterials, true, "Equipe tecnica deve manter permissao de materiais");
 assert.ok(userPreview.backup.data.roles.some((role: any) => role.name === "gestao_epis"), "Cargo gestao_epis deve entrar no preview");
 assert.ok(userPreview.backup.data.roles.some((role: any) => role.name === "materiais_equipamentos"), "Cargo materiais_equipamentos deve entrar no preview");
+
+const userRestoreStorage = createMemoryStorage();
+await userRestoreStorage.createRole({ name: "administrativo_financeiro", label: "Administrativo / Financeiro", permissions: JSON.stringify({ viewDashboard: true }), isDefault: false } as any);
+await userRestoreStorage.createRole({ name: "cargo_sem_pdf", label: "Cargo sem PDF", permissions: JSON.stringify({ viewTeam: true }), isDefault: false } as any);
+await userRestoreStorage.createUser({ username: "maria.souza", password: await bcrypt.hash("senha-existente", 4), role: "funcionario", fullName: "Maria Antiga", status: "ativo" } as any);
+const usersBeforeRestore = await userRestoreStorage.getUsers();
+const mariaPasswordBefore = usersBeforeRestore.find(user => user.username === "maria.souza")?.password;
+const restoreResult = await restoreUsersAndRolesFromBackup({ data: userPreview.backup.data, storage: userRestoreStorage });
+assert.equal(restoreResult.users.created, 3, "Usuarios novos devem ser criados mesmo com senha nao exportavel");
+assert.equal(restoreResult.users.updated, 1, "Usuario existente deve ser atualizado sem trocar senha");
+assert.equal(restoreResult.users.ignored, 1, "Admin deve ser preservado");
+assert.equal(restoreResult.users.requiresPasswordReset, 3, "Usuarios novos com credencial inicial devem exigir redefinicao conforme regra do ERP");
+assert.equal(restoreResult.roles.created, 8, "Cargos novos com permissao devem ser criados");
+assert.equal(restoreResult.roles.updated, 1, "Cargo existente com permissao deve ser atualizado");
+const restoredUsers = await userRestoreStorage.getUsers();
+const restoredMaria = restoredUsers.find(user => user.username === "maria.souza");
+const restoredNovoSemSenha = restoredUsers.find(user => user.username === "novo.semsenha");
+const restoredJoao = restoredUsers.find(user => user.username === "joao.silva");
+assert.equal(restoredMaria?.password, mariaPasswordBefore, "Usuario existente com Nao disponivel deve preservar hash atual");
+assert.equal(restoredMaria?.status, "inativo", "Campos seguros do usuario existente devem ser atualizados");
+assert.equal(restoredNovoSemSenha?.mustChangePassword, true, "Novo usuario sem senha exportavel deve exigir redefinicao");
+assert.equal(await bcrypt.compare("Não disponível", restoredNovoSemSenha?.password || ""), false, "Senha temporaria nao pode ser o texto do PDF");
+assert.equal(await bcrypt.compare("novo.semsenha", restoredNovoSemSenha?.password || ""), false, "Senha temporaria nao pode ser baseada no login");
+assert.equal(await bcrypt.compare("15022001", restoredJoao?.password || ""), true, "Senha inicial valida deve virar bcrypt funcional");
+assert.equal(restoredUsers.some(user => user.username === "Não trabalha para nós"), false, "Login invalido nunca deve ser criado");
+const preservePermissionsResult = await restoreUsersAndRolesFromBackup({ data: { users: [], roles: [{ name: "cargo_sem_pdf", label: "Cargo sem PDF", permissions: {} }] }, storage: userRestoreStorage });
+assert.equal(preservePermissionsResult.roles.permissionsPreserved, 1, "Permissoes existentes devem ser preservadas quando PDF nao traz permissoes");
+const preservedRole = (await userRestoreStorage.getRoles()).find(role => role.name === "cargo_sem_pdf");
+assert.equal(JSON.parse(String(preservedRole?.permissions || "{}")).viewTeam, true, "Permissao existente nao pode ser zerada");
+const roleCountAfterFirstRestore = (await userRestoreStorage.getRoles()).length;
+const userCountAfterFirstRestore = (await userRestoreStorage.getUsers()).length;
+const restoreAgainResult = await restoreUsersAndRolesFromBackup({ data: userPreview.backup.data, storage: userRestoreStorage });
+assert.equal((await userRestoreStorage.getRoles()).length, roleCountAfterFirstRestore, "Segunda importacao nao pode duplicar cargos");
+assert.equal((await userRestoreStorage.getUsers()).length, userCountAfterFirstRestore, "Segunda importacao nao pode duplicar usuarios");
+assert.equal(restoreAgainResult.users.created, 0, "Segunda importacao nao deve criar usuarios duplicados");
 
 const materialDateRow = pdfRow([[40, "30/06/2026"]], 620);
 const materialRows = [

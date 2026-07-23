@@ -3,6 +3,20 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-23] - Correcao do importador PDF de Usuarios e Cargos
+
+### Corrigido
+
+- Restore de Usuarios/Cargos passou a criar usuarios novos com `Senha Inicial: Nao disponivel` usando senha temporaria aleatoria criptografada, sem credencial previsivel e com redefinicao obrigatoria pelo administrador.
+- Usuarios existentes com senha nao exportavel agora preservam o hash atual e atualizam apenas campos seguros.
+- Parser de cargos do PDF passou a reconhecer os 9 cargos oficiais e aplicar permissoes padrao equivalentes ao sistema, incluindo nomes quebrados como `Gestao de EPIs,`.
+- Restore de cargos passou a preservar permissoes existentes quando o PDF nao trouxer permissoes validas, evitando sobrescrita por `{}`.
+- Preview de Usuarios/Cargos passou a listar usuarios sem senha recuperavel, cargos sem permissao, cargos reconhecidos e logins invalidos com motivo visivel.
+
+### Validacao
+
+- Testes operacionais adicionados para usuario novo sem senha exportavel, usuario existente preservando hash, cargo existente sem permissoes no PDF e segunda importacao idempotente.
+
 ## [2026-07-22] - Release engineering 1.0
 
 ### Adicionado

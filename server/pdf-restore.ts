@@ -1,5 +1,6 @@
 import { buildMaterialControlContract } from "@shared/materialControlBackup";
 import { parseBrazilianMoney } from "@shared/money";
+import { ROLE_TECHNICAL_BY_LABEL, DEFAULT_ROLE_PERMISSIONS, defaultPermissionsForRole, normalizeRoleName } from "@shared/rolePermissions";
 
 type BackupType =
   | "usuarios"
@@ -76,27 +77,12 @@ const REPORT_TYPES: Array<{ type: ErpPdfReportType; marker: string; restoreType?
   { type: "backup-completo", marker: "backup completo" },
 ];
 
-const ROLE_TECHNICAL_BY_LABEL: Record<string, string> = {
-  "Administrativo / Financeiro": "administrativo_financeiro",
-  "Administrativo /": "administrativo_financeiro",
-  "Comercial / Atendimento": "comercial_atendimento",
-  "Marketing / Redes Sociais": "marketing_redes_sociais",
-  "Equipe Técnica": "equipe_tecnica",
-  "Equipe Técnica (Obras / Serviços)": "equipe_tecnica",
-  "Gestor de Obras": "gestor_obras",
-  "Gestão de EPIs, Uniformes e Botas": "gestao_epis",
-  "Gestão de EPIs,": "gestao_epis",
-  "Materiais e Equipamentos": "materiais_equipamentos",
-  "Gestão de Funcionários": "gestao_funcionarios",
-  "Obras / Operações": "obras_operacoes",
-};
-
 function normalizeText(value: string) {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function normalizeKey(value: string) {
-  return normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  return normalizeRoleName(value);
 }
 
 function parseMoney(value = "") {
@@ -115,7 +101,7 @@ function parseIntSafe(value = "") {
 
 function normalizeInitialPassword(value = "") {
   const normalized = value.trim();
-  if (!normalized || /^(Senha alterada|Não disponível|—)$/i.test(normalized)) return "";
+  if (!normalized || /^(Senha alterada|Não disponível|Nao disponível|Não disponivel|Nao disponivel|—)$/i.test(normalized)) return "";
   const digits = normalized.replace(/\D/g, "");
   if (digits.length !== 8) return "";
   if (/^\d{4}/.test(normalized) && Number(digits.slice(4, 6)) <= 12) {
@@ -221,7 +207,18 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
     const perfilRaw = cell(row, 640, 745);
     const perfil = perfilRaw.split(" ")[0];
     const status = cell(row, 738, 820);
-    if (!/^(Admin|[a-z][a-z0-9]+(?:\.[a-z0-9]+)+)$/i.test(login)) continue;
+    if (!/^(Admin|[a-z][a-z0-9]+(?:\.[a-z0-9]+)+)$/i.test(login)) {
+      if (looksLikeRejectedUserRow(row, login, senhaInicialRaw, perfil, status)) {
+        preview.ignoredCount++;
+        preview.ignored.push(`${login}: login incompatível com o formato de usuário. Ação sugerida: não importar como usuário; cadastre manualmente se for necessário.`);
+        preview.rows.push({
+          name: login,
+          detail: "Registro rejeitado: login incompatível com o formato nome.sobrenome ou Admin.",
+          status: "ignorado",
+        });
+      }
+      continue;
+    }
     const userKey = normalizeText(login);
     if (seenUsers.has(userKey)) {
       preview.duplicateCount++;
@@ -232,13 +229,16 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
     const isAdmin = normalizeText(login) === "admin";
     const senhaInicial = normalizeInitialPassword(senhaInicialRaw);
     const hasInitialPassword = Boolean(senhaInicial);
+    const credentialState = hasInitialPassword ? "initial_password_available" : isNonExportablePassword(senhaInicialRaw) ? "password_not_exportable" : "credential_pending";
     const birthDate = birthDateFromInitialPassword(senhaInicial);
     users.push({
       login,
       username: login,
-      senhaInicial: hasInitialPassword ? senhaInicial : "Data de nascimento pendente",
+      senhaInicial: hasInitialPassword ? senhaInicial : "Não disponível",
       initialPassword: hasInitialPassword ? senhaInicial : undefined,
       resetInitialPassword: !isAdmin && hasInitialPassword,
+      credentialState,
+      requiresAdminPasswordReset: !isAdmin && !hasInitialPassword,
       nomeCompleto: nomeCompleto || login,
       fullName: nomeCompleto || login,
       birthDate,
@@ -250,11 +250,11 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
       roleName: cargo ? (ROLE_TECHNICAL_BY_LABEL[cargo] || normalizeKey(cargo)) : null,
       roleLabel: cargo || null,
       jobTitle: cargo || null,
-      mustChangePassword: false,
+      mustChangePassword: !isAdmin,
     });
     preview.rows.push({
       name: login,
-      detail: `${nomeCompleto || "sem nome"} · ${cargo || "cargo pendente"} · ${hasInitialPassword ? `senha fixa aplicada: ${senhaInicial}` : "data de nascimento pendente"}`,
+      detail: `${nomeCompleto || "sem nome"} · ${cargo || "sem cargo"} · ${hasInitialPassword ? "senha inicial válida será criptografada" : "senha não exportável; exigirá redefinição pelo administrador"}`,
       status: isAdmin ? "ignorado" : cargo ? "novo" : "pendente",
     });
     if (isAdmin) {
@@ -262,22 +262,55 @@ function parseUsers(fileName: string, selectedType: BackupType, report: ReturnTy
       preview.ignored.push("Admin será preservado e não será sobrescrito.");
     } else if (!cargo) {
       preview.pendingCount++;
-      preview.pending.push(`${login}: cargo ausente no PDF. Perfil extraído: ${perfil || "não identificado"}. Status extraído: ${status || "não identificado"}. Ação sugerida: confirmar o cargo antes de importar.`);
+      preview.pending.push(`${login}: cargo ausente no relatório. Perfil extraído: ${perfil || "não identificado"}. Status extraído: ${status || "não identificado"}. Ação sugerida: importar com permissões padrão de funcionário ou vincular cargo depois em Usuários.`);
     } else {
       preview.newCount++;
     }
+    if (!isAdmin && !hasInitialPassword) {
+      preview.warnings.push(`${login}: senha inicial não é exportável; a conta será criada com senha temporária aleatória e exigirá redefinição pelo administrador.`);
+    }
   }
 
-  for (const [label, name] of Object.entries(ROLE_TECHNICAL_BY_LABEL)) {
-    if (!rawText.includes(label) && !rawText.includes(name)) continue;
+  for (const { label, name } of DEFAULT_ROLE_PERMISSIONS) {
+    const aliases = Object.entries(ROLE_TECHNICAL_BY_LABEL)
+      .filter(([, technicalName]) => technicalName === name)
+      .map(([alias]) => alias);
+    if (![label, name, ...aliases].some(alias => rawText.includes(alias))) continue;
     if (seenRoles.has(name)) continue;
     seenRoles.add(name);
-    roles.push({ name, label, permissions: {}, isDefault: name === "equipe_tecnica" });
+    const permissions = defaultPermissionsForRole(name) || {};
+    roles.push({ name, label, permissions, isDefault: name === "equipe_tecnica", permissionStatus: Object.keys(permissions).length ? "extraidas" : "pendente" });
+    if (Object.keys(permissions).length) {
+      preview.rows.push({ name: label, detail: `${Object.keys(permissions).length} permissão(ões) reconhecida(s) para ${name}.`, status: "atualizar" });
+    } else {
+      preview.pendingCount++;
+      preview.pending.push(`${label}: permissões não foram extraídas com segurança. Ação sugerida: preservar permissões existentes ou revisar cargo antes de criar.`);
+    }
   }
 
   preview.extracted = users.length + roles.length;
   preview.existingCount = 1;
-  preview.backup = { type: "usuarios", version: "erp-pdf-preview", exportedAt: new Date().toISOString(), data: { users, roles } };
+  preview.backup = {
+    type: "usuarios",
+    version: "erp-pdf-preview",
+    exportedAt: new Date().toISOString(),
+    data: {
+      users,
+      roles,
+      invalidUsers: preview.ignored.filter(item => item.includes("login incompatível")),
+      userSummary: {
+        total: users.length,
+        requiresPasswordReset: users.filter(user => user.requiresAdminPasswordReset).length,
+        missingRole: users.filter(user => user.username !== "Admin" && !user.roleName).length,
+        invalid: preview.ignored.filter(item => item.includes("login incompatível")).length,
+      },
+      roleSummary: {
+        total: roles.length,
+        permissionsExtracted: roles.filter(role => Object.keys(role.permissions || {}).length > 0).length,
+        permissionsPending: roles.filter(role => Object.keys(role.permissions || {}).length === 0).length,
+      },
+    },
+  };
   preview.canApply = users.some(user => user.username !== "Admin") || roles.length > 0;
   if (preview.pendingCount) preview.warnings.push("Alguns usuários ficaram pendentes porque o cargo não foi lido com segurança no PDF. Confirme o cargo antes de importar.");
   return preview;
@@ -377,6 +410,30 @@ function parseServices(fileName: string, selectedType: BackupType, report: Retur
     preview.warnings.push(`PDF informa ${report.headerTotal} serviços; ${services.length} foram extraídos com segurança.`);
   }
   return preview;
+}
+
+function isNonExportablePassword(value = "") {
+  return /^(Senha alterada|Não disponível|Nao disponível|Não disponivel|Nao disponivel|—)$/i.test(value.trim());
+}
+
+function isIgnoredUserCell(value: string) {
+  const normalized = normalizeText(value);
+  const original = value.trim();
+  return !normalized ||
+    /^(login|usuario|usuário|cargo|nome|senha|perfil|status|imppe?l erp|relatorio|relatório|usuarios|usuários|cargos|permissoes|permissões|nome tecnico|nome técnico)$/.test(normalized) ||
+    /^(view|edit|create|approve|registrar)[A-Z]/.test(original) ||
+    DEFAULT_ROLE_PERMISSIONS.some(role => normalizeText(role.label) === normalized || normalizeText(role.name) === normalized);
+}
+
+function looksLikeRejectedUserRow(row: PdfRow, login: string, senhaInicialRaw: string, perfil: string, status: string) {
+  if (!login || isIgnoredUserCell(login)) return false;
+  if (/não trabalha para nós|nao trabalha para nos/i.test(login)) return true;
+  const rowText = normalizeText(row.items.map(item => item.text).join(" "));
+  const hasCredentialCell = Boolean(senhaInicialRaw) && (isNonExportablePassword(senhaInicialRaw) || /\d{8}/.test(senhaInicialRaw));
+  const hasUserProfile = /^(admin|funcionario|funcionário)$/i.test(perfil);
+  const hasUserStatus = /^(Ativo|Inativo)$/i.test(status);
+  const isPermissionsSection = /\bpermiss/.test(rowText) || /^(view|edit|create|approve|registrar)/i.test(login);
+  return !isPermissionsSection && (hasCredentialCell || hasUserProfile || hasUserStatus);
 }
 
 function validDateBr(value: string) {
