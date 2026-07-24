@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type KeyboardEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, ClipboardPaste, History, Loader2, Save, XCircle } from "lucide-react";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { useToast } from "@/hooks/use-toast";
-import type { MobileImportPreviewRow } from "@shared/mobileNotesImport";
+import { normalizeMobileImportText, type MobileImportPreviewRow } from "@shared/mobileNotesImport";
 
 type InventoryItem = { id: number; name: string; unit?: string; quantity?: number; type?: string };
 type UserItem = { id: number; username: string; fullName?: string; name?: string; role?: string };
@@ -55,6 +55,19 @@ function hasStockWarning(row: MobileImportPreviewRow) {
   return row.warnings.some(warning => warning.toLowerCase().includes("estoque insuficiente"));
 }
 
+function stockWarningFor(row: MobileImportPreviewRow, item?: InventoryItem, quantity = row.quantity) {
+  if (!item || row.type === "entrada") return null;
+  const available = Math.max(0, Number(item.quantity) || 0);
+  if (quantity <= available) return null;
+  return `Estoque insuficiente: disponível ${available} ${item.unit || "un"}. O registro poderá deixar saldo negativo temporariamente.`;
+}
+
+function mergeStockWarning(row: MobileImportPreviewRow, item?: InventoryItem, quantity = row.quantity) {
+  const warnings = row.warnings.filter(warning => !warning.toLowerCase().includes("estoque insuficiente"));
+  const stockWarning = stockWarningFor(row, item, quantity);
+  return stockWarning ? { warnings: [...warnings, stockWarning], stockWarning } : { warnings, stockWarning: null };
+}
+
 function isRowReady(row: MobileImportPreviewRow) {
   return row.status === "ok" &&
     Boolean(row.inventoryId) &&
@@ -69,6 +82,101 @@ function withdrawalGroupStatus(rows: MobileImportPreviewRow[]) {
   return { label: "valido", className: "bg-emerald-50 text-emerald-700" };
 }
 
+function InventorySearchSelect({
+  inventory,
+  value,
+  onSelect,
+  placeholder = "Buscar material",
+}: {
+  inventory: InventoryItem[];
+  value?: number | null;
+  onSelect: (inventoryId: number) => void;
+  placeholder?: string;
+}) {
+  const selected = inventory.find(item => Number(item.id) === Number(value));
+  const [search, setSearch] = useState(selected?.name || "");
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(0);
+
+  const results = useMemo(() => {
+    const query = normalizeMobileImportText(search);
+    const scored = inventory.map(item => {
+      const name = normalizeMobileImportText(item.name);
+      let score = 0;
+      if (!query) score = 1;
+      else if (name === query) score = 100;
+      else if (name.startsWith(query)) score = 90;
+      else if (name.includes(query)) score = 75;
+      else {
+        const words = query.split(" ").filter(Boolean);
+        score = words.length && words.every(word => name.includes(word)) ? 60 : 0;
+      }
+      return { item, score };
+    }).filter(entry => entry.score > 0);
+    return scored.sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name)).slice(0, 12).map(entry => entry.item);
+  }, [inventory, search]);
+
+  const choose = (item: InventoryItem) => {
+    setSearch(item.name);
+    setOpen(false);
+    setHighlighted(0);
+    onSelect(Number(item.id));
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (!open && ["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) setOpen(true);
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setHighlighted(current => Math.min(current + 1, Math.max(0, results.length - 1)));
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setHighlighted(current => Math.max(current - 1, 0));
+    }
+    if (event.key === "Enter" && results[highlighted]) {
+      event.preventDefault();
+      choose(results[highlighted]);
+    }
+    if (event.key === "Escape") setOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <Input
+        value={search}
+        onChange={(event) => {
+          setSearch(event.target.value);
+          setOpen(true);
+          setHighlighted(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        className="min-h-[44px]"
+      />
+      {open && (
+        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+          {results.map((item, index) => (
+            <button
+              key={item.id}
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                choose(item);
+              }}
+              className={`flex min-h-[46px] w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm ${index === highlighted ? "bg-primary/10 text-primary" : "text-slate-700 hover:bg-slate-50"}`}
+            >
+              <span className="font-semibold">{item.name}</span>
+              <span className="shrink-0 text-xs text-slate-500">{Number(item.quantity || 0)} {item.unit || "un"}</span>
+            </button>
+          ))}
+          {results.length === 0 && <div className="px-3 py-3 text-sm text-slate-500">Nenhum material encontrado.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MobileNotesImport({ embedded = false }: { embedded?: boolean }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -78,6 +186,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
   const [rows, setRows] = useState<MobileImportPreviewRow[]>([]);
   const [activeTab, setActiveTab] = useState<"entrada" | "saida" | "retirada" | "pendentes" | "ignorados">("entrada");
   const [aliasRows, setAliasRows] = useState<Record<string, boolean>>({});
+  const [confirmInsufficientStock, setConfirmInsufficientStock] = useState(false);
   const [report, setReport] = useState<any>(null);
   const parsedImportYear = Number(importYear);
   const isImportYearValid = Number.isInteger(parsedImportYear) && parsedImportYear >= 2020 && parsedImportYear <= 2100;
@@ -104,6 +213,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
       setPreview(data);
       setRows(data.rows);
       setReport(null);
+      setConfirmInsufficientStock(false);
       setActiveTab(data.rows.some(row => row.type === "retirada" && !row.ignored) ? "retirada" : (data.summary.duvidosos || data.summary.bloqueados ? "pendentes" : "entrada"));
       toast({ title: "Preview gerado", description: `${data.rows.length} linha(s) interpretada(s).` });
     },
@@ -121,7 +231,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
       const aliasesToSave = Array.from(aliasMap.values());
       return apiRequest("/api/mobile-import/apply", {
         method: "POST",
-        body: JSON.stringify({ text, importYear: parsedImportYear, rows, aliasesToSave }),
+        body: JSON.stringify({ text, importYear: parsedImportYear, rows, aliasesToSave, confirmInsufficientStock }),
       });
     },
     onSuccess: (data) => {
@@ -165,19 +275,28 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
   const canApply = rows.some(row => !row.ignored) &&
     !preview?.duplicate &&
     rows.every(row => row.ignored || isRowReady(row));
+  const stockWarningRows = rows.filter(row => !row.ignored && hasStockWarning(row));
+  const needsStockConfirmation = stockWarningRows.length > 0;
 
   const updateRow = (id: string, updates: Partial<MobileImportPreviewRow>) => {
     setRows(current => current.map(row => row.id === id ? { ...row, ...updates } : row));
   };
 
+  const updateRowWithStockCheck = (row: MobileImportPreviewRow, updates: Partial<MobileImportPreviewRow>) => {
+    const nextRow = { ...row, ...updates };
+    const item = inventory.find(candidate => Number(candidate.id) === Number(nextRow.inventoryId));
+    updateRow(row.id, { ...updates, ...mergeStockWarning(nextRow, item, nextRow.quantity) });
+  };
+
   const selectInventory = (row: MobileImportPreviewRow, inventoryId: number) => {
     const item = inventory.find(candidate => Number(candidate.id) === Number(inventoryId));
+    const nextRow = { ...row, inventoryId };
     updateRow(row.id, {
       inventoryId,
       itemName: item?.name || row.itemName,
       itemConfidence: 100,
       status: row.type === "retirada" && !row.userId ? "duvidoso" : "ok",
-      warnings: row.type === "retirada" && !row.userId ? ["Funcionário pendente"] : row.warnings.filter(warning => warning.toLowerCase().includes("estoque insuficiente")),
+      ...(row.type === "retirada" && !row.userId ? { warnings: ["Funcionário pendente"], stockWarning: null } : mergeStockWarning(nextRow, item)),
     });
   };
 
@@ -192,7 +311,7 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
         username: user?.username || candidate.username,
         userConfidence: 100,
         status: candidate.inventoryId ? "ok" : "duvidoso",
-        warnings: candidate.inventoryId ? candidate.warnings.filter(warning => warning.toLowerCase().includes("estoque insuficiente")) : ["Item ainda não cadastrado."],
+        ...(candidate.inventoryId ? mergeStockWarning(candidate, inventory.find(item => Number(item.id) === Number(candidate.inventoryId))) : { warnings: ["Item ainda não cadastrado."], stockWarning: null }),
       };
     }));
   };
@@ -336,11 +455,8 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                               <div className="text-xs text-slate-500">Trecho: {row.rawItem || row.rawText}</div>
                               {row.warnings.length > 0 && <div className="mt-1 text-xs font-semibold text-amber-700">{row.warnings.join(" · ")}</div>}
                             </div>
-                            <Input type="number" min={1} value={row.quantity} onChange={(event) => updateRow(row.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} />
-                            <select className="w-full rounded-md border border-slate-300 px-2 py-2 text-sm" value={row.inventoryId || ""} onChange={(event) => selectInventory(row, Number(event.target.value))}>
-                              <option value="">Selecionar material existente</option>
-                              {inventory.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-                            </select>
+                            <Input type="number" min={1} value={row.quantity} onChange={(event) => updateRowWithStockCheck(row, { quantity: Math.max(1, Number(event.target.value) || 1) })} />
+                            <InventorySearchSelect inventory={inventory} value={row.inventoryId} onSelect={(inventoryId) => selectInventory(row, inventoryId)} placeholder="Buscar material existente" />
                             <div className="flex flex-col gap-2">
                               <span className={`inline-flex justify-center rounded-full px-2 py-1 text-xs font-bold ${rowStatusClass(row)}`}>{row.ignored ? "ignorado" : row.status}</span>
                               <Button variant="outline" size="sm" onClick={() => updateRow(row.id, { ignored: !row.ignored, status: row.ignored ? "duvidoso" : "ignorado" as any })}>
@@ -378,19 +494,16 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
                   <tr key={row.id} className="border-t border-slate-100 align-top">
                     <td className="px-3 py-2"><Input type="date" value={row.date} onChange={(event) => updateRow(row.id, { date: event.target.value })} /></td>
                     <td className="px-3 py-2">
-                      <select className="rounded-md border border-slate-300 px-2 py-2" value={row.type} onChange={(event) => updateRow(row.id, { type: event.target.value as any })}>
+                      <select className="rounded-md border border-slate-300 px-2 py-2" value={row.type} onChange={(event) => updateRowWithStockCheck(row, { type: event.target.value as any })}>
                         <option value="entrada">Entrada</option>
                         <option value="saida">Saída</option>
                         <option value="retirada">Retirada</option>
                       </select>
                     </td>
-                    <td className="px-3 py-2"><Input type="number" min={1} value={row.quantity} onChange={(event) => updateRow(row.id, { quantity: Math.max(1, Number(event.target.value) || 1) })} /></td>
+                    <td className="px-3 py-2"><Input type="number" min={1} value={row.quantity} onChange={(event) => updateRowWithStockCheck(row, { quantity: Math.max(1, Number(event.target.value) || 1) })} /></td>
                     <td className="px-3 py-2 text-slate-700">{row.rawText}</td>
                     <td className="px-3 py-2">
-                      <select className="w-full rounded-md border border-slate-300 px-2 py-2" value={row.inventoryId || ""} onChange={(event) => selectInventory(row, Number(event.target.value))}>
-                        <option value="">Selecionar material</option>
-                        {inventory.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-                      </select>
+                      <InventorySearchSelect inventory={inventory} value={row.inventoryId} onSelect={(inventoryId) => selectInventory(row, inventoryId)} />
                     </td>
                     <td className="px-3 py-2">
                       {row.type === "retirada" ? (
@@ -427,11 +540,27 @@ export default function MobileNotesImport({ embedded = false }: { embedded?: boo
             </table>
           </div>
 
+          {needsStockConfirmation && (
+            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <div className="font-bold">Há {stockWarningRows.length} item(ns) com estoque insuficiente.</div>
+                  <p className="mt-1">O Registro Rápido pode ser aplicado mesmo assim, mas o saldo poderá ficar negativo ou inconsistente até a conferência do estoque.</p>
+                  <label className="mt-3 flex items-center gap-2 font-semibold">
+                    <input type="checkbox" checked={confirmInsufficientStock} onChange={(event) => setConfirmInsufficientStock(event.target.checked)} />
+                    Confirmo registrar mesmo com estoque insuficiente
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
-            <Button variant="outline" onClick={() => { setPreview(null); setRows([]); setReport(null); }} className="gap-2">
+            <Button variant="outline" onClick={() => { setPreview(null); setRows([]); setReport(null); setConfirmInsufficientStock(false); }} className="gap-2">
               <XCircle className="h-4 w-4" /> Cancelar
             </Button>
-            <Button onClick={() => applyMutation.mutate()} disabled={!canApply || applyMutation.isPending} className="gap-2">
+            <Button onClick={() => applyMutation.mutate()} disabled={!canApply || (needsStockConfirmation && !confirmInsufficientStock) || applyMutation.isPending} className="gap-2">
               {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Confirmar registro
             </Button>

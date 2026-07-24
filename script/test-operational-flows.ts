@@ -20,7 +20,7 @@ const { parseBrazilianMoney } = await import("../shared/money");
 const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMaterialItem, shouldRestoreReturnedQuantityToStock } = await import("../shared/materialReturnPolicy");
 const { getEffectiveMaterialSaleDiscountLimit } = await import("../shared/materialSalesPolicy");
 const { buildReturnableToolSummary } = await import("../shared/returnableToolSummary");
-const { buildMobileNotesPreview } = await import("../shared/mobileNotesImport");
+const { buildMobileNotesPreview, resolveMobileImportInventory } = await import("../shared/mobileNotesImport");
 const { buildMaterialControlContract } = await import("../shared/materialControlBackup");
 const { __testPdfRestoreParsing } = await import("../server/pdf-restore");
 const { restoreUsersAndRolesFromBackup } = await import("../server/user-restore-service");
@@ -117,6 +117,21 @@ await assert.rejects(
   "movimentacao manual acima do estoque deve ser bloqueada na camada de storage",
 );
 assert.equal((await storage.getInventoryItems()).find(item => item.id === normalizedInventory.id)?.quantity, 5, "saldo deve permanecer intacto quando movimento manual e bloqueado");
+const mobileNegativeMovement = await storage.createInventoryMovement({
+  inventoryId: normalizedInventory.id,
+  productName: normalizedInventory.name,
+  type: "SAÍDA",
+  quantity: 6,
+  date: "2026-06-30",
+  notes: "Registro Rapido teste com saldo insuficiente confirmado",
+}, { allowNegativeStock: true });
+assert.equal(mobileNegativeMovement.quantity, 6, "Registro Rapido confirmado deve permitir movimento acima do saldo");
+assert.equal((await storage.getInventoryItems()).find(item => item.id === normalizedInventory.id)?.quantity, -1, "saldo negativo deve ser possível somente quando a exceção controlada for usada");
+const mobileAliasMatch = resolveMobileImportInventory("MANTA LIQUIDA", [
+  { id: 1, name: "Manta líquida branca", quantity: 3 },
+  { id: 2, name: "Broxa", quantity: 10 },
+]);
+assert.equal(mobileAliasMatch.item?.name, "Manta líquida branca", "busca do Registro Rapido deve localizar material por alias normalizado");
 
 const materialPdfStorage = createMemoryStorage();
 const pdfUser = await materialPdfStorage.createUser({ username: "wellington.pires", password: "x", role: "funcionario", fullName: "Wellington Pires" } as any);

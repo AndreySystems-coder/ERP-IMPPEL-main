@@ -1901,6 +1901,20 @@ export async function registerRoutes(
       assertMobileImportRowsReady(rows);
       const activeRows = rows.filter(row => !row.ignored);
       if (!activeRows.length) return res.status(400).json({ message: "Nenhum item confirmado para importar." });
+      const stockWarningRows = activeRows.filter(row => row.warnings.some(warning => warning.toLowerCase().includes("estoque insuficiente")));
+      const confirmedInsufficientStock = req.body?.confirmInsufficientStock === true;
+      if (stockWarningRows.length > 0 && !confirmedInsufficientStock) {
+        return res.status(409).json({
+          message: "Confirme o Registro Rápido com estoque insuficiente antes de aplicar.",
+          requiresInsufficientStockConfirmation: true,
+          stockWarnings: stockWarningRows.map(row => ({
+            id: row.id,
+            itemName: row.itemName || row.rawItem,
+            quantity: row.quantity,
+            warnings: row.warnings.filter(warning => warning.toLowerCase().includes("estoque insuficiente")),
+          })),
+        });
+      }
 
       const [inventoryItems, users, existingAliases] = await Promise.all([
         storage.getInventoryItems(),
@@ -1909,6 +1923,31 @@ export async function registerRoutes(
       ]);
       const inventoryById = new Map(inventoryItems.map((item: any) => [Number(item.id), item]));
       const usersById = new Map(users.map((user: any) => [Number(user.id), user]));
+      const availableByInventoryId = new Map(inventoryItems.map((item: any) => [Number(item.id), Math.max(0, Number(item.quantity) || 0)]));
+      const recomputedStockWarningRows = activeRows.filter(row => {
+        if (!row.inventoryId) return false;
+        const key = Number(row.inventoryId);
+        const available = availableByInventoryId.get(key) ?? 0;
+        const quantity = Number(row.quantity || 0);
+        if (row.type === "entrada") {
+          availableByInventoryId.set(key, available + quantity);
+          return false;
+        }
+        if (quantity > available) return true;
+        availableByInventoryId.set(key, available - quantity);
+        return false;
+      });
+      if (recomputedStockWarningRows.length > 0 && !confirmedInsufficientStock) {
+        return res.status(409).json({
+          message: "Confirme o Registro Rápido com estoque insuficiente antes de aplicar.",
+          requiresInsufficientStockConfirmation: true,
+          stockWarnings: recomputedStockWarningRows.map(row => ({
+            id: row.id,
+            itemName: row.itemName || row.rawItem,
+            quantity: row.quantity,
+          })),
+        });
+      }
 
       const movements: any[] = [];
       const withdrawals: any[] = [];
@@ -1937,7 +1976,7 @@ export async function registerRoutes(
             date: row.date,
             month,
             notes: `Registro Rapido #${hash.slice(0, 12)} | ${row.rawText}${stockWarning}`,
-          });
+          }, row.type === "saida" ? { allowNegativeStock: true } : undefined);
           movements.push(movement);
           continue;
         }
@@ -1994,7 +2033,7 @@ export async function registerRoutes(
             date: group.date,
             month,
             notes: `Registro Rapido #${hash.slice(0, 12)} | Retirada #${withdrawal.id} | Responsavel: ${group.user.username}${Number(inventoryById.get(Number(item.inventoryId))?.quantity || 0) < Number(item.quantity || 0) ? " | ALERTA: estoque insuficiente no momento do registro" : ""}`,
-          });
+          }, { allowNegativeStock: true });
           movements.push(movement);
         }
       }

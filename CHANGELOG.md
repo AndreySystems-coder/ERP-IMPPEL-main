@@ -3,6 +3,21 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-24] - Melhorias no Registro Rapido
+
+### Alterado
+
+- Registro Rapido passou a usar busca inteligente de materiais no preview, com correspondencia por nome, parte do nome, caixa ignorada e normalizacao de aliases do parser.
+- Registro Rapido passou a permitir confirmacao explicita de itens com estoque insuficiente, mantendo o alerta visual antes de aplicar.
+
+### Segurança
+
+- A excecao para saldo insuficiente ficou restrita ao endpoint de Registro Rapido e exige confirmacao; as demais movimentacoes continuam bloqueadas pela regra global de estoque.
+
+### Validacao
+
+- Testes operacionais cobrem bloqueio padrao de estoque, excecao controlada do Registro Rapido e busca por alias normalizado.
+
 ## [2026-07-24] - Validacao final de restore operacional e credenciais
 
 ### Corrigido
