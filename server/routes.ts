@@ -713,12 +713,9 @@ export async function registerRoutes(
       if (!isHashed) {
         await storage.updateUserPassword(user.id, await bcrypt.hash(input.password, BCRYPT_ROUNDS));
       }
-      if ((user as any).mustChangePassword) {
-        await storage.updateUser(user.id, { mustChangePassword: false } as any);
-      }
       req.session.userId = user.id;
       req.session.userRole = user.role;
-      res.status(200).json(toPublicUser({ ...user, mustChangePassword: false }));
+      res.status(200).json(toPublicUser(user));
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(401).json({ message: err.errors[0].message });
@@ -748,7 +745,7 @@ export async function registerRoutes(
         roleLabel = customRole.label;
       }
     }
-    res.status(200).json(toPublicUser({ ...user, mustChangePassword: false }, { permissions, roleName, roleLabel }));
+    res.status(200).json(toPublicUser(user, { permissions, roleName, roleLabel }));
   });
 
   app.post(api.auth.logout.path, (req, res) => {
@@ -785,7 +782,7 @@ export async function registerRoutes(
           fullName: uAny.fullName || null,
           birthDate: uAny.birthDate || null,
           status: uAny.status || "ativo",
-          mustChangePassword: false,
+          mustChangePassword: Boolean(uAny.mustChangePassword),
           roleName: customRole?.name || null,
           roleLabel: customRole?.label || null,
         };
@@ -883,7 +880,7 @@ export async function registerRoutes(
           cargo: role?.label || item.jobTitle || TECHNICAL_TEAM_ROLE.label,
           perfil: "Funcionário",
           status: item.status === "inativo" ? "Inativo" : "Ativo",
-          trocaPendente: false,
+          trocaPendente: Boolean(item.mustChangePassword),
         };
       });
       res.json({ type: "usuarios-operacionais", version: "1.0", exportedAt: new Date().toISOString(), data: rows });

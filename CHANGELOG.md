@@ -3,6 +3,20 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-07-24] - Validacao final de restore operacional e credenciais
+
+### Corrigido
+
+- Login e `/api/auth/me` deixaram de zerar ou ocultar `mustChangePassword` antes da troca real de senha.
+- Listagem administrativa de usuarios passou a exibir o estado real de redefinicao obrigatoria, permitindo auditar funcionarios importados com senha nao exportavel.
+- Exportacao operacional de usuarios passou a indicar `trocaPendente` com base no estado real do cadastro.
+
+### Validacao
+
+- Fluxo temporario por API oficial confirmou importacao de Usuarios/Cargos, Produtos, Servicos, Estoque e Controle de Materiais.
+- Controle de Materiais ficou preenchido com 77 retiradas e 245 itens de retirada em ambiente temporario em memoria.
+- Segunda importacao do PDF de Controle de Materiais nao criou novas retiradas nem novos itens.
+
 ## [2026-07-23] - Correcao do importador PDF de Usuarios e Cargos
 
 ### Corrigido
