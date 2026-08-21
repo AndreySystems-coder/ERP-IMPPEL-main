@@ -787,6 +787,152 @@ export const materialWithdrawalItems = pgTable("material_withdrawal_items", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const materialCustodyTransfers = pgTable("material_custody_transfers", {
+  id: serial("id").primaryKey(),
+  withdrawalId: integer("withdrawal_id"),
+  withdrawalItemId: integer("withdrawal_item_id"),
+  inventoryId: integer("inventory_id").notNull(),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unit: text("unit").notNull().default("unid"),
+  previousUserId: integer("previous_user_id"),
+  previousUsername: text("previous_username"),
+  newUserId: integer("new_user_id").notNull(),
+  newUsername: text("new_username").notNull(),
+  workOrderId: integer("work_order_id"),
+  reason: text("reason"),
+  condition: text("condition").notNull().default("bom"),
+  evidencePhoto: text("evidence_photo"),
+  acceptedAt: timestamp("accepted_at"),
+  acceptedByUserId: integer("accepted_by_user_id"),
+  acceptedByUsername: text("accepted_by_username"),
+  status: text("status").notNull().default("pendente"), // pendente | aceito | rejeitado | cancelado
+  auditTrail: text("audit_trail"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const materialResponsibilityCases = pgTable("material_responsibility_cases", {
+  id: serial("id").primaryKey(),
+  withdrawalId: integer("withdrawal_id"),
+  withdrawalItemId: integer("withdrawal_item_id"),
+  inventoryId: integer("inventory_id"),
+  productName: text("product_name").notNull(),
+  workOrderId: integer("work_order_id"),
+  jobId: integer("job_id"),
+  userId: integer("user_id"),
+  username: text("username"),
+  type: text("type").notNull(), // dano | perda | manutencao | divergencia | atraso | sobra | outro
+  severity: text("severity").notNull().default("administrativa"), // informativa | administrativa | bloqueante
+  status: text("status").notNull().default("aberta"), // aberta | aguardando_manifestacao | em_analise | aprovada_administrativamente | rejeitada | concluida | cancelada
+  description: text("description").notNull(),
+  evidence: text("evidence"),
+  estimatedValue: real("estimated_value").notNull().default(0),
+  employeeStatement: text("employee_statement"),
+  analysis: text("analysis"),
+  decision: text("decision"),
+  financialStatus: text("financial_status").notNull().default("sem_providencia_financeira"),
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  approvedAt: timestamp("approved_at"),
+  auditTrail: text("audit_trail"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const materialKits = pgTable("material_kits", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("funcao"), // funcao | individual | equipe
+  roleName: text("role_name"),
+  assignedUserId: integer("assigned_user_id"),
+  assignedUsername: text("assigned_username"),
+  status: text("status").notNull().default("rascunho"),
+  notes: text("notes"),
+  auditTrail: text("audit_trail"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const materialKitItems = pgTable("material_kit_items", {
+  id: serial("id").primaryKey(),
+  kitId: integer("kit_id").notNull(),
+  inventoryId: integer("inventory_id").notNull(),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull().default(1),
+  required: boolean("required").notNull().default(true),
+  replacementPolicy: text("replacement_policy"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const toolMaintenanceRecords = pgTable("tool_maintenance_records", {
+  id: serial("id").primaryKey(),
+  inventoryId: integer("inventory_id").notNull(),
+  productName: text("product_name").notNull(),
+  withdrawalId: integer("withdrawal_id"),
+  status: text("status").notNull().default("aberta"), // aberta | em_manutencao | aguardando_retorno | concluida | cancelada
+  maintenanceType: text("maintenance_type").notNull().default("corretiva"),
+  defectDescription: text("defect_description"),
+  provider: text("provider"),
+  estimatedCost: real("estimated_cost").notNull().default(0),
+  scheduledAt: timestamp("scheduled_at"),
+  completedAt: timestamp("completed_at"),
+  finalCondition: text("final_condition"),
+  photos: text("photos"),
+  releasedByUserId: integer("released_by_user_id"),
+  releasedByUsername: text("released_by_username"),
+  auditTrail: text("audit_trail"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const materialCountAudits = pgTable("material_count_audits", {
+  id: serial("id").primaryKey(),
+  inventoryId: integer("inventory_id").notNull(),
+  productName: text("product_name").notNull(),
+  systemQuantity: integer("system_quantity").notNull(),
+  physicalQuantity: integer("physical_quantity").notNull(),
+  difference: integer("difference").notNull(),
+  reason: text("reason").notNull(),
+  evidence: text("evidence"),
+  status: text("status").notNull().default("pendente"), // pendente | aprovado | rejeitado | ajustado
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  approvedAt: timestamp("approved_at"),
+  auditTrail: text("audit_trail"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const materialTrainingGuides = pgTable("material_training_guides", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  category: text("category").notNull().default("controle_materiais"),
+  version: text("version").notNull().default("1.0"),
+  status: text("status").notNull().default("rascunho"),
+  content: text("content").notNull(),
+  media: text("media"),
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  approvedAt: timestamp("approved_at"),
+  auditTrail: text("audit_trail"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertMaterialWithdrawalSchema = createInsertSchema(materialWithdrawals).omit({ id: true, createdAt: true, returnedAt: true });
 export const insertMaterialWithdrawalItemSchema = createInsertSchema(materialWithdrawalItems).omit({ id: true, createdAt: true });
 
@@ -816,6 +962,13 @@ export const insertMobileImportHistorySchema = createInsertSchema(mobileImportHi
 
 export type MaterialWithdrawal = typeof materialWithdrawals.$inferSelect;
 export type MaterialWithdrawalItem = typeof materialWithdrawalItems.$inferSelect;
+export type MaterialCustodyTransfer = typeof materialCustodyTransfers.$inferSelect;
+export type MaterialResponsibilityCase = typeof materialResponsibilityCases.$inferSelect;
+export type MaterialKit = typeof materialKits.$inferSelect;
+export type MaterialKitItem = typeof materialKitItems.$inferSelect;
+export type ToolMaintenanceRecord = typeof toolMaintenanceRecords.$inferSelect;
+export type MaterialCountAudit = typeof materialCountAudits.$inferSelect;
+export type MaterialTrainingGuide = typeof materialTrainingGuides.$inferSelect;
 export type InsertMaterialWithdrawal = typeof insertMaterialWithdrawalSchema._type;
 export type InsertMaterialWithdrawalItem = typeof insertMaterialWithdrawalItemSchema._type;
 export type MobileImportAlias = typeof mobileImportAliases.$inferSelect;
@@ -854,6 +1007,13 @@ export const salaryDiscounts = pgTable("salary_discounts", {
 
 export const insertSalaryDiscountRuleSchema = createInsertSchema(salaryDiscountRules).omit({ id: true, createdAt: true });
 export const insertSalaryDiscountSchema = createInsertSchema(salaryDiscounts).omit({ id: true, createdAt: true, approvedAt: true });
+export const insertMaterialCustodyTransferSchema = createInsertSchema(materialCustodyTransfers).omit({ id: true, createdAt: true, updatedAt: true, acceptedAt: true });
+export const insertMaterialResponsibilityCaseSchema = createInsertSchema(materialResponsibilityCases).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
+export const insertMaterialKitSchema = createInsertSchema(materialKits).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMaterialKitItemSchema = createInsertSchema(materialKitItems).omit({ id: true, createdAt: true });
+export const insertToolMaintenanceRecordSchema = createInsertSchema(toolMaintenanceRecords).omit({ id: true, createdAt: true, updatedAt: true, completedAt: true });
+export const insertMaterialCountAuditSchema = createInsertSchema(materialCountAudits).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
+export const insertMaterialTrainingGuideSchema = createInsertSchema(materialTrainingGuides).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
 export const insertCommercialPolicySchema = createInsertSchema(commercialPolicies).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertDiscountRequestSchema = createInsertSchema(discountRequests).omit({ id: true, createdAt: true, updatedAt: true, decidedAt: true });
 export const insertCommissionRecordSchema = createInsertSchema(commissionRecords).omit({ id: true, createdAt: true, updatedAt: true });

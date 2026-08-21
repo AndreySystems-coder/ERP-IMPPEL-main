@@ -3,6 +3,25 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-21] - Fechamento tecnico da Etapa 6 de materiais e responsabilidade
+
+### Adicionado
+
+- Criada estrutura tecnica para transferencias de custodia, casos de responsabilidade administrativa, kits, manutencao, conciliacao de contagem e treinamento "Como Trabalhar".
+- Controle de Materiais ganhou aba `Etapa 6` com acoes mobile-friendly para registrar transferencias, ocorrencias, manutencoes, kits, divergencias e treinamento em rascunho.
+- Novas APIs `/api/material-responsibility/*` com autenticacao, autorizacao, auditoria e indicadores.
+- Finalizacao de OS passou a bloquear pendencias materiais retornaveis e ocorrencias bloqueantes, sem tratar consumiveis como devolucao pendente.
+- Backup completo do modulo `controleMateriais` passou a incluir todos os novos registros da Etapa 6.
+- Migration incremental `migrations/0004_stage_6_material_responsibility.sql` adiciona apenas tabelas novas com `CREATE TABLE IF NOT EXISTS`.
+
+### Corrigido
+
+- Devolucao de item danificado, perdido ou em manutencao deixou de criar desconto salarial automaticamente; agora abre caso administrativo sem providencia financeira.
+
+### Observacoes
+
+- Regras disciplinares, juridicas, prazos reais, valores, treinamentos definitivos e responsaveis oficiais nao foram inventados e permanecem como decisao da IMPPEL.
+
 ## [2026-08-21] - Implementacao tecnica da Etapa 5 de qualidade das obras
 
 ### Adicionado

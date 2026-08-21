@@ -168,7 +168,7 @@ export function buildTechnicalFiles(backup: CompleteBackupPackage): TechnicalFil
     ["orcamentos.json", "orcamentos", "orcamentos", ["jobs"], backup.data.orcamentos || {}],
     ["garantias.json", "garantias", "garantias", ["warranties", "warrantyIncidents", "contracts"], backup.data.garantias || {}],
     ["financeiro.json", "financeiro", "financeiro", ["payments", "transactions"], backup.data.financeiro || {}],
-    ["materiais.json", "materiais", "controleMateriais", ["materialWithdrawals", "materialWithdrawalItems", "obraConsumoLogs", "salaryDiscounts"], backup.data.controleMateriais || {}],
+    ["materiais.json", "materiais", "controleMateriais", ["materialWithdrawals", "materialWithdrawalItems", "obraConsumoLogs", "salaryDiscounts", "materialCustodyTransfers", "materialResponsibilityCases", "materialKits", "materialKitItems", "toolMaintenanceRecords", "materialCountAudits", "materialTrainingGuides"], backup.data.controleMateriais || {}],
     ["importacoesRapidas.json", "importacoesRapidas", "importacoesRapidas", ["mobileImportAliases", "mobileImportHistory"], backup.data.importacoesRapidas || {}],
     ["configuracoes.json", "configuracoes", "configuracoes", ["settings", "costConfig", "priorityRules", "jobStatuses", "whatsappFlows", "whatsappSendLogs", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"], backup.data.configuracoes || {}],
     ["registrosObra.json", "registrosObra", "registrosObra", ["obraRegistros", "productionLogs"], backup.data.registrosObra || {}],

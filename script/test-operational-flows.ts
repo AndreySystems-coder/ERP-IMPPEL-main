@@ -913,4 +913,73 @@ assert.equal(qualitySnapshot.checklistTemplates[0].procedureId, qualityProcedure
 assert.equal(qualitySnapshot.workOrderQualityRuns[0].status, "concluido", "execução de checklist deve registrar conclusão");
 assert.equal(qualitySnapshot.qualityEvents[0].status, "resolvida", "ocorrência deve registrar resolução");
 
-console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel, entrada por cargo e qualidade das obras.");
+const responsibilityStorage = createMemoryStorage();
+const stage6UserA = await responsibilityStorage.createUser({ username: "funcionario.a", password: "x", role: "funcionario" } as any);
+const stage6UserB = await responsibilityStorage.createUser({ username: "funcionario.b", password: "x", role: "funcionario" } as any);
+const stage6Tool = await responsibilityStorage.createInventoryItem({ name: "Marreta Etapa 6", type: "ferramenta", unit: "un", quantity: 2, minStock: 0, pricePerUnit: 90 });
+const stage6Withdrawal = await responsibilityStorage.createMaterialWithdrawal({
+  userId: stage6UserA.id,
+  username: stage6UserA.username,
+  workOrderId: 606,
+  jobId: 505,
+  clientName: "Cliente Etapa 6",
+  withdrawalDate: "2026-08-21",
+  status: "pendente",
+  withdrawalPhoto: "data:image/png;base64,sintetico",
+  withdrawalSignature: "data:image/png;base64,sintetico",
+  notes: "Retirada sintética Etapa 6",
+} as any, [{ inventoryId: stage6Tool.id, productName: stage6Tool.name, unit: "un", quantity: 1 } as any]);
+const stage6Item = stage6Withdrawal.items[0];
+const transfer = await responsibilityStorage.createCompleteTableRow("materialCustodyTransfers", {
+  withdrawalId: stage6Withdrawal.id,
+  withdrawalItemId: stage6Item.id,
+  inventoryId: stage6Tool.id,
+  productName: stage6Tool.name,
+  quantity: 1,
+  previousUserId: stage6UserA.id,
+  previousUsername: stage6UserA.username,
+  newUserId: stage6UserB.id,
+  newUsername: stage6UserB.username,
+  workOrderId: 606,
+  reason: "Troca de equipe",
+  condition: "bom",
+  status: "pendente",
+  auditTrail: JSON.stringify([{ action: "created" }]),
+});
+await responsibilityStorage.updateCompleteTableRow("materialCustodyTransfers", transfer.id, {
+  status: "aceito",
+  acceptedByUserId: stage6UserB.id,
+  acceptedByUsername: stage6UserB.username,
+  acceptedAt: new Date("2026-08-21T12:00:00Z"),
+});
+await responsibilityStorage.updateMaterialWithdrawalItems(stage6Withdrawal.id, [{ id: stage6Item.id, returnedQuantity: 1, condition: "danificado" }]);
+await responsibilityStorage.createCompleteTableRow("materialResponsibilityCases", {
+  withdrawalId: stage6Withdrawal.id,
+  withdrawalItemId: stage6Item.id,
+  inventoryId: stage6Tool.id,
+  productName: stage6Tool.name,
+  workOrderId: 606,
+  jobId: 505,
+  userId: stage6UserB.id,
+  username: stage6UserB.username,
+  type: "dano",
+  severity: "administrativa",
+  status: "aberta",
+  description: "Dano sintético para apuração administrativa",
+  estimatedValue: 0,
+  financialStatus: "sem_providencia_financeira",
+  auditTrail: JSON.stringify([{ action: "created" }]),
+});
+await responsibilityStorage.createCompleteTableRow("materialKits", { name: "Kit Etapa 6", type: "funcao", roleName: "Aplicador", status: "rascunho", auditTrail: "[]" });
+await responsibilityStorage.createCompleteTableRow("toolMaintenanceRecords", { inventoryId: stage6Tool.id, productName: stage6Tool.name, withdrawalId: stage6Withdrawal.id, status: "aberta", maintenanceType: "corretiva", defectDescription: "Cabo trincado", auditTrail: "[]" });
+await responsibilityStorage.createCompleteTableRow("materialCountAudits", { inventoryId: stage6Tool.id, productName: stage6Tool.name, systemQuantity: 2, physicalQuantity: 1, difference: -1, reason: "Conferência sintética", status: "pendente", auditTrail: "[]" });
+await responsibilityStorage.createCompleteTableRow("materialTrainingGuides", { title: "Como trabalhar Etapa 6", category: "controle_materiais", version: "1.0", status: "rascunho", content: "PENDENTE DE VALIDACAO DA IMPPEL", auditTrail: "[]" });
+const stage6Snapshot = await responsibilityStorage.getCompleteBackupData();
+assert.equal(stage6Snapshot.materialCustodyTransfers[0].status, "aceito", "transferência deve registrar aceite explícito");
+assert.equal(stage6Snapshot.materialResponsibilityCases[0].financialStatus, "sem_providencia_financeira", "dano/perda não pode gerar desconto automático");
+assert.equal(stage6Snapshot.salaryDiscounts.length, 0, "Etapa 6 não deve criar desconto salarial automático");
+assert.equal(stage6Snapshot.toolMaintenanceRecords[0].status, "aberta", "ferramenta em manutenção deve ficar registrada");
+assert.equal(stage6Snapshot.materialCountAudits[0].difference, -1, "divergência de contagem deve preservar diferença auditável");
+assert.equal(stage6Snapshot.materialTrainingGuides[0].status, "rascunho", "treinamento deve nascer como rascunho editável");
+
+console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel, entrada por cargo, qualidade das obras e responsabilidade de materiais.");

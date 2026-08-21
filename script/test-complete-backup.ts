@@ -48,6 +48,13 @@ const syntheticData: Record<string, any[]> = {
     { id: 1, withdrawalId: 1, inventoryId: 1, productName: "Material Sintetico", quantity: 2 },
     { id: 2, withdrawalId: 2, inventoryId: 2, productName: "Furadeira Sintetica", quantity: 1, returnedQuantity: 1, condition: "manutencao" },
   ],
+  materialCustodyTransfers: [{ id: 1, withdrawalId: 2, withdrawalItemId: 2, inventoryId: 2, productName: "Furadeira Sintetica", quantity: 1, previousUserId: 2, previousUsername: "AplicadorTeste", newUserId: 1, newUsername: "AdminTeste", status: "aceito", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  materialResponsibilityCases: [{ id: 1, withdrawalId: 2, withdrawalItemId: 2, inventoryId: 2, productName: "Furadeira Sintetica", workOrderId: 1, jobId: 1, userId: 2, username: "AplicadorTeste", type: "manutencao", severity: "administrativa", status: "aberta", description: "Caso sintético", financialStatus: "sem_providencia_financeira", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  materialKits: [{ id: 1, name: "Kit sintético", type: "funcao", roleName: "Aplicador", status: "rascunho", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  materialKitItems: [{ id: 1, kitId: 1, inventoryId: 2, productName: "Furadeira Sintetica", quantity: 1, required: true }],
+  toolMaintenanceRecords: [{ id: 1, inventoryId: 2, productName: "Furadeira Sintetica", withdrawalId: 2, status: "aberta", maintenanceType: "corretiva", defectDescription: "Manutenção sintética", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  materialCountAudits: [{ id: 1, inventoryId: 2, productName: "Furadeira Sintetica", systemQuantity: 1, physicalQuantity: 1, difference: 0, reason: "Contagem sintética", status: "pendente", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  materialTrainingGuides: [{ id: 1, title: "Como trabalhar sintético", category: "controle_materiais", version: "1.0", status: "rascunho", content: "PENDENTE DE VALIDACAO DA IMPPEL", auditTrail: JSON.stringify([{ action: "created" }]) }],
   mobileImportAliases: [{ id: 1, alias: "Lequinho", userId: 2, username: "AplicadorTeste" }],
   mobileImportHistory: [{ id: 1, hash: "hash-sintetico", importedByUserId: 1, importedByUsername: "AdminTeste", sourceText: "30/06\n+ 1x Material Sintetico", summary: JSON.stringify({ movimentosCriados: 1 }), status: "aplicado" }],
   obraConsumoLogs: [{ id: 1, workOrderId: 1, inventoryId: 1, materialName: "Material Sintetico", quantity: 1 }],
@@ -145,6 +152,13 @@ assert.equal(restored.inventory.find(row => row.id === 2)?.type, "ferramenta", "
 assert.equal(restored.materialWithdrawalItems.find(row => row.id === 2)?.condition, "manutencao", "condição da ferramenta não foi restaurada");
 assert.equal(restored.mobileImportAliases[0].alias, "Lequinho", "alias da importação rápida não foi restaurado");
 assert.equal(restored.mobileImportHistory[0].hash, "hash-sintetico", "histórico da importação rápida não foi restaurado");
+assert.equal(restored.materialCustodyTransfers[0].newUsername, "AdminTeste", "transferência de custódia não foi restaurada");
+assert.equal(restored.materialResponsibilityCases[0].financialStatus, "sem_providencia_financeira", "caso administrativo não preservou status financeiro seguro");
+assert.equal(restored.materialKits[0].name, "Kit sintético", "kit de materiais não foi restaurado");
+assert.equal(restored.materialKitItems[0].kitId, 1, "item de kit não preservou vínculo");
+assert.equal(restored.toolMaintenanceRecords[0].status, "aberta", "manutenção de ferramenta não foi restaurada");
+assert.equal(restored.materialCountAudits[0].difference, 0, "auditoria de contagem não foi restaurada");
+assert.equal(restored.materialTrainingGuides[0].status, "rascunho", "treinamento operacional não foi restaurado");
 assert.equal(restored.discountRequests[0].discountPercent, 10, "solicitação comercial não foi restaurada");
 assert.equal(restored.commissionRecords[0].commissionAmount, 30, "comissão comercial não foi restaurada");
 assert.equal(restored.technicalProcedures[0].status, "ativo", "procedimento técnico não foi restaurado");

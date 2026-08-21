@@ -138,3 +138,12 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Impacto: problemas de UX responsiva podem restar mesmo com TypeScript/build/testes passando.
 - Arquivos envolvidos: telas de Orçamentos, Financeiro, Custos e Margens, Estoque, OS, Garantias e Backup.
 - Plano: executar validacao visual desktop/mobile antes do piloto real ou durante a homologacao operacional.
+
+### KI-013 - Etapa 6 depende de regras administrativas reais da IMPPEL
+
+- Severidade: Medio.
+- Causa raiz: o ERP agora possui estrutura para custodia, ocorrencias, apuracao, manutencao, kits, contagem e treinamento, mas prazos, politicas disciplinares, valores e consequencias financeiras dependem de decisao da empresa e validacao juridica/contabil.
+- Impacto: o processo esta tecnicamente disponivel, mas nao deve ser considerado operacionalmente homologado sem piloto real, treinamento e regras aprovadas.
+- Arquivos envolvidos: `client/src/features/materials/components/MaterialResponsibilityGovernance.tsx`, `server/routes.ts`, `shared/schema.ts`, `migrations/0004_stage_6_material_responsibility.sql`.
+- Workaround: usar casos administrativos como registro de fatos, mantendo `financialStatus=sem_providencia_financeira` ate decisao humana.
+- Status: pendente de homologacao operacional da IMPPEL.

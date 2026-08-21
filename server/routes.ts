@@ -210,6 +210,24 @@ async function getQualityClosureBlockers(workOrderId: number) {
   return { pendingRuns, blockingEvents };
 }
 
+async function getMaterialClosureBlockers(workOrderId: number) {
+  const [withdrawals, cases] = await Promise.all([
+    storage.getMaterialWithdrawals(),
+    storage.getCompleteTableRows("materialResponsibilityCases"),
+  ]);
+  const pendingReturnables = withdrawals.filter((withdrawal: any) =>
+    Number(withdrawal.workOrderId) === workOrderId && isMaterialWithdrawalPending(withdrawal)
+  );
+  const blockingCases = cases.filter((item: any) => {
+    if (Number(item.workOrderId) !== workOrderId) return false;
+    const status = String(item.status || "").toLowerCase();
+    const severity = String(item.severity || "").toLowerCase();
+    if (CLOSED_QUALITY_STATUSES.has(status) || status === "concluida" || status === "concluída") return false;
+    return severity === "bloqueante";
+  });
+  return { pendingReturnables, blockingCases };
+}
+
 function uniqueRestoreValues(values: unknown[]) {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -1145,6 +1163,7 @@ export async function registerRoutes(
     { prefix: "/api/nps-responses", permissions: ["viewPostSale"] },
     { prefix: "/api/maintenance-reminders", permissions: ["viewPostSale"] },
     { prefix: "/api/material-withdrawals", permissions: ["registrarMaterials", "viewAllMaterials"] },
+    { prefix: "/api/material-responsibility", permissions: ["registrarMaterials", "viewAllMaterials", "editInventory", "viewInventoryCurrent"] },
     { prefix: "/api/commercial", permissions: ["viewSettings", "viewFinancials", "viewQuotes"] },
     { prefix: "/api/quality", permissions: ["viewWorkOrders", "editWorkOrders", "registrarMaterials", "viewSettings"] },
   ];
@@ -1203,9 +1222,10 @@ export async function registerRoutes(
       }
       const actor = sessionActor(req);
       const payload = transform(cleanPayload(req.body || {}), current);
+      const internalAuditTrail = req.body?.auditTrail === undefined ? payload.auditTrail : undefined;
       const updated = await storage.updateCompleteTableRow(tableKey, id, {
         ...payload,
-        auditTrail: appendAuditTrail(current.auditTrail, { action: "updated", ...actor }),
+        auditTrail: internalAuditTrail ?? appendAuditTrail(current.auditTrail, { action: "updated", ...actor }),
       });
       res.json(updated);
     } catch (err: any) {
@@ -1481,6 +1501,192 @@ export async function registerRoutes(
         openEvents: events.filter(row => !CLOSED_QUALITY_STATUSES.has(String(row.status || "").toLowerCase())).length,
         blockingOpen,
         nonConformities: events.filter(row => String(row.type || "").toLowerCase().includes("conformidade")).length,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  const stage6ActorPayload = (req: Request) => {
+    const actor = sessionActor(req);
+    return { createdByUserId: actor.userId, createdByUsername: actor.username };
+  };
+
+  const safePositiveInteger = (value: unknown, fallback = 0) => Math.max(0, Math.trunc(Number(value) || fallback));
+
+  app.get("/api/material-responsibility/transfers", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), (req, res) => listCompleteRows("materialCustodyTransfers", req, res));
+  app.post("/api/material-responsibility/transfers", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), async (req, res) => {
+    const quantity = safePositiveInteger(req.body?.quantity);
+    if (!req.body?.inventoryId || !req.body?.productName || !req.body?.newUserId || !req.body?.newUsername || quantity <= 0) {
+      return res.status(400).json({ message: "Item, quantidade e novo responsável são obrigatórios." });
+    }
+    return createCompleteRow("materialCustodyTransfers", req, res, (payload) => ({
+      ...payload,
+      inventoryId: Number(payload.inventoryId),
+      withdrawalId: payload.withdrawalId ? Number(payload.withdrawalId) : null,
+      withdrawalItemId: payload.withdrawalItemId ? Number(payload.withdrawalItemId) : null,
+      previousUserId: payload.previousUserId ? Number(payload.previousUserId) : null,
+      newUserId: Number(payload.newUserId),
+      workOrderId: payload.workOrderId ? Number(payload.workOrderId) : null,
+      quantity,
+      condition: normalizeReturnCondition(payload.condition || "bom"),
+      status: payload.status || "pendente",
+      ...stage6ActorPayload(req),
+    }));
+  });
+  app.patch("/api/material-responsibility/transfers/:id/accept", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), (req, res) => patchCompleteRow("materialCustodyTransfers", req, res, (payload, current) => {
+    const actor = sessionActor(req);
+    return {
+      ...payload,
+      status: "aceito",
+      acceptedAt: new Date(),
+      acceptedByUserId: actor.userId,
+      acceptedByUsername: actor.username,
+      auditTrail: appendAuditTrail(current.auditTrail, { action: "accepted", ...actor }),
+    };
+  }));
+
+  app.get("/api/material-responsibility/cases", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), (req, res) => listCompleteRows("materialResponsibilityCases", req, res));
+  app.post("/api/material-responsibility/cases", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), (req, res) => {
+    if (!req.body?.productName || !req.body?.type || !req.body?.description) {
+      return res.status(400).json({ message: "Produto, tipo e descrição são obrigatórios." });
+    }
+    return createCompleteRow("materialResponsibilityCases", req, res, (payload) => ({
+      ...payload,
+      withdrawalId: payload.withdrawalId ? Number(payload.withdrawalId) : null,
+      withdrawalItemId: payload.withdrawalItemId ? Number(payload.withdrawalItemId) : null,
+      inventoryId: payload.inventoryId ? Number(payload.inventoryId) : null,
+      workOrderId: payload.workOrderId ? Number(payload.workOrderId) : null,
+      jobId: payload.jobId ? Number(payload.jobId) : null,
+      userId: payload.userId ? Number(payload.userId) : null,
+      estimatedValue: Math.max(0, parseNumber(payload.estimatedValue)),
+      severity: payload.severity || "administrativa",
+      status: payload.status || "aberta",
+      financialStatus: payload.financialStatus || "sem_providencia_financeira",
+      ...stage6ActorPayload(req),
+    }));
+  });
+  app.patch("/api/material-responsibility/cases/:id", requireAdmin, (req, res) => patchCompleteRow("materialResponsibilityCases", req, res));
+  app.post("/api/material-responsibility/cases/:id/decision", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const current = (await storage.getCompleteTableRows("materialResponsibilityCases")).find(row => Number(row.id) === id);
+      if (!current) return res.status(404).json({ message: "Ocorrência não encontrada" });
+      const actor = sessionActor(req);
+      const status = req.body?.status || "concluida";
+      const updated = await storage.updateCompleteTableRow("materialResponsibilityCases", id, {
+        status,
+        analysis: req.body?.analysis || current.analysis || null,
+        decision: req.body?.decision || current.decision || null,
+        financialStatus: req.body?.financialStatus || current.financialStatus || "sem_providencia_financeira",
+        approvedByUserId: actor.userId,
+        approvedByUsername: actor.username,
+        approvedAt: new Date(),
+        auditTrail: appendAuditTrail(current.auditTrail, { action: "administrative_decision", ...actor, status }),
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/material-responsibility/kits", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), (req, res) => listCompleteRows("materialKits", req, res));
+  app.post("/api/material-responsibility/kits", requireAdmin, (req, res) => {
+    if (!req.body?.name) return res.status(400).json({ message: "Nome do kit é obrigatório." });
+    return createCompleteRow("materialKits", req, res, (payload) => ({
+      ...payload,
+      assignedUserId: payload.assignedUserId ? Number(payload.assignedUserId) : null,
+      status: payload.status || "rascunho",
+      ...stage6ActorPayload(req),
+    }));
+  });
+  app.get("/api/material-responsibility/kit-items", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), (req, res) => listCompleteRows("materialKitItems", req, res));
+  app.post("/api/material-responsibility/kit-items", requireAdmin, (req, res) => {
+    if (!req.body?.kitId || !req.body?.inventoryId || !req.body?.productName) return res.status(400).json({ message: "Kit e item são obrigatórios." });
+    return createCompleteRow("materialKitItems", req, res, (payload) => ({
+      ...payload,
+      kitId: Number(payload.kitId),
+      inventoryId: Number(payload.inventoryId),
+      quantity: Math.max(1, safePositiveInteger(payload.quantity, 1)),
+      required: payload.required !== false,
+    }));
+  });
+
+  app.get("/api/material-responsibility/maintenance", requireAnyPermission(["registrarMaterials", "viewAllMaterials", "editInventory"]), (req, res) => listCompleteRows("toolMaintenanceRecords", req, res));
+  app.post("/api/material-responsibility/maintenance", requireAnyPermission(["registrarMaterials", "viewAllMaterials", "editInventory"]), (req, res) => {
+    if (!req.body?.inventoryId || !req.body?.productName) return res.status(400).json({ message: "Ferramenta/equipamento é obrigatório." });
+    return createCompleteRow("toolMaintenanceRecords", req, res, (payload) => ({
+      ...payload,
+      inventoryId: Number(payload.inventoryId),
+      withdrawalId: payload.withdrawalId ? Number(payload.withdrawalId) : null,
+      estimatedCost: Math.max(0, parseNumber(payload.estimatedCost)),
+      status: payload.status || "aberta",
+      maintenanceType: payload.maintenanceType || "corretiva",
+      ...stage6ActorPayload(req),
+    }));
+  });
+  app.patch("/api/material-responsibility/maintenance/:id", requireAnyPermission(["viewAllMaterials", "editInventory"]), (req, res) => patchCompleteRow("toolMaintenanceRecords", req, res, (payload, current) => {
+    const status = String(payload.status || current.status || "").toLowerCase();
+    const completed = status === "concluida" || status === "concluída";
+    const actor = sessionActor(req);
+    return {
+      ...payload,
+      completedAt: payload.completedAt ?? (completed ? new Date() : current.completedAt),
+      releasedByUserId: payload.releasedByUserId ?? (completed ? actor.userId : current.releasedByUserId),
+      releasedByUsername: payload.releasedByUsername ?? (completed ? actor.username : current.releasedByUsername),
+    };
+  }));
+
+  app.get("/api/material-responsibility/count-audits", requireAdmin, (req, res) => listCompleteRows("materialCountAudits", req, res));
+  app.post("/api/material-responsibility/count-audits", requireAdmin, (req, res) => {
+    if (!req.body?.inventoryId || !req.body?.productName || !req.body?.reason) return res.status(400).json({ message: "Item e motivo da divergência são obrigatórios." });
+    const systemQuantity = safePositiveInteger(req.body?.systemQuantity);
+    const physicalQuantity = safePositiveInteger(req.body?.physicalQuantity);
+    return createCompleteRow("materialCountAudits", req, res, (payload) => ({
+      ...payload,
+      inventoryId: Number(payload.inventoryId),
+      systemQuantity,
+      physicalQuantity,
+      difference: physicalQuantity - systemQuantity,
+      status: payload.status || "pendente",
+      ...stage6ActorPayload(req),
+    }));
+  });
+
+  app.get("/api/material-responsibility/training", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), (req, res) => listCompleteRows("materialTrainingGuides", req, res));
+  app.post("/api/material-responsibility/training", requireAdmin, (req, res) => {
+    if (!req.body?.title || !req.body?.content) return res.status(400).json({ message: "Título e conteúdo são obrigatórios." });
+    return createCompleteRow("materialTrainingGuides", req, res, (payload) => ({
+      ...payload,
+      status: payload.status || "rascunho",
+      category: payload.category || "controle_materiais",
+      version: payload.version || "1.0",
+      ...stage6ActorPayload(req),
+    }));
+  });
+
+  app.get("/api/material-responsibility/indicators", requireAnyPermission(["registrarMaterials", "viewAllMaterials"]), async (_req, res) => {
+    try {
+      const [withdrawals, transfers, cases, maintenance, kits, countAudits, training] = await Promise.all([
+        storage.getMaterialWithdrawals(),
+        storage.getCompleteTableRows("materialCustodyTransfers"),
+        storage.getCompleteTableRows("materialResponsibilityCases"),
+        storage.getCompleteTableRows("toolMaintenanceRecords"),
+        storage.getCompleteTableRows("materialKits"),
+        storage.getCompleteTableRows("materialCountAudits"),
+        storage.getCompleteTableRows("materialTrainingGuides"),
+      ]);
+      const pendingWithdrawals = withdrawals.filter(isMaterialWithdrawalPending);
+      const openCases = cases.filter(row => !CLOSED_QUALITY_STATUSES.has(String(row.status || "").toLowerCase()) && !["concluida", "concluída", "cancelada"].includes(String(row.status || "").toLowerCase()));
+      res.json({
+        pendingWithdrawals: pendingWithdrawals.length,
+        pendingTransfers: transfers.filter(row => String(row.status || "") === "pendente").length,
+        openCases: openCases.length,
+        blockingCases: openCases.filter(row => String(row.severity || "") === "bloqueante").length,
+        maintenanceOpen: maintenance.filter(row => !["concluida", "concluída", "cancelada"].includes(String(row.status || "").toLowerCase())).length,
+        kits: kits.length,
+        pendingCountAudits: countAudits.filter(row => String(row.status || "") === "pendente").length,
+        trainingDrafts: training.filter(row => String(row.status || "") === "rascunho").length,
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -2192,6 +2398,15 @@ export async function registerRoutes(
           message: "Pendências de qualidade bloqueiam a finalização da OS.",
           pendingRuns: qualityBlockers.pendingRuns,
           blockingEvents: qualityBlockers.blockingEvents,
+        });
+      }
+
+      const materialBlockers = await getMaterialClosureBlockers(woId);
+      if (materialBlockers.pendingReturnables.length > 0 || materialBlockers.blockingCases.length > 0) {
+        return res.status(409).json({
+          message: "Pendências de materiais retornáveis ou ocorrências bloqueantes impedem a finalização da OS.",
+          pendingReturnables: materialBlockers.pendingReturnables,
+          blockingCases: materialBlockers.blockingCases,
         });
       }
 
@@ -3837,27 +4052,55 @@ export async function registerRoutes(
         }
       }
 
-      // Lost, damaged and maintenance items require manual responsibility review.
-      const rules = await storage.getSalaryDiscountRules();
+      // Lost, damaged and maintenance items require manual responsibility review; no salary discount is created automatically.
+      const existingResponsibilityCases = await storage.getCompleteTableRows("materialResponsibilityCases");
+      const returnActor = await storage.getUser(Number(req.session.userId));
       for (const retItem of normalizedReturnItems) {
         if (retItem.returnedNow > 0 && (retItem.condition === "perdido" || retItem.condition === "danificado" || retItem.condition === "manutencao")) {
           const original = existing.items.find((x: any) => x.id === retItem.id);
           if (!original) continue;
-          const matchingRule = rules.find((r: any) => r.condition === retItem.condition && r.active);
-          await storage.createSalaryDiscount({
-            userId: existing.userId,
-            username: existing.username,
+          const caseType = retItem.condition === "manutencao" ? "manutencao" : retItem.condition === "perdido" ? "perda" : "dano";
+          const alreadyOpen = existingResponsibilityCases.some((caseRow: any) =>
+            Number(caseRow.withdrawalId) === id &&
+            Number(caseRow.withdrawalItemId) === Number(retItem.id) &&
+            String(caseRow.type || "") === caseType &&
+            !["concluida", "concluída", "cancelada", "rejeitada"].includes(String(caseRow.status || "").toLowerCase())
+          );
+          if (alreadyOpen) continue;
+          await storage.createCompleteTableRow("materialResponsibilityCases", {
             withdrawalId: id,
             withdrawalItemId: retItem.id,
+            inventoryId: original.inventoryId,
             productName: original.productName,
-            condition: retItem.condition,
-            ruleId: matchingRule?.id || null,
-            ruleName: matchingRule?.name || null,
-            discountAmount: 0, // Admin fills in the actual amount when approving
-            status: "pendente",
-            notes: null,
-            approvedBy: null,
+            workOrderId: existing.workOrderId || null,
+            jobId: existing.jobId || null,
+            userId: existing.userId,
+            username: existing.username,
+            type: caseType,
+            severity: "administrativa",
+            status: "aberta",
+            description: `Devolução registrada como ${retItem.condition} na retirada #${id}. Requer análise administrativa antes de qualquer providência financeira.`,
+            evidence: JSON.stringify({ returnPhoto: Boolean(returnPhoto), returnSignature: Boolean(returnSignature), returnedNow: retItem.returnedNow }),
+            estimatedValue: 0,
+            financialStatus: "sem_providencia_financeira",
+            auditTrail: appendAuditTrail(null, { action: "created_from_return", userId: Number(req.session.userId || 0), condition: retItem.condition }),
+            createdByUserId: Number(req.session.userId || 0),
+            createdByUsername: String(returnActor?.username || "sistema"),
           });
+          if (retItem.condition === "manutencao") {
+            await storage.createCompleteTableRow("toolMaintenanceRecords", {
+              inventoryId: original.inventoryId,
+              productName: original.productName,
+              withdrawalId: id,
+              status: "aberta",
+              maintenanceType: "corretiva",
+              defectDescription: `Item enviado para manutenção a partir da devolução #${id}.`,
+              estimatedCost: 0,
+              auditTrail: appendAuditTrail(null, { action: "created_from_return", userId: Number(req.session.userId || 0) }),
+              createdByUserId: Number(req.session.userId || 0),
+              createdByUsername: String(returnActor?.username || "sistema"),
+            });
+          }
         }
       }
 

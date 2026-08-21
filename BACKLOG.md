@@ -34,6 +34,9 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Preencher e aprovar procedimentos tecnicos reais da IMPPEL para cada servico antes de usar bloqueios de qualidade em producao.
 - Homologar a tela Qualidade das Obras em obra piloto com equipe tecnica, admin e responsaveis por aprovacao.
 - Definir padrao operacional de fotos, evidencias, criterios de aceite e treinamento "Como Trabalhar" por servico.
+- Homologar a Etapa 6 em piloto real: retirada, devolucao, transferencia, dano, perda, manutencao, contagem, treinamento e fechamento de OS.
+- Definir prazos reais de devolucao por categoria, obra, funcionario ou tipo de item.
+- Definir procedimento administrativo/juridico para qualquer providencia financeira relacionada a perdas e danos.
 
 ### Melhoria
 
@@ -43,6 +46,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Apos congelamento da base 1.0, iniciar novas evolucoes apenas como versoes 1.x em sprints separadas.
 - Integrar, em sprint futura, aprovacoes comerciais diretamente ao fluxo operacional de aceite do orcamento quando a politica da IMPPEL estiver definida.
 - Evoluir indicadores de Qualidade das Obras com filtros por servico, funcionario, cliente, fase e periodo apos validacao dos dados reais.
+- Evoluir relatorios de materiais com filtros por obra, funcionario, periodo, categoria, severidade e tempo medio de resolucao apos coleta de dados reais.
 
 ## Migrado de docs/task_plan.md
 
