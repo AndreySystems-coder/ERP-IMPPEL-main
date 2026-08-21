@@ -3,6 +3,21 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-21] - Implementacao tecnica da Etapa 4 comercial
+
+### Adicionado
+
+- Criada a base de Governanca Comercial para politicas, solicitacoes de desconto, comissoes, logistica, versoes de orcamento e aditivos.
+- Nova tela administrativa `Governanca Comercial` em Configuracoes.
+- Novas APIs `/api/commercial/*` com autenticacao, autorizacao, decisao administrativa e trilha de auditoria.
+- Backup completo passou a incluir o modulo `governancaComercial`.
+- Migração incremental `migrations/0002_stage_4_commercial_governance.sql` adiciona apenas tabelas novas com `CREATE TABLE IF NOT EXISTS`.
+
+### Observacoes
+
+- Percentuais e alçadas definitivas nao foram inventados; permanecem configuraveis e pendentes de decisao da IMPPEL.
+- A implementacao nao altera automaticamente orcamentos existentes; aprovacoes comerciais ficam registradas para auditoria.
+
 ## [2026-08-21] - Fechamento tecnico das Etapas 1, 2 e 3
 
 ### Alterado

@@ -78,6 +78,15 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Arquivos envolvidos: `server/pdf-restore.ts`.
 - Status: mitigado; o parser registra a diferenca em aviso e usa blocos operacionais identificaveis para decidir confianca.
 
+### KI-008 - Politicas comerciais reais ainda dependem de decisao da IMPPEL
+
+- Severidade: Medio.
+- Causa raiz: a Etapa 4 criou a estrutura tecnica para alçadas, descontos, comissoes, logistica, versoes e aditivos, mas percentuais reais e responsaveis oficiais nao devem ser inventados no codigo.
+- Impacto: a tela e as APIs permitem registrar e auditar politicas, mas a operacao em producao precisa de regras aprovadas pela direcao/contabilidade.
+- Arquivos envolvidos: `client/src/pages/CommercialGovernance.tsx`, `server/routes.ts`, `shared/schema.ts`, `migrations/0002_stage_4_commercial_governance.sql`.
+- Workaround: cadastrar politicas como rascunho e usar aprovacoes administrativas ate a homologacao comercial definitiva.
+- Status: pendente de decisao operacional da IMPPEL.
+
 ### KI-008 - PDF local de Estoque difere do caso validado no Replit
 
 - Severidade: Melhoria.

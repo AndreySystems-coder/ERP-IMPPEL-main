@@ -218,6 +218,7 @@ export function SettingsHub() {
           { title: "Status", description: "Etapas e status usados nos fluxos.", href: "/status-personalizados", icon: Hash, permission: "viewStatusSettings", accent: accents.blue },
           { title: "Usuários", description: "Acessos, cargos e permissões internas.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
           { title: "Custos", description: "Margens, custos, Zona A/B/C e acréscimos regionais.", href: "/custos-margens", icon: TrendingDown, permission: "viewCostSettings", accent: accents.orange },
+          { title: "Governança Comercial", description: "Alçadas, descontos, comissões, logística e aditivos.", href: "/governanca-comercial", icon: Scale, permission: "viewSettings", accent: accents.violet },
           { title: "Regras", description: "Critérios para score e recomendação de serviços.", href: "/priority-rules", icon: Scale, permission: "viewPriorityRules", accent: accents.violet },
           { title: "Configurações Gerais", description: "Parâmetros gerais do ERP.", href: "/settings", icon: Settings, permission: "viewSettings", accent: accents.blue },
           { title: "Formas de Pagamento", description: "Meios de pagamento e ajustes.", href: "/formas-pagamento", icon: CreditCard, permission: "viewFinancialSettings", accent: accents.emerald },

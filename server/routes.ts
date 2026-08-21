@@ -131,6 +131,61 @@ function normalizeRestoreDependencyKey(value: unknown) {
 }
 
 const normalizeMaterialMatchKey = normalizeMaterialName;
+const DECIDED_COMMERCIAL_STATUSES = new Set(["aprovado", "rejeitado", "cancelado", "expirado"]);
+
+function parseNumber(value: unknown, fallback = 0) {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  const normalized = String(value)
+    .trim()
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function sessionActor(req: Request) {
+  const session = req.session as any;
+  return {
+    userId: Number(session?.userId) || null,
+    username: String(session?.username || session?.user?.username || "sistema"),
+  };
+}
+
+function parseAuditTrail(value: unknown) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function appendAuditTrail(current: unknown, event: Record<string, unknown>) {
+  return JSON.stringify([...parseAuditTrail(current), { at: new Date().toISOString(), ...event }]);
+}
+
+function cleanPayload(payload: Record<string, any>) {
+  const blocked = new Set(["id", "createdAt", "updatedAt", "created_at", "updated_at"]);
+  return Object.fromEntries(Object.entries(payload || {}).filter(([key]) => !blocked.has(key)));
+}
+
+function calculateLogisticsTotal(row: any) {
+  const distance = Math.max(0, parseNumber(row.distanceKm));
+  const trips = Math.max(1, Math.round(parseNumber(row.trips, 1)));
+  const costPerKm = Math.max(0, parseNumber(row.costPerKm));
+  return Number((
+    distance * trips * costPerKm
+    + Math.max(0, parseNumber(row.tolls))
+    + Math.max(0, parseNumber(row.parking))
+    + Math.max(0, parseNumber(row.meals))
+    + Math.max(0, parseNumber(row.lodging))
+    + Math.max(0, parseNumber(row.otherCosts))
+  ).toFixed(2));
+}
 
 function uniqueRestoreValues(values: unknown[]) {
   const seen = new Set<string>();
@@ -1067,6 +1122,7 @@ export async function registerRoutes(
     { prefix: "/api/nps-responses", permissions: ["viewPostSale"] },
     { prefix: "/api/maintenance-reminders", permissions: ["viewPostSale"] },
     { prefix: "/api/material-withdrawals", permissions: ["registrarMaterials", "viewAllMaterials"] },
+    { prefix: "/api/commercial", permissions: ["viewSettings", "viewFinancials", "viewQuotes"] },
   ];
   app.use((req, res, next) => {
     const restrictedRoute = restrictedPrefixes.find(({ prefix }) => req.path.startsWith(prefix));
@@ -1080,6 +1136,168 @@ export async function registerRoutes(
   });
   // Obra registros require at least auth (funcionarios allowed)
   app.use("/api/obra-registros", requireAuth);
+
+  const listCompleteRows = async (tableKey: string, _req: Request, res: Response) => {
+    try {
+      res.json(await storage.getCompleteTableRows(tableKey));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  };
+
+  const createCompleteRow = async (
+    tableKey: string,
+    req: Request,
+    res: Response,
+    transform: (payload: any) => any = payload => payload,
+  ) => {
+    try {
+      const actor = sessionActor(req);
+      const payload = transform(cleanPayload(req.body || {}));
+      const created = await storage.createCompleteTableRow(tableKey, {
+        ...payload,
+        auditTrail: appendAuditTrail(payload.auditTrail, { action: "created", ...actor }),
+      });
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  };
+
+  const patchCompleteRow = async (
+    tableKey: string,
+    req: Request,
+    res: Response,
+    transform: (payload: any, current: any) => any = payload => payload,
+  ) => {
+    try {
+      const id = Number(req.params.id);
+      const current = (await storage.getCompleteTableRows(tableKey)).find(row => Number(row.id) === id);
+      if (!current) return res.status(404).json({ message: "Registro não encontrado" });
+      if (DECIDED_COMMERCIAL_STATUSES.has(String(current.status || "").toLowerCase())) {
+        return res.status(409).json({ message: "Registro já decidido não pode ser alterado diretamente." });
+      }
+      const actor = sessionActor(req);
+      const payload = transform(cleanPayload(req.body || {}), current);
+      const updated = await storage.updateCompleteTableRow(tableKey, id, {
+        ...payload,
+        auditTrail: appendAuditTrail(current.auditTrail, { action: "updated", ...actor }),
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  };
+
+  const decideCompleteRow = async (tableKey: string, req: Request, res: Response, status: "aprovado" | "rejeitado") => {
+    try {
+      const id = Number(req.params.id);
+      const current = (await storage.getCompleteTableRows(tableKey)).find(row => Number(row.id) === id);
+      if (!current) return res.status(404).json({ message: "Registro não encontrado" });
+      if (DECIDED_COMMERCIAL_STATUSES.has(String(current.status || "").toLowerCase())) {
+        return res.status(409).json({ message: "Registro já decidido." });
+      }
+      const actor = sessionActor(req);
+      const updated = await storage.updateCompleteTableRow(tableKey, id, {
+        status,
+        approvedByUserId: actor.userId,
+        approvedByUsername: actor.username,
+        decisionNotes: req.body?.decisionNotes || current.decisionNotes || null,
+        decidedAt: new Date(),
+        auditTrail: appendAuditTrail(current.auditTrail, { action: status, ...actor, notes: req.body?.decisionNotes || "" }),
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  };
+
+  app.get("/api/commercial/policies", requireAdmin, (req, res) => listCompleteRows("commercialPolicies", req, res));
+  app.post("/api/commercial/policies", requireAdmin, (req, res) => createCompleteRow("commercialPolicies", req, res));
+  app.patch("/api/commercial/policies/:id", requireAdmin, (req, res) => patchCompleteRow("commercialPolicies", req, res));
+
+  app.get("/api/commercial/discount-requests", requireAdmin, (req, res) => listCompleteRows("discountRequests", req, res));
+  app.post("/api/commercial/discount-requests", requireAnyPermission(["viewQuotes", "viewFinancials"]), async (req, res) => {
+    await createCompleteRow("discountRequests", req, res, (payload) => {
+      const originalPrice = parseNumber(payload.originalPrice);
+      const requestedPrice = parseNumber(payload.requestedPrice);
+      const discountAmount = Math.max(0, originalPrice - requestedPrice);
+      const discountPercent = originalPrice > 0 ? Number(((discountAmount / originalPrice) * 100).toFixed(2)) : parseNumber(payload.discountPercent);
+      const actor = sessionActor(req);
+      return {
+        ...payload,
+        jobId: Number(payload.jobId),
+        requestedByUserId: Number(payload.requestedByUserId || actor.userId || 0),
+        requestedByUsername: payload.requestedByUsername || actor.username,
+        originalPrice,
+        requestedPrice,
+        discountAmount,
+        discountPercent,
+      };
+    });
+  });
+  app.post("/api/commercial/discount-requests/:id/approve", requireAdmin, (req, res) => decideCompleteRow("discountRequests", req, res, "aprovado"));
+  app.post("/api/commercial/discount-requests/:id/reject", requireAdmin, (req, res) => decideCompleteRow("discountRequests", req, res, "rejeitado"));
+
+  app.get("/api/commercial/commissions", requireAdmin, (req, res) => listCompleteRows("commissionRecords", req, res));
+  app.post("/api/commercial/commissions", requireAdmin, (req, res) => createCompleteRow("commissionRecords", req, res, (payload) => {
+    const baseAmount = Math.max(0, parseNumber(payload.baseAmount));
+    const percent = Math.max(0, parseNumber(payload.percent));
+    const fixedAmount = Math.max(0, parseNumber(payload.fixedAmount));
+    return { ...payload, baseAmount, percent, fixedAmount, commissionAmount: Number((baseAmount * (percent / 100) + fixedAmount).toFixed(2)) };
+  }));
+  app.patch("/api/commercial/commissions/:id", requireAdmin, (req, res) => patchCompleteRow("commissionRecords", req, res));
+
+  app.get("/api/commercial/logistics", requireAdmin, (req, res) => listCompleteRows("logisticsRecords", req, res));
+  app.post("/api/commercial/logistics", requireAdmin, (req, res) => createCompleteRow("logisticsRecords", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, createdByUserId: payload.createdByUserId || actor.userId, createdByUsername: payload.createdByUsername || actor.username, totalCost: calculateLogisticsTotal(payload) };
+  }));
+  app.patch("/api/commercial/logistics/:id", requireAdmin, (req, res) => patchCompleteRow("logisticsRecords", req, res, (payload, current) => {
+    const merged = { ...current, ...payload };
+    return { ...payload, totalCost: calculateLogisticsTotal(merged) };
+  }));
+
+  app.get("/api/commercial/quote-versions", requireAdmin, (req, res) => listCompleteRows("quoteVersions", req, res));
+  app.post("/api/commercial/quote-versions", requireAnyPermission(["viewQuotes"]), (req, res) => createCompleteRow("quoteVersions", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, createdByUserId: payload.createdByUserId || actor.userId, createdByUsername: payload.createdByUsername || actor.username };
+  }));
+
+  app.get("/api/commercial/scope-changes", requireAdmin, (req, res) => listCompleteRows("scopeChangeRequests", req, res));
+  app.post("/api/commercial/scope-changes", requireAnyPermission(["viewQuotes", "viewWorkOrders"]), (req, res) => createCompleteRow("scopeChangeRequests", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, requestedByUserId: payload.requestedByUserId || actor.userId, requestedByUsername: payload.requestedByUsername || actor.username };
+  }));
+  app.post("/api/commercial/scope-changes/:id/approve", requireAdmin, (req, res) => decideCompleteRow("scopeChangeRequests", req, res, "aprovado"));
+  app.post("/api/commercial/scope-changes/:id/reject", requireAdmin, (req, res) => decideCompleteRow("scopeChangeRequests", req, res, "rejeitado"));
+
+  app.get("/api/commercial/indicators", requireAdmin, async (_req, res) => {
+    try {
+      const [jobs, discounts, commissions, logistics, scopeChanges] = await Promise.all([
+        storage.getJobs(),
+        storage.getCompleteTableRows("discountRequests"),
+        storage.getCompleteTableRows("commissionRecords"),
+        storage.getCompleteTableRows("logisticsRecords"),
+        storage.getCompleteTableRows("scopeChangeRequests"),
+      ]);
+      const margins = jobs.map(job => Number((job as any).margin)).filter(value => Number.isFinite(value) && value > 0);
+      const approvedDiscounts = discounts.filter(row => row.status === "aprovado");
+      res.json({
+        averageMargin: margins.length ? Number((margins.reduce((sum, value) => sum + value, 0) / margins.length).toFixed(2)) : 0,
+        pendingDiscounts: discounts.filter(row => row.status === "pendente").length,
+        approvedDiscounts: approvedDiscounts.length,
+        averageDiscountPercent: approvedDiscounts.length ? Number((approvedDiscounts.reduce((sum, row) => sum + parseNumber(row.discountPercent), 0) / approvedDiscounts.length).toFixed(2)) : 0,
+        commissionForecast: Number(commissions.reduce((sum, row) => sum + parseNumber(row.commissionAmount), 0).toFixed(2)),
+        releasedCommissions: Number(commissions.reduce((sum, row) => sum + parseNumber(row.releasedAmount), 0).toFixed(2)),
+        logisticsTotal: Number(logistics.reduce((sum, row) => sum + parseNumber(row.totalCost), 0).toFixed(2)),
+        pendingScopeChanges: scopeChanges.filter(row => row.status === "pendente").length,
+        approvedScopeChanges: scopeChanges.filter(row => row.status === "aprovado").length,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   // Clients
   app.get(api.clients.list.path, async (req, res) => {

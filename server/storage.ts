@@ -5,6 +5,7 @@ import {
   whatsappFlows, whatsappSendLogs, whatsappTemplates, quoteTemplates,
   materialWithdrawals, materialWithdrawalItems, mobileImportAliases, mobileImportHistory,
   salaryDiscountRules, salaryDiscounts,
+  commercialPolicies, discountRequests, commissionRecords, logisticsRecords, quoteVersions, scopeChangeRequests,
   roles,
   type Role, type InsertRole,
   type User, type Client, type Service, type Lead, type Job, type WorkOrder, type Inventory, type InventoryMovement, type Payment, type Product, type JobTracking, type PriorityRules, type Transaction, type Setting, type CostConfig, type InsertCostConfig, type ObraRegistro, type InsertObraRegistro,
@@ -53,6 +54,7 @@ export const COMPLETE_BACKUP_MODULE_TABLES = {
   configuracoes: ["settings", "costConfig", "priorityRules", "jobStatuses", "whatsappFlows", "whatsappSendLogs", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"],
   formasPagamento: ["paymentMethods"],
   condicoesPagamento: ["paymentConditions"],
+  governancaComercial: ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"],
 } as const;
 
 export type CompleteBackupModule = keyof typeof COMPLETE_BACKUP_MODULE_TABLES;
@@ -98,6 +100,12 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   mobileImportHistory: { table: mobileImportHistory, dbName: "mobile_import_history" },
   salaryDiscountRules: { table: salaryDiscountRules, dbName: "salary_discount_rules" },
   salaryDiscounts: { table: salaryDiscounts, dbName: "salary_discounts" },
+  commercialPolicies: { table: commercialPolicies, dbName: "commercial_policies" },
+  discountRequests: { table: discountRequests, dbName: "discount_requests" },
+  commissionRecords: { table: commissionRecords, dbName: "commission_records" },
+  logisticsRecords: { table: logisticsRecords, dbName: "logistics_records" },
+  quoteVersions: { table: quoteVersions, dbName: "quote_versions" },
+  scopeChangeRequests: { table: scopeChangeRequests, dbName: "scope_change_requests" },
 };
 
 function selectedCompleteTables(modules: CompleteBackupModule[]) {
@@ -111,6 +119,9 @@ function quoteIdentifier(value: string) {
 export interface IStorage {
   getCompleteBackupData(): Promise<CompleteBackupData>;
   restoreCompleteBackup(data: CompleteBackupData, modules: CompleteBackupModule[], mode: CompleteRestoreMode): Promise<{ tables: Record<string, number>; total: number }>;
+  getCompleteTableRows(tableKey: string): Promise<any[]>;
+  createCompleteTableRow(tableKey: string, row: any): Promise<any>;
+  updateCompleteTableRow(tableKey: string, id: number, updates: any): Promise<any | undefined>;
   // Auth / Users
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -1164,6 +1175,30 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  async getCompleteTableRows(tableKey: string): Promise<any[]> {
+    const config = COMPLETE_TABLES[tableKey];
+    if (!config) throw new Error(`Tabela de backup desconhecida: ${tableKey}`);
+    return await (db as any).select().from(config.table);
+  }
+
+  async createCompleteTableRow(tableKey: string, row: any): Promise<any> {
+    const config = COMPLETE_TABLES[tableKey];
+    if (!config) throw new Error(`Tabela de backup desconhecida: ${tableKey}`);
+    const [created] = await (db as any).insert(config.table).values(row || {}).returning();
+    return created;
+  }
+
+  async updateCompleteTableRow(tableKey: string, id: number, updates: any): Promise<any | undefined> {
+    const config = COMPLETE_TABLES[tableKey];
+    if (!config) throw new Error(`Tabela de backup desconhecida: ${tableKey}`);
+    const [updated] = await (db as any)
+      .update(config.table)
+      .set({ ...(updates || {}), updatedAt: new Date() })
+      .where(eq((config.table as any).id, id))
+      .returning();
+    return updated;
+  }
+
   async getCompleteBackupData(): Promise<CompleteBackupData> {
     const snapshot: CompleteBackupData = {};
     for (const [key, config] of Object.entries(COMPLETE_TABLES)) {
@@ -1275,6 +1310,12 @@ export function createMemoryStorage(): IStorage {
     mobileImportHistory: [],
     salaryDiscountRules: [],
     salaryDiscounts: [],
+    commercialPolicies: [],
+    discountRequests: [],
+    commissionRecords: [],
+    logisticsRecords: [],
+    quoteVersions: [],
+    scopeChangeRequests: [],
   };
 
   const ids: Record<string, number> = Object.fromEntries(Object.keys(data).map(key => [key, 1]));
@@ -1365,6 +1406,18 @@ export function createMemoryStorage(): IStorage {
     SalaryDiscountRules: "salaryDiscountRules",
     SalaryDiscount: "salaryDiscounts",
     SalaryDiscounts: "salaryDiscounts",
+    CommercialPolicy: "commercialPolicies",
+    CommercialPolicies: "commercialPolicies",
+    DiscountRequest: "discountRequests",
+    DiscountRequests: "discountRequests",
+    CommissionRecord: "commissionRecords",
+    CommissionRecords: "commissionRecords",
+    LogisticsRecord: "logisticsRecords",
+    LogisticsRecords: "logisticsRecords",
+    QuoteVersion: "quoteVersions",
+    QuoteVersions: "quoteVersions",
+    ScopeChangeRequest: "scopeChangeRequests",
+    ScopeChangeRequests: "scopeChangeRequests",
   };
 
   const getTable = (name: string) => tableMap[name] || tableMap[name.replace(/s$/, "")] || "";
@@ -1373,6 +1426,9 @@ export function createMemoryStorage(): IStorage {
     getCompleteBackupData: async () => Object.fromEntries(
       Object.keys(COMPLETE_TABLES).map(key => [key, structuredClone(data[key] || [])]),
     ),
+    getCompleteTableRows: async (tableKey: string) => structuredClone(data[tableKey] || []),
+    createCompleteTableRow: async (tableKey: string, row: any) => insert(tableKey, row || {}),
+    updateCompleteTableRow: async (tableKey: string, id: number, updates: any) => updateById(tableKey, id, updates || {}),
     restoreCompleteBackup: async (backupData: CompleteBackupData, modules: CompleteBackupModule[], mode: CompleteRestoreMode) => {
       const restored: Record<string, number> = {};
       for (const key of selectedCompleteTables(modules)) {

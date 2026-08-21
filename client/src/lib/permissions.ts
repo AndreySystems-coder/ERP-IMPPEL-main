@@ -118,6 +118,7 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/pos-venda", permissions: ["viewPostSale"] },
   { path: "/configuracoes", permissions: ["viewSettings", "viewCostSettings", "viewStatusSettings", "viewUsers", "viewPriorityRules"] },
   { path: "/custos-margens", permissions: ["viewCostSettings"] },
+  { path: "/governanca-comercial", permissions: ["viewSettings", "viewCostSettings", "viewFinancials", "viewQuotes"] },
   { path: "/status-personalizados", permissions: ["viewStatusSettings"] },
   { path: "/priority-rules", permissions: ["viewPriorityRules"] },
   { path: "/usuarios", permissions: ["viewUsers"] },

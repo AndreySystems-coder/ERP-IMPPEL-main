@@ -4,6 +4,7 @@ import BackupCenter, { BackupExportPage, BackupGenerationPage, BackupRestorePage
 import Calendar from "@/pages/Calendar";
 import Catalog from "@/pages/Catalog";
 import Clients from "@/pages/Clients";
+import CommercialGovernance from "@/pages/CommercialGovernance";
 import ContageEmFisica from "@/pages/ContageEmFisica";
 import Contracts from "@/pages/Contracts";
 import CostConfig from "@/pages/CostConfig";
@@ -96,6 +97,7 @@ export const adminRoutes: AppRoute[] = [
   { path: "/settings", component: Settings, access: "admin", withLayout: true },
   { path: "/priority-rules", component: PriorityRules, access: "admin", withLayout: true },
   { path: "/custos-margens", component: CostConfig, access: "admin", withLayout: true },
+  { path: "/governanca-comercial", component: CommercialGovernance, access: "admin", withLayout: true },
   { path: "/usuarios", component: Usuarios, access: "admin", withLayout: true },
   { path: "/status-personalizados", component: StatusPersonalizados, access: "admin", withLayout: true },
   { path: "/formas-pagamento", component: PaymentMethods, access: "admin", withLayout: true },

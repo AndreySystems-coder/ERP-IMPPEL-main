@@ -101,6 +101,7 @@ export const TECHNICAL_BACKUP_TYPES: Record<string, { module: CompleteBackupModu
   posVenda: { module: "posVenda", tables: ["npsResponses", "maintenanceReminders"], label: "Pós-venda" },
   formasPagamento: { module: "formasPagamento", tables: ["paymentMethods"], label: "Formas de Pagamento" },
   condicoesPagamento: { module: "condicoesPagamento", tables: ["paymentConditions"], label: "Condições de Pagamento" },
+  governancaComercial: { module: "governancaComercial", tables: ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"], label: "Governança Comercial" },
 };
 
 function recordCount(value: unknown) {

@@ -289,6 +289,129 @@ export const costConfig = pgTable("cost_config", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const commercialPolicies = pgTable("commercial_policies", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // desconto | comissao | logistica | pagamento | alcada | margem
+  status: text("status").notNull().default("rascunho"), // rascunho | ativo | arquivado
+  rules: text("rules").notNull().default("{}"),
+  approvalLevels: text("approval_levels").notNull().default("[]"),
+  notes: text("notes"),
+  effectiveDate: timestamp("effective_date").defaultNow(),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  updatedByUserId: integer("updated_by_user_id"),
+  updatedByUsername: text("updated_by_username"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const discountRequests = pgTable("discount_requests", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  quoteVersionId: integer("quote_version_id"),
+  requestedByUserId: integer("requested_by_user_id").notNull(),
+  requestedByUsername: text("requested_by_username").notNull(),
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  status: text("status").notNull().default("pendente"),
+  originalPrice: real("original_price").notNull().default(0),
+  requestedPrice: real("requested_price").notNull().default(0),
+  discountPercent: real("discount_percent").notNull().default(0),
+  discountAmount: real("discount_amount").notNull().default(0),
+  marginBefore: real("margin_before").notNull().default(0),
+  marginAfter: real("margin_after").notNull().default(0),
+  reason: text("reason").notNull(),
+  notes: text("notes"),
+  expiresAt: timestamp("expires_at"),
+  decisionNotes: text("decision_notes"),
+  decidedAt: timestamp("decided_at"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const commissionRecords = pgTable("commission_records", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  paymentId: integer("payment_id"),
+  userId: integer("user_id"),
+  username: text("username"),
+  policyId: integer("policy_id"),
+  status: text("status").notNull().default("prevista"),
+  baseAmount: real("base_amount").notNull().default(0),
+  percent: real("percent").notNull().default(0),
+  fixedAmount: real("fixed_amount").notNull().default(0),
+  commissionAmount: real("commission_amount").notNull().default(0),
+  releasedAmount: real("released_amount").notNull().default(0),
+  paidAmount: real("paid_amount").notNull().default(0),
+  notes: text("notes"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const logisticsRecords = pgTable("logistics_records", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id"),
+  workOrderId: integer("work_order_id"),
+  distanceKm: real("distance_km").notNull().default(0),
+  trips: integer("trips").notNull().default(1),
+  costPerKm: real("cost_per_km").notNull().default(0),
+  tolls: real("tolls").notNull().default(0),
+  parking: real("parking").notNull().default(0),
+  meals: real("meals").notNull().default(0),
+  lodging: real("lodging").notNull().default(0),
+  otherCosts: real("other_costs").notNull().default(0),
+  totalCost: real("total_cost").notNull().default(0),
+  manualAdjustmentReason: text("manual_adjustment_reason"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const quoteVersions = pgTable("quote_versions", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  versionNumber: integer("version_number").notNull().default(1),
+  status: text("status").notNull().default("rascunho"),
+  scopeIncluded: text("scope_included").notNull().default("[]"),
+  scopeExcluded: text("scope_excluded").notNull().default("[]"),
+  assumptions: text("assumptions").notNull().default("[]"),
+  pricingSnapshot: text("pricing_snapshot"),
+  acceptedByClientAt: timestamp("accepted_by_client_at"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const scopeChangeRequests = pgTable("scope_change_requests", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  workOrderId: integer("work_order_id"),
+  quoteVersionId: integer("quote_version_id"),
+  type: text("type").notNull().default("aditivo"),
+  status: text("status").notNull().default("pendente"),
+  description: text("description").notNull(),
+  materialImpact: text("material_impact").notNull().default("[]"),
+  scheduleImpact: text("schedule_impact"),
+  financialImpact: real("financial_impact").notNull().default(0),
+  marginAfter: real("margin_after").notNull().default(0),
+  requestedByUserId: integer("requested_by_user_id"),
+  requestedByUsername: text("requested_by_username"),
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  decisionNotes: text("decision_notes"),
+  decidedAt: timestamp("decided_at"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const obraRegistros = pgTable("obra_registros", {
   id: serial("id").primaryKey(),
   // Tipo do formulário
@@ -623,11 +746,29 @@ export const salaryDiscounts = pgTable("salary_discounts", {
 
 export const insertSalaryDiscountRuleSchema = createInsertSchema(salaryDiscountRules).omit({ id: true, createdAt: true });
 export const insertSalaryDiscountSchema = createInsertSchema(salaryDiscounts).omit({ id: true, createdAt: true, approvedAt: true });
+export const insertCommercialPolicySchema = createInsertSchema(commercialPolicies).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertDiscountRequestSchema = createInsertSchema(discountRequests).omit({ id: true, createdAt: true, updatedAt: true, decidedAt: true });
+export const insertCommissionRecordSchema = createInsertSchema(commissionRecords).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertLogisticsRecordSchema = createInsertSchema(logisticsRecords).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertQuoteVersionSchema = createInsertSchema(quoteVersions).omit({ id: true, createdAt: true });
+export const insertScopeChangeRequestSchema = createInsertSchema(scopeChangeRequests).omit({ id: true, createdAt: true, updatedAt: true, decidedAt: true });
 
 export type SalaryDiscountRule = typeof salaryDiscountRules.$inferSelect;
 export type SalaryDiscount = typeof salaryDiscounts.$inferSelect;
 export type InsertSalaryDiscountRule = typeof insertSalaryDiscountRuleSchema._type;
 export type InsertSalaryDiscount = typeof insertSalaryDiscountSchema._type;
+export type CommercialPolicy = typeof commercialPolicies.$inferSelect;
+export type InsertCommercialPolicy = typeof insertCommercialPolicySchema._type;
+export type DiscountRequest = typeof discountRequests.$inferSelect;
+export type InsertDiscountRequest = typeof insertDiscountRequestSchema._type;
+export type CommissionRecord = typeof commissionRecords.$inferSelect;
+export type InsertCommissionRecord = typeof insertCommissionRecordSchema._type;
+export type LogisticsRecord = typeof logisticsRecords.$inferSelect;
+export type InsertLogisticsRecord = typeof insertLogisticsRecordSchema._type;
+export type QuoteVersion = typeof quoteVersions.$inferSelect;
+export type InsertQuoteVersion = typeof insertQuoteVersionSchema._type;
+export type ScopeChangeRequest = typeof scopeChangeRequests.$inferSelect;
+export type InsertScopeChangeRequest = typeof insertScopeChangeRequestSchema._type;
 export const insertWorkOrderSchema = createInsertSchema(workOrders).omit({ id: true, createdAt: true });
 export const insertInventorySchema = createInsertSchema(inventory).omit({ id: true });
 export const insertInventoryMovementSchema = createInsertSchema(inventoryMovements).omit({ id: true, createdAt: true });

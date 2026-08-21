@@ -68,6 +68,12 @@ const syntheticData: Record<string, any[]> = {
   whatsappTemplates: [{ id: 1, name: "Teste", category: "teste", content: "Teste" }],
   quoteTemplates: [{ id: 1, name: "Teste", isDefault: true }],
   salaryDiscountRules: [{ id: 1, name: "Teste", percentage: 1 }],
+  commercialPolicies: [{ id: 1, name: "Alçada sintética", type: "desconto", status: "rascunho", rules: JSON.stringify({ maxPendingPercent: 10 }) }],
+  discountRequests: [{ id: 1, jobId: 1, requestedByUserId: 1, requestedByUsername: "AdminTeste", status: "pendente", originalPrice: 1000, requestedPrice: 900, discountPercent: 10, discountAmount: 100, reason: "Teste sintético", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  commissionRecords: [{ id: 1, jobId: 1, username: "AdminTeste", status: "prevista", baseAmount: 1000, percent: 3, fixedAmount: 0, commissionAmount: 30, auditTrail: JSON.stringify([{ action: "created" }]) }],
+  logisticsRecords: [{ id: 1, jobId: 1, distanceKm: 10, trips: 2, costPerKm: 2, totalCost: 40, auditTrail: JSON.stringify([{ action: "created" }]) }],
+  quoteVersions: [{ id: 1, jobId: 1, versionNumber: 1, status: "rascunho", scopeIncluded: JSON.stringify(["Teste"]), scopeExcluded: "[]", assumptions: "[]" }],
+  scopeChangeRequests: [{ id: 1, jobId: 1, type: "aditivo", status: "pendente", description: "Aditivo sintético", financialImpact: 100, auditTrail: JSON.stringify([{ action: "created" }]) }],
   paymentMethods: [{ id: 1, name: "Pix", active: true }],
   paymentConditions: [{ id: 1, name: "À vista", active: true }],
 };
@@ -100,7 +106,7 @@ const requiredFiles = [
   "manifest.json", "usuarios.json", "cargos.json", "clientes.json", "leads.json", "orcamentos.json",
   "ordensServico.json", "registrosObra.json", "materiais.json", "estoque.json", "movimentacoes.json",
   "produtos.json", "vendasMateriais.json", "servicos.json", "financeiro.json", "garantias.json", "importacoesRapidas.json",
-  "posVenda.json", "configuracoes.json", "formasPagamento.json", "condicoesPagamento.json",
+  "posVenda.json", "configuracoes.json", "formasPagamento.json", "condicoesPagamento.json", "governancaComercial.json",
   "attachments/index.json", "relatorios/relatorio-conferencia.pdf", "ERP-IMPPEL-backup-completo.json",
 ];
 requiredFiles.forEach(path => assert.ok(files[path], `arquivo ausente no ZIP: ${path}`));
@@ -134,6 +140,8 @@ assert.equal(restored.inventory.find(row => row.id === 2)?.type, "ferramenta", "
 assert.equal(restored.materialWithdrawalItems.find(row => row.id === 2)?.condition, "manutencao", "condição da ferramenta não foi restaurada");
 assert.equal(restored.mobileImportAliases[0].alias, "Lequinho", "alias da importação rápida não foi restaurado");
 assert.equal(restored.mobileImportHistory[0].hash, "hash-sintetico", "histórico da importação rápida não foi restaurado");
+assert.equal(restored.discountRequests[0].discountPercent, 10, "solicitação comercial não foi restaurada");
+assert.equal(restored.commissionRecords[0].commissionAmount, 30, "comissão comercial não foi restaurada");
 
 const partialTarget = createMemoryStorage();
 await partialTarget.restoreCompleteBackup({ settings: [{ id: 99, key: "preservar", value: "sim" }] }, ["configuracoes"], "replace");

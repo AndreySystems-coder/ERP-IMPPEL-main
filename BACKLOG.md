@@ -19,6 +19,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Manter verificacao de backup/restauracao para funcionalidades criticas.
 - Homologar restore dos cinco PDFs reais em PostgreSQL descartavel, com segunda importacao e comparacao de saldo/idempotencia.
 - Confirmar com a IMPPEL/contabilidade a aliquota fiscal real antes de usar `taxPercent` em producao comercial definitiva.
+- Definir oficialmente alçadas, limites de desconto, regras de excecao de margem, gatilhos de bloqueio e responsaveis por aprovacao antes de operar a Governanca Comercial em producao.
 
 ### Medio
 
@@ -27,6 +28,9 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Avaliar criacao de um indice de arquitetura caso a auditoria das proximas sprints identifique necessidade.
 - Criar migration para tabela dedicada de `import_jobs`/`import_fingerprints`, substituindo fingerprints em observacoes por auditoria estruturada.
 - Homologar visualmente em desktop e celular as telas de Custos e Margens, Calculadora, Orçamentos e Financeiro usando usuario real de teste.
+- Definir politica real de comissao: base de calculo, porcentagens, liberacao por recebimento, cancelamento e estorno.
+- Definir politica real de logistica/regiao: custo por km, minimo, pedagios, refeicoes, hospedagem e aprovacao de ajuste manual.
+- Definir textos comerciais padrao para escopo incluido, escopo excluido, premissas e aditivos.
 
 ### Melhoria
 
@@ -34,6 +38,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Manter KNOWN_ISSUES.md como fonte viva de riscos, workarounds e pendencias.
 - Manter ROADMAP.md alinhado com prioridades reais do ERP em producao.
 - Apos congelamento da base 1.0, iniciar novas evolucoes apenas como versoes 1.x em sprints separadas.
+- Integrar, em sprint futura, aprovacoes comerciais diretamente ao fluxo operacional de aceite do orcamento quando a politica da IMPPEL estiver definida.
 
 ## Migrado de docs/task_plan.md
 

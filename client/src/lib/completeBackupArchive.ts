@@ -176,6 +176,7 @@ export function buildTechnicalFiles(backup: CompleteBackupPackage): TechnicalFil
     ["posVenda.json", "posVenda", "posVenda", ["npsResponses", "maintenanceReminders"], backup.data.posVenda || {}],
     ["formasPagamento.json", "formasPagamento", "formasPagamento", ["paymentMethods"], backup.data.formasPagamento || {}],
     ["condicoesPagamento.json", "condicoesPagamento", "condicoesPagamento", ["paymentConditions"], backup.data.condicoesPagamento || {}],
+    ["governancaComercial.json", "governancaComercial", "governancaComercial", ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"], backup.data.governancaComercial || {}],
   ];
 
   return definitions.map(([path, name, module, tables, data]) => ({

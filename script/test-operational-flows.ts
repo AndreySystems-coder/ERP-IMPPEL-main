@@ -765,4 +765,74 @@ const projectedBalance = financeTransactions
 assert.equal(realizedBalance, 700, "saldo atual deve considerar somente realizados");
 assert.equal(projectedBalance, 900, "projeção deve considerar pendências sem duplicar realizados");
 
+const commercialStorage = createMemoryStorage();
+const commercialPolicy = await commercialStorage.createCompleteTableRow("commercialPolicies", {
+  name: "Política de desconto sintética",
+  type: "desconto",
+  status: "rascunho",
+  rules: JSON.stringify({ requiresApproval: true }),
+  approvalLevels: "[]",
+});
+const discountRequest = await commercialStorage.createCompleteTableRow("discountRequests", {
+  jobId: 1,
+  requestedByUserId: 1,
+  requestedByUsername: "AdminTeste",
+  status: "pendente",
+  originalPrice: 1000,
+  requestedPrice: 900,
+  discountAmount: 100,
+  discountPercent: 10,
+  reason: "Validação operacional",
+  auditTrail: JSON.stringify([{ action: "created" }]),
+});
+await commercialStorage.updateCompleteTableRow("discountRequests", discountRequest.id, {
+  status: "aprovado",
+  approvedByUserId: 1,
+  approvedByUsername: "AdminTeste",
+  decidedAt: new Date("2026-08-21T12:00:00Z"),
+  decisionNotes: "Aprovado em teste",
+});
+await commercialStorage.createCompleteTableRow("commissionRecords", {
+  jobId: 1,
+  username: "AdminTeste",
+  status: "prevista",
+  baseAmount: 1000,
+  percent: 3,
+  fixedAmount: 25,
+  commissionAmount: 55,
+  auditTrail: "[]",
+});
+await commercialStorage.createCompleteTableRow("logisticsRecords", {
+  jobId: 1,
+  distanceKm: 20,
+  trips: 2,
+  costPerKm: 1.5,
+  tolls: 10,
+  totalCost: 70,
+  auditTrail: "[]",
+});
+await commercialStorage.createCompleteTableRow("quoteVersions", {
+  jobId: 1,
+  versionNumber: 1,
+  status: "rascunho",
+  scopeIncluded: JSON.stringify(["Serviço sintético"]),
+  scopeExcluded: "[]",
+  assumptions: "[]",
+});
+await commercialStorage.createCompleteTableRow("scopeChangeRequests", {
+  jobId: 1,
+  type: "aditivo",
+  status: "pendente",
+  description: "Aditivo sintético",
+  financialImpact: 300,
+  auditTrail: "[]",
+});
+const commercialSnapshot = await commercialStorage.getCompleteBackupData();
+assert.equal(commercialSnapshot.commercialPolicies[0].id, commercialPolicy.id, "política comercial não entrou no storage");
+assert.equal(commercialSnapshot.discountRequests[0].status, "aprovado", "decisão de desconto não foi persistida");
+assert.equal(commercialSnapshot.commissionRecords[0].commissionAmount, 55, "comissão deve permanecer em reais");
+assert.equal(commercialSnapshot.logisticsRecords[0].totalCost, 70, "logística deve preservar custo total calculado");
+assert.equal(commercialSnapshot.quoteVersions.length, 1, "versão de orçamento não foi registrada");
+assert.equal(commercialSnapshot.scopeChangeRequests.length, 1, "aditivo não foi registrado");
+
 console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel e entrada por cargo.");
