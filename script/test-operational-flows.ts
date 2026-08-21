@@ -17,6 +17,7 @@ const {
 const { canAccess, getDefaultLandingPath } = await import("../client/src/lib/permissions");
 const { generateInitialPassword, normalizeOperationalEmployee } = await import("../shared/operationalUsers");
 const { parseBrazilianMoney } = await import("../shared/money");
+const { calculateOfficialPriceFromTotals, calculateTotalCost, getDefaultCostConfig } = await import("../shared/marginEngine");
 const { isMaterialWithdrawalPending, isReturnableMaterialItem, isConsumableMaterialItem, shouldRestoreReturnedQuantityToStock } = await import("../shared/materialReturnPolicy");
 const { getEffectiveMaterialSaleDiscountLimit } = await import("../shared/materialSalesPolicy");
 const { buildReturnableToolSummary } = await import("../shared/returnableToolSummary");
@@ -726,5 +727,42 @@ const applicator = { role: "funcionario", permissions: { registrarMaterials: tru
 assert.equal(canAccess(applicator, "viewDashboard"), false);
 assert.equal(getDefaultLandingPath(applicator), "/controle-materiais");
 assert.equal(getDefaultLandingPath({ role: "admin" }), "/dashboard");
+
+const officialConfig = {
+  ...getDefaultCostConfig(),
+  id: 1,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  taxPercent: 0.10,
+  hiddenCostPercent: 0.05,
+  minMarginPercent: 0.30,
+} as any;
+const officialPricing = calculateOfficialPriceFromTotals({ materialCost: 1000, laborCost: 500, transportCost: 100 }, officialConfig, 0.30);
+assert.equal(officialPricing.initialCost, 1600, "custo inicial deve somar material + operação");
+assert.equal(officialPricing.hiddenCost, 80, "custos ocultos de 5% devem incidir sobre custo inicial");
+assert.equal(officialPricing.costBase, 1680, "custo base deve incluir custos ocultos");
+assert.equal(officialPricing.finalPrice, 2800, "preço final deve usar denominador 1 - impostos - margem");
+assert.throws(
+  () => calculateOfficialPriceFromTotals({ materialCost: 100, laborCost: 0, transportCost: 0 }, { ...officialConfig, taxPercent: 0.80 }, 0.30),
+  /Configuração de precificação inválida/,
+  "denominador inválido deve bloquear cálculo",
+);
+const serviceCost = calculateTotalCost({ squareMeters: 10, distanceKm: 5, serviceMaterialCostPerM2: 20, serviceLaborCostPerM2: 30, serviceTransportCostPerM2: 2 }, officialConfig);
+assert.equal(serviceCost.suggestedPrice, calculateOfficialPriceFromTotals({ materialCost: serviceCost.materialCost, laborCost: serviceCost.laborCost, transportCost: serviceCost.transportCost }, officialConfig, officialConfig.minMarginPercent).finalPrice, "calculateTotalCost deve usar o motor oficial");
+
+const financeStorage = createMemoryStorage();
+await financeStorage.createTransaction({ type: "inflow", category: "Receita", amount: 1000, description: "Entrada recebida", status: "received", paidAt: new Date("2026-08-21") } as any);
+await financeStorage.createTransaction({ type: "outflow", category: "Fornecedor", amount: 300, description: "Conta paga", status: "paid", paidAt: new Date("2026-08-21") } as any);
+await financeStorage.createTransaction({ type: "outflow", category: "Fornecedor", amount: 200, description: "Conta futura", status: "pending", dueDate: new Date("2026-08-25") } as any);
+await financeStorage.createTransaction({ type: "inflow", category: "Cliente", amount: 400, description: "Recebimento futuro", status: "pending", dueDate: new Date("2026-08-26") } as any);
+const financeTransactions = await financeStorage.getTransactions();
+const realizedBalance = financeTransactions
+  .filter((tx: any) => ["paid", "received", "realized"].includes(tx.status || "realized"))
+  .reduce((sum: number, tx: any) => sum + (tx.type === "inflow" ? tx.amount : -tx.amount), 0);
+const projectedBalance = financeTransactions
+  .filter((tx: any) => tx.status !== "canceled")
+  .reduce((sum: number, tx: any) => sum + (tx.type === "inflow" ? tx.amount : -tx.amount), 0);
+assert.equal(realizedBalance, 700, "saldo atual deve considerar somente realizados");
+assert.equal(projectedBalance, 900, "projeção deve considerar pendências sem duplicar realizados");
 
 console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel e entrada por cargo.");

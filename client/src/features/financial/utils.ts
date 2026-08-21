@@ -17,6 +17,21 @@ export const paymentStatusLabels: Record<string, string> = {
   failed: "Falhou",
 };
 
+export const transactionStatusLabels: Record<string, string> = {
+  planned: "Previsto",
+  pending: "Pendente",
+  partial: "Parcial",
+  paid: "Pago",
+  received: "Recebido",
+  overdue: "Atrasado",
+  canceled: "Cancelado",
+  realized: "Realizado",
+};
+
+export function isTransactionRealized(status?: string) {
+  return ["paid", "received", "realized"].includes(status || "realized");
+}
+
 export const paymentStatusClasses: Record<string, string> = {
   completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
@@ -52,5 +67,13 @@ export function emptyTransactionForm(): TransactionFormState {
     category: "",
     amount: "",
     description: "",
+    status: "realized",
+    competenceDate: "",
+    dueDate: "",
+    paidAt: "",
+    paymentMethod: "",
+    clientName: "",
+    supplierName: "",
+    notes: "",
   };
 }

@@ -94,6 +94,7 @@ export const jobs = pgTable("jobs", {
   paymentMethodId: integer("payment_method_id"), // FK to payment_methods
   paymentConditionIds: text("payment_condition_ids"), // JSON: number[] — IDs of selected paymentConditions
   pdfOptions: text("pdf_options"), // JSON: { materialDisplayMode, showMaterialsToClient }
+  pricingSnapshot: text("pricing_snapshot"), // JSON: parametros financeiros usados no orçamento
 
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -147,6 +148,21 @@ export const transactions = pgTable("transactions", {
   category: text("category").notNull(), 
   amount: real("amount").notNull(),
   description: text("description").notNull(),
+  competenceDate: timestamp("competence_date"),
+  dueDate: timestamp("due_date"),
+  paidAt: timestamp("paid_at"),
+  status: text("status").notNull().default("realized"), // planned | pending | partial | paid | received | overdue | canceled | realized
+  paymentMethod: text("payment_method"),
+  clientName: text("client_name"),
+  supplierName: text("supplier_name"),
+  jobId: integer("job_id"),
+  workOrderId: integer("work_order_id"),
+  installment: text("installment"),
+  recurrence: text("recurrence"),
+  notes: text("notes"),
+  attachmentUrl: text("attachment_url"),
+  responsibleUserId: integer("responsible_user_id"),
+  updatedAt: timestamp("updated_at").defaultNow(),
   date: timestamp("date").defaultNow(),
 });
 
@@ -254,11 +270,21 @@ export const costConfig = pgTable("cost_config", {
   laborHourlyRate: real("labor_hourly_rate").notNull().default(100),
   transportCostPerKm: real("transport_cost_per_km").notNull().default(1.5),
   transportMinimumCost: real("transport_minimum_cost").notNull().default(50),
+  monthlyFixedCosts: real("monthly_fixed_costs").notNull().default(35382.71),
+  proLabore: real("pro_labore").notNull().default(10000),
+  averageMonthlyRevenue: real("average_monthly_revenue").notNull().default(333000),
+  totalDebt: real("total_debt").notNull().default(878451.77),
+  hiddenCostPercent: real("hidden_cost_percent").notNull().default(0.05),
+  taxPercent: real("tax_percent").notNull().default(0),
   minMarginPercent: real("min_margin_percent").notNull().default(0.30),
   idealMarginPercent: real("ideal_margin_percent").notNull().default(0.40),
   alertMarginPercent: real("alert_margin_percent").notNull().default(0.30),
   prohibitedMarginPercent: real("prohibited_margin_percent").notNull().default(0.25),
   minimumServiceValue: real("minimum_service_value").notNull().default(1000),
+  roundingMode: text("rounding_mode").notNull().default("centavos"),
+  effectiveDate: timestamp("effective_date").defaultNow(),
+  updatedBy: text("updated_by"),
+  changeHistory: text("change_history").default("[]"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

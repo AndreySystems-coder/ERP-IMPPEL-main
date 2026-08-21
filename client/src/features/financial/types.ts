@@ -18,4 +18,12 @@ export type TransactionFormState = {
   category: string;
   amount: string;
   description: string;
+  status: string;
+  competenceDate: string;
+  dueDate: string;
+  paidAt: string;
+  paymentMethod: string;
+  clientName: string;
+  supplierName: string;
+  notes: string;
 };

@@ -22,6 +22,12 @@ const configSchema = z.object({
   laborHourlyRate: z.coerce.number().min(0),
   transportCostPerKm: z.coerce.number().min(0),
   transportMinimumCost: z.coerce.number().min(0),
+  monthlyFixedCosts: z.coerce.number().min(0),
+  proLabore: z.coerce.number().min(0),
+  averageMonthlyRevenue: z.coerce.number().min(0),
+  totalDebt: z.coerce.number().min(0),
+  hiddenCostPct: z.coerce.number().min(0).max(100),
+  taxPct: z.coerce.number().min(0).max(99),
   idealMarginPct: z.coerce.number().min(0).max(100),
   minMarginPct: z.coerce.number().min(0).max(100),
   alertMarginPct: z.coerce.number().min(0).max(100),
@@ -255,6 +261,12 @@ export default function CostConfig() {
       laborHourlyRate: 100,
       transportCostPerKm: 1.5,
       transportMinimumCost: 50,
+      monthlyFixedCosts: 35382.71,
+      proLabore: 10000,
+      averageMonthlyRevenue: 333000,
+      totalDebt: 878451.77,
+      hiddenCostPct: 5,
+      taxPct: 0,
       idealMarginPct: 40,
       minMarginPct: 30,
       alertMarginPct: 30,
@@ -270,6 +282,12 @@ export default function CostConfig() {
         laborHourlyRate: config.laborHourlyRate,
         transportCostPerKm: config.transportCostPerKm,
         transportMinimumCost: config.transportMinimumCost,
+        monthlyFixedCosts: (config as any).monthlyFixedCosts ?? 35382.71,
+        proLabore: (config as any).proLabore ?? 10000,
+        averageMonthlyRevenue: (config as any).averageMonthlyRevenue ?? 333000,
+        totalDebt: (config as any).totalDebt ?? 878451.77,
+        hiddenCostPct: ((config as any).hiddenCostPercent ?? 0.05) * 100,
+        taxPct: ((config as any).taxPercent ?? 0) * 100,
         idealMarginPct: config.idealMarginPercent * 100,
         minMarginPct: config.minMarginPercent * 100,
         alertMarginPct: config.alertMarginPercent * 100,
@@ -303,6 +321,12 @@ export default function CostConfig() {
         laborHourlyRate: data.laborHourlyRate,
         transportCostPerKm: data.transportCostPerKm,
         transportMinimumCost: data.transportMinimumCost,
+        monthlyFixedCosts: data.monthlyFixedCosts,
+        proLabore: data.proLabore,
+        averageMonthlyRevenue: data.averageMonthlyRevenue,
+        totalDebt: data.totalDebt,
+        hiddenCostPercent: data.hiddenCostPct / 100,
+        taxPercent: data.taxPct / 100,
         idealMarginPercent: data.idealMarginPct / 100,
         minMarginPercent: data.minMarginPct / 100,
         alertMarginPercent: data.alertMarginPct / 100,
@@ -454,6 +478,82 @@ export default function CostConfig() {
         </SectionCard>
 
         <SectionCard
+          icon={<DollarSign className="w-5 h-5" />}
+          title="Base Financeira Oficial"
+          description="Parâmetros usados pelo motor único de precificação"
+          bgClass="bg-slate-50"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FieldRow
+              label="Custos fixos mensais"
+              hint="Referência administrativa da empresa"
+              prefix="R$"
+              step="0.01"
+              fieldName="monthlyFixedCosts"
+              register={register}
+              error={errors.monthlyFixedCosts?.message}
+              testId="input-monthly-fixed-costs"
+            />
+            <FieldRow
+              label="Pró-labore"
+              hint="Valor de referência mensal"
+              prefix="R$"
+              step="0.01"
+              fieldName="proLabore"
+              register={register}
+              error={errors.proLabore?.message}
+              testId="input-pro-labore"
+            />
+            <FieldRow
+              label="Faturamento médio"
+              hint="Base usada para análise gerencial"
+              prefix="R$"
+              step="0.01"
+              fieldName="averageMonthlyRevenue"
+              register={register}
+              error={errors.averageMonthlyRevenue?.message}
+              testId="input-average-monthly-revenue"
+            />
+            <FieldRow
+              label="Dívida total"
+              hint="Indicador financeiro, não altera automaticamente o preço"
+              prefix="R$"
+              step="0.01"
+              fieldName="totalDebt"
+              register={register}
+              error={errors.totalDebt?.message}
+              testId="input-total-debt"
+            />
+            <FieldRow
+              label="Custos ocultos (%)"
+              hint="Aplicado sobre material + operação"
+              suffix="%"
+              step="0.1"
+              fieldName="hiddenCostPct"
+              register={register}
+              error={errors.hiddenCostPct?.message}
+              testId="input-hidden-cost-percent"
+            />
+            <FieldRow
+              label="Impostos (%)"
+              hint="Deixe 0 até confirmar o regime fiscal"
+              suffix="%"
+              step="0.1"
+              fieldName="taxPct"
+              register={register}
+              error={errors.taxPct?.message}
+              testId="input-tax-percent"
+            />
+          </div>
+          <div className="mt-4 p-3 bg-white rounded-lg border border-gray-200 text-xs text-gray-600">
+            <p className="font-semibold mb-1">Fórmula oficial:</p>
+            <code className="block bg-gray-100 rounded px-2 py-1 font-mono">
+              Preço final = (Material + Operação + Custos ocultos) ÷ (1 − Impostos − Margem)
+            </code>
+          </div>
+        </SectionCard>
+
+        <SectionCard
           icon={<Package className="w-5 h-5" />}
           title="Materiais"
           description="Os custos de material são definidos individualmente em cada serviço do catálogo"
@@ -568,7 +668,7 @@ export default function CostConfig() {
           <div className="mt-4 p-3 bg-white rounded-lg border border-gray-200 text-xs text-gray-600">
             <p className="font-semibold mb-1">Fórmula de precificação:</p>
             <code className="block bg-gray-100 rounded px-2 py-1 font-mono">
-              Preço sugerido = Custo total ÷ (1 − Margem mínima %)
+              Preço sugerido = Custo base ÷ (1 − Impostos − Margem mínima %)
             </code>
           </div>
         </SectionCard>

@@ -1,7 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, Loader2, ReceiptText } from "lucide-react";
 
 import type { FinancialTransaction } from "@/features/financial/types";
-import { formatCurrency, formatDate } from "@/features/financial/utils";
+import { formatCurrency, formatDate, transactionStatusLabels } from "@/features/financial/utils";
 
 type TransactionHistoryProps = {
   transactions: FinancialTransaction[];
@@ -38,6 +38,8 @@ export function TransactionHistory({ transactions, isLoading = false }: Transact
                   <th className="p-4 pl-5">Data</th>
                   <th className="p-4">Descrição</th>
                   <th className="p-4">Categoria</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Vencimento</th>
                   <th className="p-4 pr-5 text-right">Valor</th>
                 </tr>
               </thead>
@@ -47,6 +49,8 @@ export function TransactionHistory({ transactions, isLoading = false }: Transact
                     <td className="p-4 pl-5 text-slate-600 dark:text-slate-300">{formatDate(tx.date)}</td>
                     <td className="p-4 font-medium text-slate-900 dark:text-slate-100">{tx.description}</td>
                     <td className="p-4"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">{tx.category}</span></td>
+                    <td className="p-4 text-slate-600 dark:text-slate-300">{transactionStatusLabels[(tx as any).status || "realized"] || (tx as any).status || "Realizado"}</td>
+                    <td className="p-4 text-slate-600 dark:text-slate-300">{formatDate((tx as any).dueDate)}</td>
                     <td className={`p-4 pr-5 text-right font-bold ${tx.type === "inflow" ? "text-emerald-600" : "text-red-600"}`}>
                       {tx.type === "inflow" ? "+" : "-"} {formatCurrency(tx.amount)}
                     </td>
@@ -77,6 +81,10 @@ function TransactionCard({ transaction }: { transaction: FinancialTransaction })
         <div className="min-w-0">
           <h3 className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">{transaction.description}</h3>
           <p className="mt-1 text-xs text-slate-500">{formatDate(transaction.date)} · {transaction.category}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {transactionStatusLabels[(transaction as any).status || "realized"] || (transaction as any).status || "Realizado"}
+            {(transaction as any).dueDate ? ` · vence ${formatDate((transaction as any).dueDate)}` : ""}
+          </p>
         </div>
         <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${isInflow ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
           {isInflow ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}

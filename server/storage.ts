@@ -31,6 +31,7 @@ import {
   type InsertSalaryDiscountRule, type InsertSalaryDiscount,
   type MaterialSale, type InsertMaterialSale,
 } from "@shared/schema";
+import { getDefaultCostConfig } from "@shared/marginEngine";
 import { eq, desc, sql, getTableColumns, and } from "drizzle-orm";
 
 export const COMPLETE_BACKUP_MODULE_TABLES = {
@@ -1059,17 +1060,7 @@ export class DatabaseStorage implements IStorage {
       const [updated] = await db.update(costConfig).set({ ...updates, updatedAt: new Date() }).where(eq(costConfig.id, existing.id)).returning();
       return updated;
     } else {
-      const defaults: InsertCostConfig = {
-        laborDailyRate: 800,
-        laborHourlyRate: 100,
-        transportCostPerKm: 1.5,
-        transportMinimumCost: 50,
-        minMarginPercent: 0.30,
-        idealMarginPercent: 0.40,
-        alertMarginPercent: 0.30,
-        prohibitedMarginPercent: 0.25,
-        minimumServiceValue: 1000,
-      };
+      const defaults = getDefaultCostConfig() as InsertCostConfig;
       const [created] = await db.insert(costConfig).values({ ...defaults, ...updates }).returning();
       return created;
     }

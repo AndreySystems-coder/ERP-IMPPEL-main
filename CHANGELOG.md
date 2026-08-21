@@ -3,6 +3,29 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-21] - Fechamento tecnico das Etapas 1, 2 e 3
+
+### Alterado
+
+- Precificacao passou a usar `shared/marginEngine.ts` como motor oficial unico para custo inicial, custos ocultos, impostos, margem e preco final.
+- Calculadora de precos passou a consumir o mesmo motor usado por orcamentos.
+- Criacao e atualizacao de orcamentos agora recalculam valores criticos no backend antes de salvar e gravam `pricingSnapshot` com os parametros usados.
+- Configuracao de Custos e Margens passou a expor custos fixos mensais, pro-labore, faturamento medio, divida total, custos ocultos e impostos como parametros editaveis.
+- Financeiro passou a registrar status, competencia, vencimento, pagamento/recebimento, cliente, fornecedor, forma de pagamento e observacoes em `transactions`.
+- Tela Financeiro passou a mostrar saldo realizado, saldo real dos proximos 7 dias, projecao minima de 30 dias e resumo financeiro semanal.
+
+### Banco
+
+- Adicionada migration incremental `migrations/0001_stage_1_3_financial_pricing.sql` com `ADD COLUMN IF NOT EXISTS` para preservar bancos existentes.
+- Novos campos foram adicionados com defaults ou como opcionais para manter compatibilidade com dados antigos.
+
+### Validacao
+
+- TypeScript validado com `npx tsc --noEmit --incremental false`.
+- `npm run build` passou com os avisos ja conhecidos de bundle grande e `import.meta` no build CJS.
+- `npm run test:backup` passou.
+- `npm run test:operational` passou e cobre formula oficial e projecao financeira simples.
+
 ## [2026-07-24] - Melhorias no Registro Rapido
 
 ### Alterado

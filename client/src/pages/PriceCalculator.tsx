@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { useSettings } from "@/hooks/use-settings";
+import { useCostConfig } from "@/hooks/use-cost-config";
 import { Card, CardContent } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Calculator, ArrowRight, DollarSign, PieChart } from "lucide-react";
+import { calculateOfficialPriceFromTotals } from "@shared/marginEngine";
 
 export default function PriceCalculator() {
   const { data: settings } = useSettings();
+  const { data: costConfig } = useCostConfig();
   
   const [sqMeters, setSqMeters] = useState("100");
   const [matCost, setMatCost] = useState("0");
@@ -25,40 +28,28 @@ export default function PriceCalculator() {
   const lc = Number(labCost) || 0;
   const tc = Number(transCost) || 0;
 
-  const fcaRate = getSetting("fixedCostAllocation", 0.15);
-  const marginRate = getSetting("targetMargin", 0.20);
-  const taxRate = getSetting("taxRate", 0.10);
   const regionBPercent = getSetting("regionBZonePercent", 0.15);
   const regionCPercent = getSetting("regionCZonePercent", 0.25);
 
-  // Direct cost calculation (PROMPT 3)
-  const directCost = mc + lc + tc;
-  const fixedCostAlloc = directCost * fcaRate;
-  const totalCost = directCost + fixedCostAlloc;
-  
-  const basePrice = marginRate < 1 ? totalCost / (1 - marginRate) : totalCost * (1 + marginRate);
-  const marginAmount = basePrice - totalCost;
-  
   // Regional adjustment (PROMPT 4)
   let regionalAdjustment = 0;
-  if (regionZone === "B") regionalAdjustment = basePrice * regionBPercent;
-  else if (regionZone === "C") regionalAdjustment = basePrice * regionCPercent;
+  if (regionZone === "B") regionalAdjustment = mc * regionBPercent;
+  else if (regionZone === "C") regionalAdjustment = mc * regionCPercent;
   
-  const priceWithRegion = basePrice + regionalAdjustment;
-  const taxAmount = priceWithRegion * taxRate;
-  const finalPrice = priceWithRegion + taxAmount;
+  const materialWithRegion = mc + regionalAdjustment;
+  const pricing = costConfig
+    ? calculateOfficialPriceFromTotals({ materialCost: materialWithRegion, laborCost: lc, transportCost: tc }, costConfig, costConfig.minMarginPercent)
+    : null;
 
   const results = {
-    directCost,
-    fixedCostAlloc,
-    totalCost,
-    marginAmount,
-    basePrice,
+    directCost: materialWithRegion + lc + tc,
+    hiddenCost: pricing?.hiddenCost || 0,
+    totalCost: pricing?.costBase || 0,
+    marginAmount: pricing?.marginValue || 0,
+    taxAmount: pricing ? pricing.finalPrice * pricing.taxPercent : 0,
+    finalPrice: pricing?.finalPrice || 0,
     regionalAdjustment,
-    priceWithRegion,
-    taxAmount,
-    finalPrice,
-    pricePerSqm: m > 0 ? finalPrice / m : 0
+    pricePerSqm: m > 0 ? (pricing?.finalPrice || 0) / m : 0
   };
 
   return (
@@ -126,13 +117,13 @@ export default function PriceCalculator() {
               <div className="text-sm text-blue-800">
                 <p className="font-bold mb-1">Usando Padrões do Sistema:</p>
                 <ul className="list-disc pl-4 space-y-0.5 opacity-80">
-                  <li>Alocação de Custos Fixos: {(getSetting("fixedCostAllocation", 0.15) * 100).toFixed(1)}%</li>
-                  <li>Margem Alvo: {(getSetting("targetMargin", 0.20) * 100).toFixed(1)}%</li>
-                  <li>Taxa de Imposto: {(getSetting("taxRate", 0.10) * 100).toFixed(1)}%</li>
+                  <li>Custos Ocultos: {(((costConfig as any)?.hiddenCostPercent ?? 0.05) * 100).toFixed(1)}%</li>
+                  <li>Margem Mínima: {((costConfig?.minMarginPercent ?? 0.30) * 100).toFixed(1)}%</li>
+                  <li>Impostos: {(((costConfig as any)?.taxPercent ?? 0) * 100).toFixed(1)}%</li>
                   <li>Ajuste Zona B: {(getSetting("regionBZonePercent", 0.15) * 100).toFixed(1)}%</li>
                   <li>Ajuste Zona C: {(getSetting("regionCZonePercent", 0.25) * 100).toFixed(1)}%</li>
                 </ul>
-                <a href="/settings" className="underline font-semibold mt-2 inline-block">Editar Regras</a>
+                <a href="/custos-margens" className="underline font-semibold mt-2 inline-block">Editar Regras</a>
               </div>
             </div>
           </CardContent>
@@ -176,12 +167,12 @@ export default function PriceCalculator() {
               <h4 className="font-bold text-slate-900 mb-4 font-display">Detalhamento de Custos</h4>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                  <span className="text-slate-600">Custos Diretos (Mat + MO)</span>
+                  <span className="text-slate-600">Custo inicial (Material + Operação)</span>
                   <span className="font-semibold text-slate-900">R$ {results?.directCost.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-100">
-                  <span className="text-slate-600">Alocação de Custos Fixos</span>
-                  <span className="font-semibold text-slate-900">R$ {results?.fixedCostAlloc.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                  <span className="text-slate-600">Custos Ocultos</span>
+                  <span className="font-semibold text-slate-900">R$ {results?.hiddenCost.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-100 bg-slate-50 -mx-6 px-6 font-bold">
                   <span className="text-slate-800">Custo Base Total</span>

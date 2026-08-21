@@ -13,6 +13,11 @@ export interface CostCalculation {
   laborCost: number;
   transportCost: number;
   extrasCost: number;
+  initialCost: number;
+  hiddenCost: number;
+  costBase: number;
+  taxPercent: number;
+  marginPercent: number;
   totalCost: number;
   suggestedPrice: number;
 }
@@ -43,6 +48,102 @@ export interface CombinedRecommendation {
   priority: "ALTA" | "MÉDIA" | "BAIXA";
 }
 
+export interface OfficialPricingTotals {
+  materialCost: number;
+  laborCost: number;
+  transportCost: number;
+  extrasCost?: number;
+}
+
+export interface OfficialPricingResult {
+  materialCost: number;
+  operationalCost: number;
+  laborCost: number;
+  transportCost: number;
+  extrasCost: number;
+  initialCost: number;
+  hiddenCostPercent: number;
+  hiddenCost: number;
+  costBase: number;
+  taxPercent: number;
+  marginPercent: number;
+  denominator: number;
+  finalPrice: number;
+  profit: number;
+  marginValue: number;
+}
+
+function asFiniteNumber(value: unknown, fallback = 0): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+export function normalizePercent(value: unknown, fallback = 0): number {
+  const numeric = asFiniteNumber(value, fallback);
+  const percent = numeric > 1 ? numeric / 100 : numeric;
+  return Number.isFinite(percent) ? percent : fallback;
+}
+
+export function roundMoney(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function assertValidOfficialPricingConfig(config: CostConfig, marginPercent: number, taxPercent: number, hiddenCostPercent: number) {
+  const invalidFields: string[] = [];
+  if (marginPercent < 0 || marginPercent >= 1) invalidFields.push("margem");
+  if (taxPercent < 0 || taxPercent >= 1) invalidFields.push("impostos");
+  if (hiddenCostPercent < 0) invalidFields.push("custos ocultos");
+
+  const denominator = 1 - taxPercent - marginPercent;
+  if (denominator <= 0) invalidFields.push("denominador");
+  if (invalidFields.length > 0) {
+    throw new Error(`Configuração de precificação inválida: ${invalidFields.join(", ")}`);
+  }
+  return denominator;
+}
+
+export function calculateOfficialPriceFromTotals(
+  totals: OfficialPricingTotals,
+  config: CostConfig,
+  marginPercent = config.minMarginPercent,
+): OfficialPricingResult {
+  const materialCost = Math.max(0, asFiniteNumber(totals.materialCost));
+  const laborCost = Math.max(0, asFiniteNumber(totals.laborCost));
+  const transportCost = Math.max(0, asFiniteNumber(totals.transportCost));
+  const extrasCost = Math.max(0, asFiniteNumber(totals.extrasCost));
+  const normalizedMargin = normalizePercent(marginPercent, config.minMarginPercent);
+  const taxPercent = normalizePercent((config as any).taxPercent, 0);
+  const hiddenCostPercent = normalizePercent((config as any).hiddenCostPercent, 0.05);
+  const denominator = assertValidOfficialPricingConfig(config, normalizedMargin, taxPercent, hiddenCostPercent);
+
+  const operationalCost = roundMoney(laborCost + transportCost + extrasCost);
+  const initialCost = roundMoney(materialCost + operationalCost);
+  const hiddenCost = roundMoney(initialCost * hiddenCostPercent);
+  const costBase = roundMoney(initialCost + hiddenCost);
+  const finalPrice = roundMoney(costBase / denominator);
+  const profit = roundMoney(finalPrice - costBase);
+  const marginValue = roundMoney(finalPrice * normalizedMargin);
+
+  return {
+    materialCost: roundMoney(materialCost),
+    operationalCost,
+    laborCost: roundMoney(laborCost),
+    transportCost: roundMoney(transportCost),
+    extrasCost: roundMoney(extrasCost),
+    initialCost,
+    hiddenCostPercent,
+    hiddenCost,
+    costBase,
+    taxPercent,
+    marginPercent: normalizedMargin,
+    denominator,
+    finalPrice,
+    profit,
+    marginValue,
+  };
+}
+
 export function calculateTotalCost(
   input: CostCalculationInput,
   config: CostConfig,
@@ -63,11 +164,21 @@ export function calculateTotalCost(
   const transportCost = Math.max(transportFromKm, transportFromService, config.transportMinimumCost);
 
   const extrasCost = 0;
+  const official = calculateOfficialPriceFromTotals({ materialCost, laborCost, transportCost, extrasCost }, config, config.minMarginPercent);
 
-  const totalCost = materialCost + laborCost + transportCost + extrasCost;
-  const suggestedPrice = totalCost > 0 ? totalCost / (1 - config.minMarginPercent) : 0;
-
-  return { materialCost, laborCost, transportCost, extrasCost, totalCost, suggestedPrice };
+  return {
+    materialCost: official.materialCost,
+    laborCost: official.laborCost,
+    transportCost: official.transportCost,
+    extrasCost: official.extrasCost,
+    initialCost: official.initialCost,
+    hiddenCost: official.hiddenCost,
+    costBase: official.costBase,
+    taxPercent: official.taxPercent,
+    marginPercent: official.marginPercent,
+    totalCost: official.costBase,
+    suggestedPrice: official.finalPrice,
+  };
 }
 
 export function calculateSuggestedPrice(totalCost: number, minMarginPercent: number): number {
@@ -249,10 +360,20 @@ export function getDefaultCostConfig(): Omit<CostConfig, "id" | "createdAt" | "u
     laborHourlyRate: 100,
     transportCostPerKm: 1.5,
     transportMinimumCost: 50,
+    monthlyFixedCosts: 35382.71,
+    proLabore: 10000,
+    averageMonthlyRevenue: 333000,
+    totalDebt: 878451.77,
+    hiddenCostPercent: 0.05,
+    taxPercent: 0,
     minMarginPercent: 0.30,
     idealMarginPercent: 0.40,
     alertMarginPercent: 0.30,
     prohibitedMarginPercent: 0.25,
     minimumServiceValue: 1000,
+    roundingMode: "centavos",
+    effectiveDate: null,
+    updatedBy: null,
+    changeHistory: "[]",
   };
 }

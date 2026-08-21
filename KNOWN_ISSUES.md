@@ -104,10 +104,19 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Arquivos envolvidos: `shared/schema.ts`, `server/routes.ts`, `server/material-restore-service.ts`, `server/material-pdf-import-service.ts`.
 - Plano: criar migration segura para `import_jobs`/`import_fingerprints` em sprint dedicada com PostgreSQL descartavel, validando restore real antes de producao.
 
-### KI-011 - Servicos com custo zerado ainda precisam de aviso visual dedicado
+### KI-011 - Aliquota fiscal real ainda precisa ser confirmada pela IMPPEL
 
-- Severidade: Melhoria.
-- Causa raiz: o motor de margem ja alerta quando o custo total fica zerado, mas a interface ainda nao possui mensagem especifica para `Custo de mao de obra nao configurado` em servicos cadastrados com mao de obra `0`.
-- Impacto: o calculo nao deve ser considerado margem real quando custo operacional estiver incompleto; exige revisao de UX antes do uso comercial amplo.
-- Arquivos envolvidos: `shared/marginEngine.ts`, componentes de orcamento/servicos.
-- Plano: adicionar aviso visual dedicado em sprint de margem/orcamentos, sem misturar com a correcao cirurgica do restore de materiais.
+- Severidade: Medio.
+- Causa raiz: a formula oficial agora suporta impostos no denominador, mas a aliquota real depende do regime fiscal e da decisao administrativa/contabil da IMPPEL.
+- Impacto: enquanto `taxPercent` estiver 0, o ERP calcula sem imposto embutido. Isso evita inventar uma regra fiscal, mas exige configuracao antes do uso comercial definitivo.
+- Arquivos envolvidos: `shared/marginEngine.ts`, `shared/schema.ts`, `client/src/pages/CostConfig.tsx`.
+- Workaround: configurar `Impostos (%)` em Custos e Margens assim que a aliquota for confirmada.
+- Status: motor tecnico corrigido; pendencia humana/contabil.
+
+### KI-012 - Validacao visual completa ainda depende de ambiente local com login
+
+- Severidade: Medio.
+- Causa raiz: as validacoes automatizadas e build passaram, mas a homologacao visual completa requer servidor local aberto, usuario valido e navegacao pelas telas.
+- Impacto: problemas de UX responsiva podem restar mesmo com TypeScript/build/testes passando.
+- Arquivos envolvidos: telas de Orçamentos, Financeiro, Custos e Margens, Estoque, OS, Garantias e Backup.
+- Plano: executar validacao visual desktop/mobile antes do piloto real ou durante a homologacao operacional.

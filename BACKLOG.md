@@ -18,6 +18,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Garantir que toda alteracao futura em estoque preserve a regra: quantidade somente por movimentacao.
 - Manter verificacao de backup/restauracao para funcionalidades criticas.
 - Homologar restore dos cinco PDFs reais em PostgreSQL descartavel, com segunda importacao e comparacao de saldo/idempotencia.
+- Confirmar com a IMPPEL/contabilidade a aliquota fiscal real antes de usar `taxPercent` em producao comercial definitiva.
 
 ### Medio
 
@@ -25,6 +26,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Revisar se `docs/gemini.md`, `docs/PASSO A PASSO/protocolo_vlaeg.md` e outros documentos auxiliares ainda devem ser mantidos como referencia tecnica.
 - Avaliar criacao de um indice de arquitetura caso a auditoria das proximas sprints identifique necessidade.
 - Criar migration para tabela dedicada de `import_jobs`/`import_fingerprints`, substituindo fingerprints em observacoes por auditoria estruturada.
+- Homologar visualmente em desktop e celular as telas de Custos e Margens, Calculadora, Orçamentos e Financeiro usando usuario real de teste.
 
 ### Melhoria
 

@@ -60,6 +60,61 @@ export function TransactionFormModal({ open, form, isSaving = false, onClose, on
             </div>
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <select
+                value={form.status}
+                onChange={event => setField("status", event.target.value)}
+                className="min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="planned">Previsto</option>
+                <option value="pending">Pendente</option>
+                <option value="partial">Parcialmente pago</option>
+                <option value="paid">Pago</option>
+                <option value="received">Recebido</option>
+                <option value="overdue">Atrasado</option>
+                <option value="canceled">Cancelado</option>
+                <option value="realized">Realizado</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Forma de pagamento</Label>
+              <Input value={form.paymentMethod} onChange={event => setField("paymentMethod", event.target.value)} placeholder="PIX, cartão, boleto..." className="min-h-11" />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label>Competência</Label>
+              <Input type="date" value={form.competenceDate} onChange={event => setField("competenceDate", event.target.value)} className="min-h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Vencimento</Label>
+              <Input type="date" value={form.dueDate} onChange={event => setField("dueDate", event.target.value)} className="min-h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Pago/recebido em</Label>
+              <Input type="date" value={form.paidAt} onChange={event => setField("paidAt", event.target.value)} className="min-h-11" />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Cliente</Label>
+              <Input value={form.clientName} onChange={event => setField("clientName", event.target.value)} placeholder="Opcional" className="min-h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Fornecedor</Label>
+              <Input value={form.supplierName} onChange={event => setField("supplierName", event.target.value)} placeholder="Opcional" className="min-h-11" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Observações</Label>
+            <Input value={form.notes} onChange={event => setField("notes", event.target.value)} placeholder="Decisões, parcela, recorrência ou conferência" className="min-h-11" />
+          </div>
+
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
             <Button type="submit" disabled={isSaving} className="bg-blue-700 text-white hover:bg-blue-800">

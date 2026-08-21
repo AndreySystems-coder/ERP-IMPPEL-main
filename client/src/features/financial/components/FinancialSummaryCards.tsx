@@ -6,11 +6,14 @@ type FinancialSummaryCardsProps = {
   inflows: number;
   outflows: number;
   balance: number;
+  upcomingPayables?: number;
+  upcomingReceivables?: number;
+  realSevenDayBalance?: number;
 };
 
-export function FinancialSummaryCards({ inflows, outflows, balance }: FinancialSummaryCardsProps) {
+export function FinancialSummaryCards({ inflows, outflows, balance, upcomingPayables = 0, upcomingReceivables = 0, realSevenDayBalance = balance }: FinancialSummaryCardsProps) {
   return (
-    <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
       <div className="rounded-xl border border-slate-800 bg-slate-900 p-5 text-white shadow-sm">
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-300">
           <DollarSign className="h-4 w-4" />
@@ -36,6 +39,17 @@ export function FinancialSummaryCards({ inflows, outflows, balance }: FinancialS
         </div>
         <p className="mt-3 text-3xl font-bold text-red-900 dark:text-red-200">{formatCurrency(outflows)}</p>
         <p className="mt-1 text-xs text-red-700/70 dark:text-red-300/70">Despesas registradas no caixa</p>
+      </div>
+
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-5 shadow-sm dark:border-blue-900 dark:bg-blue-950/20">
+        <div className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
+          <DollarSign className="h-4 w-4" />
+          Saldo real 7 dias
+        </div>
+        <p className="mt-3 text-3xl font-bold text-blue-900 dark:text-blue-200">{formatCurrency(realSevenDayBalance)}</p>
+        <p className="mt-1 text-xs text-blue-700/70 dark:text-blue-300/70">
+          +{formatCurrency(upcomingReceivables)} / -{formatCurrency(upcomingPayables)}
+        </p>
       </div>
     </section>
   );

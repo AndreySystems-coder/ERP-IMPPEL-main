@@ -20,7 +20,7 @@ import { QuoteFinancialAnalysis } from "@/features/quotes/components/QuoteFinanc
 import { QuoteForm } from "@/features/quotes/components/QuoteForm";
 import { QuoteServiceItems } from "@/features/quotes/components/QuoteServiceItems";
 import { QuotesList } from "@/features/quotes/components/QuotesList";
-import { evaluateMargin, validateDiscount, calculateTotalCost, getCombinedRecommendation } from "@shared/marginEngine";
+import { evaluateMargin, validateDiscount, calculateTotalCost, calculateOfficialPriceFromTotals, getCombinedRecommendation } from "@shared/marginEngine";
 import { calculateScore } from "@shared/scoringEngine";
 import { usePriorityRules } from "@/hooks/use-priority-rules";
 import { useSettings } from "@/hooks/use-settings";
@@ -204,9 +204,20 @@ export default function Jobs() {
     });
     const materialRegionalIncrease = totalMaterialBase * regionalAdjustmentPercent;
     const totalMaterial = totalMaterialBase + materialRegionalIncrease;
-    const directCost = totalMaterial + totalLabor + totalTransport;
-    const suggestedPrice = directCost > 0 ? directCost / (1 - costConfig.minMarginPercent) : 0;
-    return { materialCost: totalMaterial, baseMaterialCost: totalMaterialBase, materialRegionalIncrease, regionalAdjustmentPercent, laborCost: totalLabor, transportCost: totalTransport, directCost, suggestedPrice };
+    const official = calculateOfficialPriceFromTotals({ materialCost: totalMaterial, laborCost: totalLabor, transportCost: totalTransport }, costConfig, costConfig.minMarginPercent);
+    return {
+      materialCost: totalMaterial,
+      baseMaterialCost: totalMaterialBase,
+      materialRegionalIncrease,
+      regionalAdjustmentPercent,
+      laborCost: totalLabor,
+      transportCost: totalTransport,
+      directCost: official.costBase,
+      initialCost: official.initialCost,
+      hiddenCost: official.hiddenCost,
+      taxPercent: official.taxPercent,
+      suggestedPrice: official.finalPrice,
+    };
   }, [multiItems, distKm, servicesList, costConfig, regionalAdjustmentPercent]);
 
   const filteredJobs = jobsWithScores.filter(j => 
@@ -498,8 +509,11 @@ export default function Jobs() {
     const pdfRegion = ["Zona A", "Zona B", "Zona C"].includes(job.locationRegion) ? job.locationRegion : "Zona A";
     const pdfRegionalAdjustmentPercent = regionPercentMap[pdfRegion] ?? 0;
     totalMaterial = totalMaterial * (1 + pdfRegionalAdjustmentPercent);
-    const directCost = totalMaterial + totalLabor + totalTransport;
-    const finalPrice = job.realPriceSold > 0 ? job.realPriceSold : (directCost > 0 ? directCost / (1 - (costConfig?.minMarginPercent || 0.3)) : 0);
+    const officialPdfPricing = costConfig
+      ? calculateOfficialPriceFromTotals({ materialCost: totalMaterial, laborCost: totalLabor, transportCost: totalTransport }, costConfig, costConfig.minMarginPercent)
+      : null;
+    const directCost = officialPdfPricing?.costBase || (totalMaterial + totalLabor + totalTransport);
+    const finalPrice = job.realPriceSold > 0 ? job.realPriceSold : (officialPdfPricing?.finalPrice || (directCost > 0 ? directCost / (1 - (costConfig?.minMarginPercent || 0.3)) : 0));
     const marginPct = directCost > 0 && finalPrice > 0 ? (finalPrice - directCost) / finalPrice : (costConfig?.minMarginPercent || 0.3);
 
     // Preserve compatibility with older records that only have clientName.

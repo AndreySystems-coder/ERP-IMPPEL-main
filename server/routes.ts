@@ -38,6 +38,10 @@ import {
   buildMaterialPdfImportPreview,
   normalizeMaterialPdfRows,
 } from "./material-pdf-import-service";
+import {
+  calculateOfficialPriceFromTotals,
+  getDefaultCostConfig,
+} from "@shared/marginEngine";
 import { parseBrazilianMoney } from "@shared/money";
 import { DEFAULT_ROLE_PERMISSIONS, normalizeRoleName } from "@shared/rolePermissions";
 import { restoreUsersAndRolesFromBackup } from "./user-restore-service";
@@ -607,15 +611,15 @@ export async function registerRoutes(
   // Seed data function
   async function seedDatabase() {
     const defaultSettings = [
-      { key: "monthlyFixedCosts", value: 30000 },
-      { key: "expectedMonthlyRevenue", value: 120000 },
-      { key: "taxPercentage", value: 0.15 },
+      { key: "monthlyFixedCosts", value: 35382.71 },
+      { key: "expectedMonthlyRevenue", value: 333000 },
+      { key: "taxPercentage", value: 0 },
       { key: "commissionPercentage", value: 0.05 },
       { key: "targetMarginPercentage", value: 0.30 },
       { key: "cardFeePercentage", value: 0.03 },
-      { key: "fixedCostAllocation", value: 0.15 },
-      { key: "targetMargin", value: 0.20 },
-      { key: "taxRate", value: 0.10 },
+      { key: "fixedCostAllocation", value: 0.05 },
+      { key: "targetMargin", value: 0.30 },
+      { key: "taxRate", value: 0 },
       { key: "contributionMargin", value: 0.40 },
       { key: "regionBZonePercent", value: 0.15 },
       { key: "regionCZonePercent", value: 0.25 }
@@ -636,17 +640,7 @@ export async function registerRoutes(
     // Seed cost config defaults on startup
     const existingCostConfig = await storage.getCostConfig();
     if (!existingCostConfig) {
-      await storage.updateCostConfig({
-        laborDailyRate: 800,
-        laborHourlyRate: 100,
-        transportCostPerKm: 1.5,
-        transportMinimumCost: 50,
-        minMarginPercent: 0.30,
-        idealMarginPercent: 0.40,
-        alertMarginPercent: 0.30,
-        prohibitedMarginPercent: 0.25,
-        minimumServiceValue: 1000,
-      });
+      await storage.updateCostConfig(getDefaultCostConfig() as any);
     }
 
     // Seed default WhatsApp flows
@@ -1297,6 +1291,103 @@ export async function registerRoutes(
     return result;
   };
 
+  const normalizeJobFinancials = async (input: any) => {
+    const config = await storage.getCostConfig() || await storage.updateCostConfig(getDefaultCostConfig() as any);
+    const [servicesList, settings] = await Promise.all([storage.getServices(), storage.getSettings()]);
+    const settingMap = new Map(settings.map(setting => [setting.key, Number(setting.value)]));
+    const normalizeRate = (value: unknown, fallback = 0) => {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return fallback;
+      return numeric > 1 ? numeric / 100 : numeric;
+    };
+    const regionPercentMap: Record<string, number> = {
+      "Zona A": 0,
+      "Zona B": normalizeRate(settingMap.get("regionBZonePercent"), 0.15),
+      "Zona C": normalizeRate(settingMap.get("regionCZonePercent"), 0.25),
+    };
+    const regionalAdjustmentPercent = regionPercentMap[input.locationRegion] ?? 0;
+
+    let serviceItems: any[] = [];
+    try { serviceItems = JSON.parse(input.serviceItems || "[]"); } catch { serviceItems = []; }
+    if (!Array.isArray(serviceItems) || serviceItems.length === 0) {
+      serviceItems = [{ name: input.serviceType, area: Number(input.squareMeters) || 0 }];
+    }
+
+    let baseMaterialCost = 0;
+    let laborCost = 0;
+    let transportCost = 0;
+    const serviceBreakdown: any[] = [];
+
+    for (const item of serviceItems) {
+      const service = servicesList.find(candidate => normalizeFlowText(candidate.name) === normalizeFlowText(item.name));
+      const area = Number(item.area) || 0;
+      if (!service || area <= 0) continue;
+      const estimatedLaborHours = area * 0.25;
+      const serviceLabor = Math.max(
+        config.laborHourlyRate * estimatedLaborHours,
+        area * service.laborCostPerM2,
+        config.laborDailyRate,
+      );
+      const serviceTransport = Math.max(
+        0,
+        area * service.transportCostPerM2,
+        config.transportMinimumCost,
+      );
+      const serviceMaterial = area * service.materialConsumptionPerM2;
+      baseMaterialCost += serviceMaterial;
+      laborCost += serviceLabor;
+      transportCost += serviceTransport;
+      serviceBreakdown.push({
+        name: item.name,
+        area,
+        materialCost: normalizeMoneyReais(serviceMaterial),
+        laborCost: normalizeMoneyReais(serviceLabor),
+        transportCost: normalizeMoneyReais(serviceTransport),
+      });
+    }
+
+    const materialCost = normalizeMoneyReais(baseMaterialCost * (1 + regionalAdjustmentPercent));
+    const pricing = calculateOfficialPriceFromTotals({ materialCost, laborCost, transportCost }, config, config.minMarginPercent);
+    const submittedPrice = normalizeMoneyReais(input.realPriceSold ?? input.calculatedPrice ?? 0);
+    const effectivePrice = submittedPrice > 0 ? submittedPrice : pricing.finalPrice;
+    const margin = effectivePrice > 0 ? normalizeMoneyReais((effectivePrice - pricing.costBase) / effectivePrice) : 0;
+    const profit = normalizeMoneyReais(effectivePrice - pricing.costBase);
+
+    if (effectivePrice > 0 && pricing.costBase > 0) {
+      const marginPercent = (effectivePrice - pricing.costBase) / effectivePrice;
+      if (marginPercent < config.prohibitedMarginPercent) {
+        throw new Error(`Margem de ${(marginPercent * 100).toFixed(1)}% abaixo do limite proibido de ${(config.prohibitedMarginPercent * 100).toFixed(0)}%.`);
+      }
+    }
+
+    return {
+      ...input,
+      materialCost,
+      laborCost: normalizeMoneyReais(laborCost),
+      transportCost: normalizeMoneyReais(transportCost),
+      calculatedPrice: pricing.finalPrice,
+      realPriceSold: effectivePrice,
+      profit,
+      margin,
+      pricingSnapshot: JSON.stringify({
+        version: "official-v1",
+        createdAt: new Date().toISOString(),
+        config: {
+          hiddenCostPercent: pricing.hiddenCostPercent,
+          taxPercent: pricing.taxPercent,
+          minMarginPercent: config.minMarginPercent,
+          idealMarginPercent: config.idealMarginPercent,
+          alertMarginPercent: config.alertMarginPercent,
+          prohibitedMarginPercent: config.prohibitedMarginPercent,
+          roundingMode: (config as any).roundingMode || "centavos",
+        },
+        totals: pricing,
+        regionalAdjustmentPercent,
+        serviceBreakdown,
+      }),
+    };
+  };
+
   const buildWorkOrderMaterials = async (job: any) => {
     let serviceItems: any[] = [];
     try { serviceItems = JSON.parse(job.serviceItems || "[]"); } catch {}
@@ -1478,7 +1569,8 @@ export async function registerRoutes(
   app.post(api.jobs.create.path, async (req, res) => {
     try {
       const input = api.jobs.create.input.parse(req.body);
-      const relatedInput = await ensureJobCustomerRelations(input);
+      const pricedInput = await normalizeJobFinancials(input);
+      const relatedInput = await ensureJobCustomerRelations(pricedInput);
       const job = await storage.createJob(relatedInput);
       await updateLeadForJobFlow(job);
       await ensureWorkOrderFlowForJob(job);
@@ -1487,6 +1579,9 @@ export async function registerRoutes(
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
       }
+      if (err instanceof Error && err.message.includes("Margem")) {
+        return res.status(400).json({ message: err.message });
+      }
       res.status(500).json({ message: "Internal Error" });
     }
   });
@@ -1494,9 +1589,11 @@ export async function registerRoutes(
     try {
       const input = api.jobs.update.input.parse(req.body);
       const previousJob = await storage.getJob(Number(req.params.id));
-      const relations = await ensureJobCustomerRelations({ ...previousJob, ...input });
+      const pricedInput = await normalizeJobFinancials({ ...previousJob, ...input });
+      const relations = await ensureJobCustomerRelations(pricedInput);
+      const { id: _jobId, createdAt: _createdAt, ...safePricedInput } = pricedInput;
       const job = await storage.updateJob(Number(req.params.id), {
-        ...input,
+        ...safePricedInput,
         clientId: relations.clientId,
         leadId: relations.leadId,
       });
@@ -1510,6 +1607,9 @@ export async function registerRoutes(
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join('.') });
+      }
+      if (err instanceof Error && err.message.includes("Margem")) {
+        return res.status(400).json({ message: err.message });
       }
       res.status(500).json({ message: "Internal Error" });
     }
@@ -2166,6 +2266,14 @@ export async function registerRoutes(
       category: "Pagamento de orçamento",
       amount: Number(payment.amount || 0),
       description,
+      status: "received",
+      competenceDate: payment.date ? new Date(payment.date) : new Date(),
+      dueDate: payment.date ? new Date(payment.date) : new Date(),
+      paidAt: payment.date ? new Date(payment.date) : new Date(),
+      paymentMethod: payment.paymentMethod,
+      clientName: payment.clientName,
+      jobId: Number(payment.jobId),
+      notes: payment.notes || null,
     } as any);
 
     return { paymentId: payment.id, createdTransaction };
@@ -2195,7 +2303,17 @@ export async function registerRoutes(
   });
   app.post(api.transactions.create.path, async (req, res) => {
     try {
-      const input = api.transactions.create.input.parse(req.body);
+      const normalizeDateField = (value: unknown) => {
+        if (!value) return undefined;
+        const date = new Date(String(value));
+        return Number.isNaN(date.getTime()) ? undefined : date;
+      };
+      const input = api.transactions.create.input.parse({
+        ...req.body,
+        competenceDate: normalizeDateField(req.body.competenceDate),
+        dueDate: normalizeDateField(req.body.dueDate),
+        paidAt: normalizeDateField(req.body.paidAt),
+      });
       const t = await storage.createTransaction(input);
       res.status(201).json(t);
     } catch (err) {
@@ -2370,17 +2488,7 @@ export async function registerRoutes(
     try {
       let config = await storage.getCostConfig();
       if (!config) {
-        config = await storage.updateCostConfig({
-          laborDailyRate: 800,
-          laborHourlyRate: 100,
-          transportCostPerKm: 1.5,
-          transportMinimumCost: 50,
-          minMarginPercent: 0.30,
-          idealMarginPercent: 0.40,
-          alertMarginPercent: 0.30,
-          prohibitedMarginPercent: 0.25,
-          minimumServiceValue: 1000,
-        });
+        config = await storage.updateCostConfig(getDefaultCostConfig() as any);
       }
       res.json(config);
     } catch (err) {
