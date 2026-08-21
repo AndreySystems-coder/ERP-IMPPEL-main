@@ -149,6 +149,7 @@ export function WorksHub() {
         description: "Acompanhe OS, registro de obra, agenda e execução em campo.",
         items: [
           { title: "Ordens de Serviço", description: "Criação, progresso, consumo, fotos e finalização.", href: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders", accent: accents.blue },
+          { title: "Qualidade das Obras", description: "Procedimentos, checklists, ocorrências, inspeções e bloqueios.", href: "/qualidade-obras", icon: ListChecks, permission: "viewWorkOrders", accent: accents.emerald },
           { title: "Calendário", description: "Programação semanal e diária das equipes.", href: "/calendar", icon: Calendar, permission: "viewCalendar", accent: accents.violet },
         ],
       }}

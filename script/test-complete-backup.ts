@@ -74,6 +74,10 @@ const syntheticData: Record<string, any[]> = {
   logisticsRecords: [{ id: 1, jobId: 1, distanceKm: 10, trips: 2, costPerKm: 2, totalCost: 40, auditTrail: JSON.stringify([{ action: "created" }]) }],
   quoteVersions: [{ id: 1, jobId: 1, versionNumber: 1, status: "rascunho", scopeIncluded: JSON.stringify(["Teste"]), scopeExcluded: "[]", assumptions: "[]" }],
   scopeChangeRequests: [{ id: 1, jobId: 1, type: "aditivo", status: "pendente", description: "Aditivo sintético", financialImpact: 100, auditTrail: JSON.stringify([{ action: "created" }]) }],
+  technicalProcedures: [{ id: 1, name: "Procedimento sintético", serviceId: 1, serviceName: "Servico Sintetico", version: "1.0", status: "ativo", objective: "Validação sintética", preparation: "Preparação sintética", execution: "Execução sintética", acceptanceCriteria: "Critério sintético", createdByUserId: 1, createdByUsername: "AdminTeste", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  checklistTemplates: [{ id: 1, name: "Checklist sintético", serviceId: 1, serviceName: "Servico Sintetico", procedureId: 1, phase: "execucao", version: "1.0", status: "aprovado", items: JSON.stringify([{ key: "item-1", title: "Conferência sintética", required: true, blocking: true }]), createdByUserId: 1, createdByUsername: "AdminTeste", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  workOrderQualityRuns: [{ id: 1, workOrderId: 1, jobId: 1, procedureId: 1, procedureVersion: "1.0", checklistTemplateId: 1, phase: "execucao", status: "em_andamento", responses: JSON.stringify([{ key: "item-1", value: false }]), requiredItemsTotal: 1, requiredItemsDone: 0, blockingOpenCount: 1, auditTrail: JSON.stringify([{ action: "created" }]) }],
+  qualityEvents: [{ id: 1, workOrderId: 1, jobId: 1, serviceName: "Servico Sintetico", phase: "execucao", type: "nao_conformidade", severity: "bloqueante", status: "aberta", description: "Não conformidade sintética", createdByUserId: 1, createdByUsername: "AdminTeste", auditTrail: JSON.stringify([{ action: "created" }]) }],
   paymentMethods: [{ id: 1, name: "Pix", active: true }],
   paymentConditions: [{ id: 1, name: "À vista", active: true }],
 };
@@ -107,6 +111,7 @@ const requiredFiles = [
   "ordensServico.json", "registrosObra.json", "materiais.json", "estoque.json", "movimentacoes.json",
   "produtos.json", "vendasMateriais.json", "servicos.json", "financeiro.json", "garantias.json", "importacoesRapidas.json",
   "posVenda.json", "configuracoes.json", "formasPagamento.json", "condicoesPagamento.json", "governancaComercial.json",
+  "qualidadeObras.json",
   "attachments/index.json", "relatorios/relatorio-conferencia.pdf", "ERP-IMPPEL-backup-completo.json",
 ];
 requiredFiles.forEach(path => assert.ok(files[path], `arquivo ausente no ZIP: ${path}`));
@@ -142,6 +147,10 @@ assert.equal(restored.mobileImportAliases[0].alias, "Lequinho", "alias da import
 assert.equal(restored.mobileImportHistory[0].hash, "hash-sintetico", "histórico da importação rápida não foi restaurado");
 assert.equal(restored.discountRequests[0].discountPercent, 10, "solicitação comercial não foi restaurada");
 assert.equal(restored.commissionRecords[0].commissionAmount, 30, "comissão comercial não foi restaurada");
+assert.equal(restored.technicalProcedures[0].status, "ativo", "procedimento técnico não foi restaurado");
+assert.equal(restored.checklistTemplates[0].procedureId, 1, "checklist não preservou relação com procedimento");
+assert.equal(restored.workOrderQualityRuns[0].blockingOpenCount, 1, "execução de qualidade não preservou bloqueios");
+assert.equal(restored.qualityEvents[0].severity, "bloqueante", "ocorrência de qualidade não foi restaurada");
 
 const partialTarget = createMemoryStorage();
 await partialTarget.restoreCompleteBackup({ settings: [{ id: 99, key: "preservar", value: "sim" }] }, ["configuracoes"], "replace");

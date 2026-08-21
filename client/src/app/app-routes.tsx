@@ -38,6 +38,7 @@ import ToolsAndEquipment from "@/pages/ToolsAndEquipment";
 import Usuarios from "@/pages/Usuarios";
 import Warranties from "@/pages/Warranties";
 import WorkOrders from "@/pages/WorkOrders";
+import WorkQuality from "@/pages/WorkQuality";
 import MaterialSales from "@/pages/MaterialSales";
 import HomeRedirect from "@/pages/HomeRedirect";
 import AccessDenied from "@/pages/AccessDenied";
@@ -83,6 +84,7 @@ export const adminRoutes: AppRoute[] = [
   { path: "/crm-whatsapp", component: CrmWhatsapp, access: "admin", withLayout: true },
   { path: "/jobs", component: Jobs, access: "admin", withLayout: true },
   { path: "/work-orders", component: WorkOrders, access: "admin", withLayout: true },
+  { path: "/qualidade-obras", component: WorkQuality, access: "admin", withLayout: true },
   { path: "/calendar", component: Calendar, access: "admin", withLayout: true },
   { path: "/payments", component: Payments, access: "admin", withLayout: true },
   { path: "/services", component: ServicesCatalog, access: "admin", withLayout: true },

@@ -6,6 +6,7 @@ import {
   materialWithdrawals, materialWithdrawalItems, mobileImportAliases, mobileImportHistory,
   salaryDiscountRules, salaryDiscounts,
   commercialPolicies, discountRequests, commissionRecords, logisticsRecords, quoteVersions, scopeChangeRequests,
+  technicalProcedures, checklistTemplates, workOrderQualityRuns, qualityEvents,
   roles,
   type Role, type InsertRole,
   type User, type Client, type Service, type Lead, type Job, type WorkOrder, type Inventory, type InventoryMovement, type Payment, type Product, type JobTracking, type PriorityRules, type Transaction, type Setting, type CostConfig, type InsertCostConfig, type ObraRegistro, type InsertObraRegistro,
@@ -55,6 +56,7 @@ export const COMPLETE_BACKUP_MODULE_TABLES = {
   formasPagamento: ["paymentMethods"],
   condicoesPagamento: ["paymentConditions"],
   governancaComercial: ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"],
+  qualidadeObras: ["technicalProcedures", "checklistTemplates", "workOrderQualityRuns", "qualityEvents"],
 } as const;
 
 export type CompleteBackupModule = keyof typeof COMPLETE_BACKUP_MODULE_TABLES;
@@ -106,6 +108,10 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   logisticsRecords: { table: logisticsRecords, dbName: "logistics_records" },
   quoteVersions: { table: quoteVersions, dbName: "quote_versions" },
   scopeChangeRequests: { table: scopeChangeRequests, dbName: "scope_change_requests" },
+  technicalProcedures: { table: technicalProcedures, dbName: "technical_procedures" },
+  checklistTemplates: { table: checklistTemplates, dbName: "checklist_templates" },
+  workOrderQualityRuns: { table: workOrderQualityRuns, dbName: "work_order_quality_runs" },
+  qualityEvents: { table: qualityEvents, dbName: "quality_events" },
 };
 
 function selectedCompleteTables(modules: CompleteBackupModule[]) {
@@ -1316,6 +1322,10 @@ export function createMemoryStorage(): IStorage {
     logisticsRecords: [],
     quoteVersions: [],
     scopeChangeRequests: [],
+    technicalProcedures: [],
+    checklistTemplates: [],
+    workOrderQualityRuns: [],
+    qualityEvents: [],
   };
 
   const ids: Record<string, number> = Object.fromEntries(Object.keys(data).map(key => [key, 1]));
@@ -1418,6 +1428,14 @@ export function createMemoryStorage(): IStorage {
     QuoteVersions: "quoteVersions",
     ScopeChangeRequest: "scopeChangeRequests",
     ScopeChangeRequests: "scopeChangeRequests",
+    TechnicalProcedure: "technicalProcedures",
+    TechnicalProcedures: "technicalProcedures",
+    ChecklistTemplate: "checklistTemplates",
+    ChecklistTemplates: "checklistTemplates",
+    WorkOrderQualityRun: "workOrderQualityRuns",
+    WorkOrderQualityRuns: "workOrderQualityRuns",
+    QualityEvent: "qualityEvents",
+    QualityEvents: "qualityEvents",
   };
 
   const getTable = (name: string) => tableMap[name] || tableMap[name.replace(/s$/, "")] || "";

@@ -835,4 +835,82 @@ assert.equal(commercialSnapshot.logisticsRecords[0].totalCost, 70, "logística d
 assert.equal(commercialSnapshot.quoteVersions.length, 1, "versão de orçamento não foi registrada");
 assert.equal(commercialSnapshot.scopeChangeRequests.length, 1, "aditivo não foi registrado");
 
-console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel e entrada por cargo.");
+const qualityStorage = createMemoryStorage();
+const qualityProcedure = await qualityStorage.createCompleteTableRow("technicalProcedures", {
+  name: "Procedimento sintético de obra",
+  serviceName: "Impermeabilização sintética",
+  version: "1.0",
+  status: "ativo",
+  objective: "Objetivo validado em teste",
+  preparation: "Preparação validada em teste",
+  execution: "Execução validada em teste",
+  acceptanceCriteria: "Critério validado em teste",
+  createdByUserId: 1,
+  createdByUsername: "AdminTeste",
+  auditTrail: "[]",
+});
+const qualityChecklist = await qualityStorage.createCompleteTableRow("checklistTemplates", {
+  name: "Checklist sintético de entrega",
+  serviceName: "Impermeabilização sintética",
+  procedureId: qualityProcedure.id,
+  phase: "entrega",
+  version: "1.0",
+  status: "aprovado",
+  items: JSON.stringify([{ key: "conferencia-final", title: "Conferência final", required: true, blocking: true }]),
+  createdByUserId: 1,
+  createdByUsername: "AdminTeste",
+  auditTrail: "[]",
+});
+const qualityRun = await qualityStorage.createCompleteTableRow("workOrderQualityRuns", {
+  workOrderId: 88,
+  jobId: 77,
+  procedureId: qualityProcedure.id,
+  procedureVersion: "1.0",
+  checklistTemplateId: qualityChecklist.id,
+  phase: "entrega",
+  status: "em_andamento",
+  responses: JSON.stringify([{ key: "conferencia-final", value: false }]),
+  requiredItemsTotal: 1,
+  requiredItemsDone: 0,
+  blockingOpenCount: 1,
+  auditTrail: "[]",
+});
+const qualityEvent = await qualityStorage.createCompleteTableRow("qualityEvents", {
+  workOrderId: 88,
+  jobId: 77,
+  serviceName: "Impermeabilização sintética",
+  phase: "entrega",
+  type: "nao_conformidade",
+  severity: "bloqueante",
+  status: "aberta",
+  description: "Não conformidade sintética",
+  createdByUserId: 1,
+  createdByUsername: "AdminTeste",
+  auditTrail: "[]",
+});
+const isClosedQualityStatus = (status: unknown) => ["resolvida", "resolvido", "aprovada", "aprovado", "concluida", "concluido", "concluída", "concluído", "encerrada", "encerrado", "cancelada", "cancelado"].includes(String(status || "").toLowerCase());
+const hasQualityClosureBlocker = async () => {
+  const snapshot = await qualityStorage.getCompleteBackupData();
+  const pendingRuns = snapshot.workOrderQualityRuns.filter((run: any) => Number(run.workOrderId) === 88 && !isClosedQualityStatus(run.status) && (Number(run.blockingOpenCount || 0) > 0 || Number(run.requiredItemsDone || 0) < Number(run.requiredItemsTotal || 0)));
+  const blockingEvents = snapshot.qualityEvents.filter((event: any) => Number(event.workOrderId) === 88 && !isClosedQualityStatus(event.status) && (String(event.severity || "") === "bloqueante" || ["nao_conformidade", "não_conformidade"].includes(String(event.type || ""))));
+  return pendingRuns.length + blockingEvents.length > 0;
+};
+assert.equal(await hasQualityClosureBlocker(), true, "OS com checklist pendente e não conformidade bloqueante não pode encerrar");
+await qualityStorage.updateCompleteTableRow("workOrderQualityRuns", qualityRun.id, {
+  status: "concluido",
+  requiredItemsDone: 1,
+  blockingOpenCount: 0,
+  completedAt: new Date("2026-08-21T12:00:00Z"),
+});
+await qualityStorage.updateCompleteTableRow("qualityEvents", qualityEvent.id, {
+  status: "resolvida",
+  resolvedAt: new Date("2026-08-21T12:05:00Z"),
+});
+assert.equal(await hasQualityClosureBlocker(), false, "OS com checklist concluído e ocorrência resolvida deve ficar apta ao fechamento");
+const qualitySnapshot = await qualityStorage.getCompleteBackupData();
+assert.equal(qualitySnapshot.technicalProcedures.length, 1, "procedimento técnico deve entrar no storage");
+assert.equal(qualitySnapshot.checklistTemplates[0].procedureId, qualityProcedure.id, "checklist deve preservar vínculo com procedimento");
+assert.equal(qualitySnapshot.workOrderQualityRuns[0].status, "concluido", "execução de checklist deve registrar conclusão");
+assert.equal(qualitySnapshot.qualityEvents[0].status, "resolvida", "ocorrência deve registrar resolução");
+
+console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel, entrada por cargo e qualidade das obras.");

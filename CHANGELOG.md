@@ -3,6 +3,22 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-21] - Implementacao tecnica da Etapa 5 de qualidade das obras
+
+### Adicionado
+
+- Criada a base de Qualidade das Obras para procedimentos tecnicos, checklists configuraveis, execucoes por OS e eventos de qualidade.
+- Nova tela administrativa `Qualidade das Obras` dentro do fluxo de Obras.
+- Novas APIs `/api/quality/*` com autenticacao, autorizacao, trilha de auditoria e indicadores.
+- Fechamento de OS passou a consultar bloqueios de qualidade antes de concluir.
+- Backup completo passou a incluir o modulo `qualidadeObras`.
+- Migration incremental `migrations/0003_stage_5_work_quality.sql` adiciona apenas tabelas novas com `CREATE TABLE IF NOT EXISTS`.
+
+### Observacoes
+
+- Conteudos tecnicos reais da IMPPEL nao foram inventados; procedimentos podem nascer como rascunho e bloqueiam aprovacao quando ainda contem marcador de pendencia tecnica.
+- A estrutura esta pronta para homologacao operacional, mas requer preenchimento e aprovacao dos procedimentos reais pela IMPPEL.
+
 ## [2026-08-21] - Implementacao tecnica da Etapa 4 comercial
 
 ### Adicionado

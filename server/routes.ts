@@ -132,6 +132,7 @@ function normalizeRestoreDependencyKey(value: unknown) {
 
 const normalizeMaterialMatchKey = normalizeMaterialName;
 const DECIDED_COMMERCIAL_STATUSES = new Set(["aprovado", "rejeitado", "cancelado", "expirado"]);
+const CLOSED_QUALITY_STATUSES = new Set(["resolvida", "resolvido", "aprovada", "aprovado", "concluida", "concluido", "concluída", "concluído", "encerrada", "encerrado", "cancelada", "cancelado"]);
 
 function parseNumber(value: unknown, fallback = 0) {
   if (value === null || value === undefined || value === "") return fallback;
@@ -185,6 +186,28 @@ function calculateLogisticsTotal(row: any) {
     + Math.max(0, parseNumber(row.lodging))
     + Math.max(0, parseNumber(row.otherCosts))
   ).toFixed(2));
+}
+
+async function getQualityClosureBlockers(workOrderId: number) {
+  const [qualityRuns, qualityEvents] = await Promise.all([
+    storage.getCompleteTableRows("workOrderQualityRuns"),
+    storage.getCompleteTableRows("qualityEvents"),
+  ]);
+  const pendingRuns = qualityRuns.filter((run: any) => {
+    if (Number(run.workOrderId) !== workOrderId) return false;
+    const status = String(run.status || "").toLowerCase();
+    if (CLOSED_QUALITY_STATUSES.has(status)) return false;
+    return Number(run.blockingOpenCount || 0) > 0 || Number(run.requiredItemsDone || 0) < Number(run.requiredItemsTotal || 0);
+  });
+  const blockingEvents = qualityEvents.filter((event: any) => {
+    if (Number(event.workOrderId) !== workOrderId) return false;
+    const status = String(event.status || "").toLowerCase();
+    const severity = String(event.severity || "").toLowerCase();
+    const type = String(event.type || "").toLowerCase();
+    if (CLOSED_QUALITY_STATUSES.has(status)) return false;
+    return severity === "bloqueante" || type === "nao_conformidade" || type === "não_conformidade";
+  });
+  return { pendingRuns, blockingEvents };
 }
 
 function uniqueRestoreValues(values: unknown[]) {
@@ -1123,6 +1146,7 @@ export async function registerRoutes(
     { prefix: "/api/maintenance-reminders", permissions: ["viewPostSale"] },
     { prefix: "/api/material-withdrawals", permissions: ["registrarMaterials", "viewAllMaterials"] },
     { prefix: "/api/commercial", permissions: ["viewSettings", "viewFinancials", "viewQuotes"] },
+    { prefix: "/api/quality", permissions: ["viewWorkOrders", "editWorkOrders", "registrarMaterials", "viewSettings"] },
   ];
   app.use((req, res, next) => {
     const restrictedRoute = restrictedPrefixes.find(({ prefix }) => req.path.startsWith(prefix));
@@ -1293,6 +1317,170 @@ export async function registerRoutes(
         logisticsTotal: Number(logistics.reduce((sum, row) => sum + parseNumber(row.totalCost), 0).toFixed(2)),
         pendingScopeChanges: scopeChanges.filter(row => row.status === "pendente").length,
         approvedScopeChanges: scopeChanges.filter(row => row.status === "aprovado").length,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/quality/procedures", requireAuth, (req, res) => listCompleteRows("technicalProcedures", req, res));
+  app.post("/api/quality/procedures", requireAdmin, (req, res) => createCompleteRow("technicalProcedures", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return {
+      ...payload,
+      status: payload.status || "rascunho",
+      createdByUserId: payload.createdByUserId || actor.userId,
+      createdByUsername: payload.createdByUsername || actor.username,
+    };
+  }));
+  app.patch("/api/quality/procedures/:id", requireAdmin, (req, res) => patchCompleteRow("technicalProcedures", req, res));
+  app.post("/api/quality/procedures/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const current = (await storage.getCompleteTableRows("technicalProcedures")).find(row => Number(row.id) === id);
+      if (!current) return res.status(404).json({ message: "Procedimento não encontrado" });
+      const requiredTechnicalFields = ["objective", "preparation", "execution", "acceptanceCriteria"];
+      const missing = requiredTechnicalFields.filter(field => !String(current[field] || "").trim() || String(current[field]).includes("PENDENTE DE VALIDAÇÃO TÉCNICA DA IMPPEL"));
+      if (missing.length > 0) {
+        return res.status(409).json({ message: "Procedimento ainda possui campos técnicos pendentes.", missing });
+      }
+      const actor = sessionActor(req);
+      const updated = await storage.updateCompleteTableRow("technicalProcedures", id, {
+        status: "ativo",
+        approvedByUserId: actor.userId,
+        approvedByUsername: actor.username,
+        approvedAt: new Date(),
+        effectiveDate: new Date(),
+        auditTrail: appendAuditTrail(current.auditTrail, { action: "approved", ...actor }),
+      });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/quality/checklist-templates", requireAuth, (req, res) => listCompleteRows("checklistTemplates", req, res));
+  app.post("/api/quality/checklist-templates", requireAdmin, (req, res) => createCompleteRow("checklistTemplates", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return {
+      ...payload,
+      status: payload.status || "rascunho",
+      createdByUserId: payload.createdByUserId || actor.userId,
+      createdByUsername: payload.createdByUsername || actor.username,
+    };
+  }));
+  app.patch("/api/quality/checklist-templates/:id", requireAdmin, (req, res) => patchCompleteRow("checklistTemplates", req, res));
+  app.post("/api/quality/checklist-templates/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const actor = sessionActor(req);
+      const id = Number(req.params.id);
+      const existing = await storage.getCompleteTableRows("checklistTemplates") as any[];
+      const current = existing.find((row) => Number(row.id) === id);
+      if (!current) {
+        return res.status(404).json({ success: false, error: "Checklist não encontrado" });
+      }
+
+      const updated = await storage.updateCompleteTableRow("checklistTemplates", id, {
+        status: "aprovado",
+        approvedByUserId: actor.userId,
+        approvedByUsername: actor.username,
+        approvedAt: new Date(),
+        auditTrail: appendAuditTrail(current.auditTrail as unknown[], {
+          action: "approve",
+          actor,
+        }),
+      });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Quality checklist approval error:", error);
+      res.status(500).json({ success: false, error: "Erro ao aprovar checklist" });
+    }
+  });
+
+  app.get("/api/quality/runs", requireAnyPermission(["viewWorkOrders", "editWorkOrders", "registrarMaterials"]), (req, res) => listCompleteRows("workOrderQualityRuns", req, res));
+  app.post("/api/quality/runs", requireAnyPermission(["viewWorkOrders", "editWorkOrders"]), async (req, res) => {
+    const procedureId = Number(req.body?.procedureId || 0);
+    if (procedureId > 0) {
+      const procedure = (await storage.getCompleteTableRows("technicalProcedures")).find(row => Number(row.id) === procedureId);
+      if (!procedure || procedure.status !== "ativo") {
+        return res.status(409).json({ message: "Somente procedimento técnico ativo pode orientar uma OS." });
+      }
+    }
+    return createCompleteRow("workOrderQualityRuns", req, res, (payload) => ({
+      ...payload,
+      workOrderId: Number(payload.workOrderId),
+      jobId: payload.jobId ? Number(payload.jobId) : null,
+      procedureId: payload.procedureId ? Number(payload.procedureId) : null,
+      checklistTemplateId: payload.checklistTemplateId ? Number(payload.checklistTemplateId) : null,
+      requiredItemsTotal: Math.max(0, Math.round(parseNumber(payload.requiredItemsTotal))),
+      requiredItemsDone: Math.max(0, Math.round(parseNumber(payload.requiredItemsDone))),
+      blockingOpenCount: Math.max(0, Math.round(parseNumber(payload.blockingOpenCount))),
+    }));
+  });
+  app.patch("/api/quality/runs/:id", requireAnyPermission(["viewWorkOrders", "editWorkOrders", "registrarMaterials"]), (req, res) => patchCompleteRow("workOrderQualityRuns", req, res, (payload, current) => {
+    const status = String(payload.status || current.status || "");
+    const completed = CLOSED_QUALITY_STATUSES.has(status.toLowerCase());
+    return {
+      ...payload,
+      completedAt: payload.completedAt ?? (completed ? new Date() : current.completedAt),
+      completedByUserId: payload.completedByUserId ?? (completed ? sessionActor(req).userId : current.completedByUserId),
+      completedByUsername: payload.completedByUsername ?? (completed ? sessionActor(req).username : current.completedByUsername),
+    };
+  }));
+
+  app.get("/api/quality/events", requireAnyPermission(["viewWorkOrders", "editWorkOrders", "registrarMaterials"]), (req, res) => listCompleteRows("qualityEvents", req, res));
+  app.post("/api/quality/events", requireAnyPermission(["viewWorkOrders", "editWorkOrders", "registrarMaterials"]), (req, res) => createCompleteRow("qualityEvents", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return {
+      ...payload,
+      workOrderId: Number(payload.workOrderId),
+      jobId: payload.jobId ? Number(payload.jobId) : null,
+      status: payload.status || "aberta",
+      severity: payload.severity || "normal",
+      createdByUserId: payload.createdByUserId || actor.userId,
+      createdByUsername: payload.createdByUsername || actor.username,
+    };
+  }));
+  app.patch("/api/quality/events/:id", requireAnyPermission(["viewWorkOrders", "editWorkOrders"]), (req, res) => patchCompleteRow("qualityEvents", req, res, (payload, current) => {
+    const status = String(payload.status || current.status || "").toLowerCase();
+    const resolved = CLOSED_QUALITY_STATUSES.has(status);
+    return {
+      ...payload,
+      resolvedAt: payload.resolvedAt ?? (resolved ? new Date() : current.resolvedAt),
+      resolvedByUserId: payload.resolvedByUserId ?? (resolved ? sessionActor(req).userId : current.resolvedByUserId),
+      resolvedByUsername: payload.resolvedByUsername ?? (resolved ? sessionActor(req).username : current.resolvedByUsername),
+    };
+  }));
+
+  app.get("/api/quality/work-orders/:id/closure-status", requireAuth, async (req, res) => {
+    try {
+      const workOrderId = Number(req.params.id);
+      const blockers = await getQualityClosureBlockers(workOrderId);
+      res.json({
+        workOrderId,
+        canClose: blockers.pendingRuns.length === 0 && blockers.blockingEvents.length === 0,
+        pendingRuns: blockers.pendingRuns,
+        blockingEvents: blockers.blockingEvents,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/quality/indicators", requireAdmin, async (_req, res) => {
+    try {
+      const [runs, events] = await Promise.all([
+        storage.getCompleteTableRows("workOrderQualityRuns"),
+        storage.getCompleteTableRows("qualityEvents"),
+      ]);
+      const completedRuns = runs.filter(row => CLOSED_QUALITY_STATUSES.has(String(row.status || "").toLowerCase())).length;
+      const blockingOpen = events.filter(row => !CLOSED_QUALITY_STATUSES.has(String(row.status || "").toLowerCase()) && String(row.severity || "").toLowerCase() === "bloqueante").length;
+      res.json({
+        checklistRuns: runs.length,
+        completedChecklistRuns: completedRuns,
+        openEvents: events.filter(row => !CLOSED_QUALITY_STATUSES.has(String(row.status || "").toLowerCase())).length,
+        blockingOpen,
+        nonConformities: events.filter(row => String(row.type || "").toLowerCase().includes("conformidade")).length,
       });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -1997,6 +2185,15 @@ export async function registerRoutes(
       const woId = Number(req.params.id);
       const wo = await storage.getWorkOrder(woId);
       if (!wo) return res.status(404).json({ message: "OS não encontrada" });
+
+      const qualityBlockers = await getQualityClosureBlockers(woId);
+      if (qualityBlockers.pendingRuns.length > 0 || qualityBlockers.blockingEvents.length > 0) {
+        return res.status(409).json({
+          message: "Pendências de qualidade bloqueiam a finalização da OS.",
+          pendingRuns: qualityBlockers.pendingRuns,
+          blockingEvents: qualityBlockers.blockingEvents,
+        });
+      }
 
       // 1. Mark as Concluída
       await storage.updateWorkOrder(woId, { status: "Concluída" });

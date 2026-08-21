@@ -96,6 +96,7 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/quote-templates", permissions: ["viewQuoteTemplates"] },
   { path: "/obras", permissions: ["viewWorks", "viewWorkOrders", "viewObraRegistro", "viewCalendar"] },
   { path: "/work-orders", permissions: ["viewWorkOrders"] },
+  { path: "/qualidade-obras", permissions: ["viewWorkOrders", "viewSettings"] },
   { path: "/calendar", permissions: ["viewCalendar"] },
   { path: "/registro-obra", permissions: ["viewObraRegistro"] },
   { path: "/estoque/atual", permissions: ["viewInventory", "viewInventoryCurrent"] },

@@ -102,6 +102,7 @@ export const TECHNICAL_BACKUP_TYPES: Record<string, { module: CompleteBackupModu
   formasPagamento: { module: "formasPagamento", tables: ["paymentMethods"], label: "Formas de Pagamento" },
   condicoesPagamento: { module: "condicoesPagamento", tables: ["paymentConditions"], label: "Condições de Pagamento" },
   governancaComercial: { module: "governancaComercial", tables: ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"], label: "Governança Comercial" },
+  qualidadeObras: { module: "qualidadeObras", tables: ["technicalProcedures", "checklistTemplates", "workOrderQualityRuns", "qualityEvents"], label: "Qualidade das Obras" },
 };
 
 function recordCount(value: unknown) {
@@ -282,6 +283,9 @@ const RELATIONSHIPS: Record<string, Array<{ field: string; target: string }>> = 
   contracts: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
   npsResponses: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
   maintenanceReminders: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
+  checklistTemplates: [{ field: "procedureId", target: "technicalProcedures" }, { field: "serviceId", target: "services" }],
+  workOrderQualityRuns: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }, { field: "procedureId", target: "technicalProcedures" }, { field: "checklistTemplateId", target: "checklistTemplates" }],
+  qualityEvents: [{ field: "workOrderId", target: "workOrders" }, { field: "jobId", target: "jobs" }],
 };
 
 export function buildRestorePreview(

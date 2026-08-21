@@ -118,6 +118,15 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 - Severidade: Medio.
 - Causa raiz: a formula oficial agora suporta impostos no denominador, mas a aliquota real depende do regime fiscal e da decisao administrativa/contabil da IMPPEL.
 - Impacto: enquanto `taxPercent` estiver 0, o ERP calcula sem imposto embutido. Isso evita inventar uma regra fiscal, mas exige configuracao antes do uso comercial definitivo.
+
+### KI-012 - Procedimentos tecnicos reais da Etapa 5 dependem de aprovacao da IMPPEL
+
+- Severidade: Medio.
+- Causa raiz: a Etapa 5 criou a estrutura tecnica de qualidade das obras, mas tempos de cura, consumo, metodos, EPIs, criterios de aceite e treinamentos reais nao podem ser inventados no codigo.
+- Impacto: a tela, APIs, bloqueios e backup estao prontos tecnicamente, mas a operacao em producao depende do preenchimento e aprovacao dos procedimentos reais.
+- Arquivos envolvidos: `client/src/pages/WorkQuality.tsx`, `server/routes.ts`, `shared/schema.ts`, `migrations/0003_stage_5_work_quality.sql`.
+- Workaround: cadastrar procedimentos como rascunho e manter marcador `PENDENTE DE VALIDACAO TECNICA DA IMPPEL` ate aprovacao interna.
+- Status: pendente de decisao operacional da IMPPEL.
 - Arquivos envolvidos: `shared/marginEngine.ts`, `shared/schema.ts`, `client/src/pages/CostConfig.tsx`.
 - Workaround: configurar `Impostos (%)` em Custos e Margens assim que a aliquota for confirmada.
 - Status: motor tecnico corrigido; pendencia humana/contabil.

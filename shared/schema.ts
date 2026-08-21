@@ -412,6 +412,114 @@ export const scopeChangeRequests = pgTable("scope_change_requests", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const technicalProcedures = pgTable("technical_procedures", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  serviceId: integer("service_id"),
+  serviceName: text("service_name"),
+  version: text("version").notNull().default("1.0"),
+  status: text("status").notNull().default("rascunho"),
+  objective: text("objective"),
+  indication: text("indication"),
+  contraindication: text("contraindication"),
+  materials: text("materials").notNull().default("[]"),
+  tools: text("tools").notNull().default("[]"),
+  equipment: text("equipment").notNull().default("[]"),
+  epis: text("epis").notNull().default("[]"),
+  preparation: text("preparation"),
+  execution: text("execution"),
+  curing: text("curing"),
+  protection: text("protection"),
+  tests: text("tests"),
+  acceptanceCriteria: text("acceptance_criteria"),
+  criticalPoints: text("critical_points"),
+  commonFailures: text("common_failures"),
+  exceptionProcedure: text("exception_procedure"),
+  references: text("references").notNull().default("[]"),
+  attachments: text("attachments").notNull().default("[]"),
+  trainingMedia: text("training_media").notNull().default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  approvedAt: timestamp("approved_at"),
+  effectiveDate: timestamp("effective_date"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const checklistTemplates = pgTable("checklist_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  serviceId: integer("service_id"),
+  serviceName: text("service_name"),
+  procedureId: integer("procedure_id"),
+  phase: text("phase").notNull().default("Planejamento"),
+  version: text("version").notNull().default("1.0"),
+  status: text("status").notNull().default("rascunho"),
+  items: text("items").notNull().default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  approvedAt: timestamp("approved_at"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const workOrderQualityRuns = pgTable("work_order_quality_runs", {
+  id: serial("id").primaryKey(),
+  workOrderId: integer("work_order_id").notNull(),
+  jobId: integer("job_id"),
+  procedureId: integer("procedure_id"),
+  procedureVersion: text("procedure_version"),
+  checklistTemplateId: integer("checklist_template_id"),
+  phase: text("phase").notNull().default("Planejamento"),
+  status: text("status").notNull().default("pendente"),
+  responses: text("responses").notNull().default("{}"),
+  requiredItemsTotal: integer("required_items_total").notNull().default(0),
+  requiredItemsDone: integer("required_items_done").notNull().default(0),
+  blockingOpenCount: integer("blocking_open_count").notNull().default(0),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  completedByUserId: integer("completed_by_user_id"),
+  completedByUsername: text("completed_by_username"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const qualityEvents = pgTable("quality_events", {
+  id: serial("id").primaryKey(),
+  workOrderId: integer("work_order_id").notNull(),
+  jobId: integer("job_id"),
+  serviceName: text("service_name"),
+  phase: text("phase").notNull().default("Execução"),
+  type: text("type").notNull(),
+  severity: text("severity").notNull().default("normal"),
+  status: text("status").notNull().default("aberta"),
+  description: text("description").notNull(),
+  impactTechnical: text("impact_technical"),
+  impactFinancial: real("impact_financial").notNull().default(0),
+  impactSchedule: text("impact_schedule"),
+  correctiveAction: text("corrective_action"),
+  resolution: text("resolution"),
+  photos: text("photos").notNull().default("[]"),
+  evidence: text("evidence").notNull().default("[]"),
+  assignedToUserId: integer("assigned_to_user_id"),
+  assignedToUsername: text("assigned_to_username"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  resolvedByUserId: integer("resolved_by_user_id"),
+  resolvedByUsername: text("resolved_by_username"),
+  resolvedAt: timestamp("resolved_at"),
+  auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const obraRegistros = pgTable("obra_registros", {
   id: serial("id").primaryKey(),
   // Tipo do formulário
@@ -752,6 +860,10 @@ export const insertCommissionRecordSchema = createInsertSchema(commissionRecords
 export const insertLogisticsRecordSchema = createInsertSchema(logisticsRecords).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertQuoteVersionSchema = createInsertSchema(quoteVersions).omit({ id: true, createdAt: true });
 export const insertScopeChangeRequestSchema = createInsertSchema(scopeChangeRequests).omit({ id: true, createdAt: true, updatedAt: true, decidedAt: true });
+export const insertTechnicalProcedureSchema = createInsertSchema(technicalProcedures).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
+export const insertChecklistTemplateSchema = createInsertSchema(checklistTemplates).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
+export const insertWorkOrderQualityRunSchema = createInsertSchema(workOrderQualityRuns).omit({ id: true, createdAt: true, updatedAt: true, startedAt: true, completedAt: true });
+export const insertQualityEventSchema = createInsertSchema(qualityEvents).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true });
 
 export type SalaryDiscountRule = typeof salaryDiscountRules.$inferSelect;
 export type SalaryDiscount = typeof salaryDiscounts.$inferSelect;
@@ -769,6 +881,14 @@ export type QuoteVersion = typeof quoteVersions.$inferSelect;
 export type InsertQuoteVersion = typeof insertQuoteVersionSchema._type;
 export type ScopeChangeRequest = typeof scopeChangeRequests.$inferSelect;
 export type InsertScopeChangeRequest = typeof insertScopeChangeRequestSchema._type;
+export type TechnicalProcedure = typeof technicalProcedures.$inferSelect;
+export type InsertTechnicalProcedure = typeof insertTechnicalProcedureSchema._type;
+export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
+export type InsertChecklistTemplate = typeof insertChecklistTemplateSchema._type;
+export type WorkOrderQualityRun = typeof workOrderQualityRuns.$inferSelect;
+export type InsertWorkOrderQualityRun = typeof insertWorkOrderQualityRunSchema._type;
+export type QualityEvent = typeof qualityEvents.$inferSelect;
+export type InsertQualityEvent = typeof insertQualityEventSchema._type;
 export const insertWorkOrderSchema = createInsertSchema(workOrders).omit({ id: true, createdAt: true });
 export const insertInventorySchema = createInsertSchema(inventory).omit({ id: true });
 export const insertInventoryMovementSchema = createInsertSchema(inventoryMovements).omit({ id: true, createdAt: true });

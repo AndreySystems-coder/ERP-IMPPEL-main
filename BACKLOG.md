@@ -31,6 +31,9 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Definir politica real de comissao: base de calculo, porcentagens, liberacao por recebimento, cancelamento e estorno.
 - Definir politica real de logistica/regiao: custo por km, minimo, pedagios, refeicoes, hospedagem e aprovacao de ajuste manual.
 - Definir textos comerciais padrao para escopo incluido, escopo excluido, premissas e aditivos.
+- Preencher e aprovar procedimentos tecnicos reais da IMPPEL para cada servico antes de usar bloqueios de qualidade em producao.
+- Homologar a tela Qualidade das Obras em obra piloto com equipe tecnica, admin e responsaveis por aprovacao.
+- Definir padrao operacional de fotos, evidencias, criterios de aceite e treinamento "Como Trabalhar" por servico.
 
 ### Melhoria
 
@@ -39,6 +42,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Manter ROADMAP.md alinhado com prioridades reais do ERP em producao.
 - Apos congelamento da base 1.0, iniciar novas evolucoes apenas como versoes 1.x em sprints separadas.
 - Integrar, em sprint futura, aprovacoes comerciais diretamente ao fluxo operacional de aceite do orcamento quando a politica da IMPPEL estiver definida.
+- Evoluir indicadores de Qualidade das Obras com filtros por servico, funcionario, cliente, fase e periodo apos validacao dos dados reais.
 
 ## Migrado de docs/task_plan.md
 
