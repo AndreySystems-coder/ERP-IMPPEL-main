@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import { useMemo, useState } from "react";
 import { DollarSign, Plus } from "lucide-react";
+import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +65,19 @@ export default function Financials() {
         return created >= weekStart && created <= now && isTransactionRealized((tx as any).status);
       }).reduce((sum, tx) => sum + (tx.type === "inflow" ? tx.amount : -tx.amount), 0),
     };
+  }, [transactions]);
+
+  const chartData = useMemo(() => {
+    const byType = [
+      { name: "Entradas", value: transactions.filter(tx => tx.type === "inflow").reduce((sum, tx) => sum + tx.amount, 0) },
+      { name: "Saídas", value: transactions.filter(tx => tx.type === "outflow").reduce((sum, tx) => sum + tx.amount, 0) },
+    ];
+    const byCategory = Object.entries(transactions.reduce((acc: Record<string, number>, tx) => {
+      const key = tx.category || "Sem categoria";
+      acc[key] = (acc[key] || 0) + (tx.type === "inflow" ? tx.amount : -tx.amount);
+      return acc;
+    }, {})).map(([name, value]) => ({ name, value: Number(value.toFixed(2)) })).slice(0, 8);
+    return { byType, byCategory };
   }, [transactions]);
 
   const closeModal = () => {
@@ -140,6 +154,34 @@ export default function Financials() {
           <p className="mt-2 text-xs text-slate-500">{totals.overdueCount} conta(s) vencida(s)</p>
           <p className="text-xs text-slate-500">Resultado da semana: {formatCurrency(totals.weeklyResult)}</p>
           <p className="mt-3 text-xs text-slate-500">A reunião continua sendo uma confirmação humana registrada nos lançamentos.</p>
+        </div>
+      </section>
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-slate-600">Entradas x saídas</p>
+          <div className="mt-3 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={chartData.byType} dataKey="value" nameKey="name" innerRadius={55} outerRadius={86}>
+                  {chartData.byType.map((entry) => <Cell key={entry.name} fill={entry.name === "Entradas" ? "#059669" : "#dc2626"} />)}
+                </Pie>
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-slate-600">Resultado por categoria</p>
+          <div className="mt-3 h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData.byCategory}>
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={(value) => String(value)} />
+                <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                <Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </section>
       <TransactionHistory transactions={transactions} isLoading={isLoading} />

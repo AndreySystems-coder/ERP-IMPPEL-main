@@ -85,6 +85,12 @@ const syntheticData: Record<string, any[]> = {
   checklistTemplates: [{ id: 1, name: "Checklist sintético", serviceId: 1, serviceName: "Servico Sintetico", procedureId: 1, phase: "execucao", version: "1.0", status: "aprovado", items: JSON.stringify([{ key: "item-1", title: "Conferência sintética", required: true, blocking: true }]), createdByUserId: 1, createdByUsername: "AdminTeste", auditTrail: JSON.stringify([{ action: "created" }]) }],
   workOrderQualityRuns: [{ id: 1, workOrderId: 1, jobId: 1, procedureId: 1, procedureVersion: "1.0", checklistTemplateId: 1, phase: "execucao", status: "em_andamento", responses: JSON.stringify([{ key: "item-1", value: false }]), requiredItemsTotal: 1, requiredItemsDone: 0, blockingOpenCount: 1, auditTrail: JSON.stringify([{ action: "created" }]) }],
   qualityEvents: [{ id: 1, workOrderId: 1, jobId: 1, serviceName: "Servico Sintetico", phase: "execucao", type: "nao_conformidade", severity: "bloqueante", status: "aberta", description: "Não conformidade sintética", createdByUserId: 1, createdByUsername: "AdminTeste", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  crmPipelineStatuses: [{ id: 1, name: "qualificado", label: "Qualificado", sortOrder: 40, isActive: true, requiresNextAction: true }],
+  crmFollowUps: [{ id: 1, leadId: 1, status: "pendente", reason: "Follow-up D+2", dueDate: new Date("2026-06-25T09:00:00"), channel: "manual", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  crmInteractions: [{ id: 1, leadId: 1, channel: "sistema", direction: "internal", summary: "Lead qualificado", status: "qualificado" }],
+  marketingContentPlans: [{ id: 1, title: "Antes e depois sintético", channel: "Instagram", objective: "Prova social", status: "ideia", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  helpArticles: [{ id: 1, moduleKey: "materiais", title: "Como registrar retirada", audience: "Equipe", summary: "Guia sintético", routePath: "/controle-materiais", status: "ativo", version: 1 }],
+  materialReturnPolicyAudits: [{ id: 1, inventoryId: 2, productName: "Furadeira Sintetica", previousType: "material", newType: "ferramenta", previousPolicy: "consumivel", newPolicy: "retornavel", reason: "Correção sintética" }],
   paymentMethods: [{ id: 1, name: "Pix", active: true }],
   paymentConditions: [{ id: 1, name: "À vista", active: true }],
 };
@@ -118,7 +124,7 @@ const requiredFiles = [
   "ordensServico.json", "registrosObra.json", "materiais.json", "estoque.json", "movimentacoes.json",
   "produtos.json", "vendasMateriais.json", "servicos.json", "financeiro.json", "garantias.json", "importacoesRapidas.json",
   "posVenda.json", "configuracoes.json", "formasPagamento.json", "condicoesPagamento.json", "governancaComercial.json",
-  "qualidadeObras.json",
+  "qualidadeObras.json", "sistemaComercial.json", "marketingConteudo.json", "centralAjuda.json", "auditoriaMateriais.json",
   "attachments/index.json", "relatorios/relatorio-conferencia.pdf", "ERP-IMPPEL-backup-completo.json",
 ];
 requiredFiles.forEach(path => assert.ok(files[path], `arquivo ausente no ZIP: ${path}`));
@@ -165,6 +171,11 @@ assert.equal(restored.technicalProcedures[0].status, "ativo", "procedimento téc
 assert.equal(restored.checklistTemplates[0].procedureId, 1, "checklist não preservou relação com procedimento");
 assert.equal(restored.workOrderQualityRuns[0].blockingOpenCount, 1, "execução de qualidade não preservou bloqueios");
 assert.equal(restored.qualityEvents[0].severity, "bloqueante", "ocorrência de qualidade não foi restaurada");
+assert.equal(restored.crmFollowUps[0].reason, "Follow-up D+2", "follow-up comercial não foi restaurado");
+assert.equal(restored.crmInteractions[0].summary, "Lead qualificado", "interação comercial não foi restaurada");
+assert.equal(restored.marketingContentPlans[0].objective, "Prova social", "planejamento de marketing não foi restaurado");
+assert.equal(restored.helpArticles[0].routePath, "/controle-materiais", "central Como Trabalhar não foi restaurada");
+assert.equal(restored.materialReturnPolicyAudits[0].newPolicy, "retornavel", "auditoria de política de retorno não foi restaurada");
 
 const partialTarget = createMemoryStorage();
 await partialTarget.restoreCompleteBackup({ settings: [{ id: 99, key: "preservar", value: "sim" }] }, ["configuracoes"], "replace");

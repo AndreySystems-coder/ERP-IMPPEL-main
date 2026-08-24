@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useLocation } from "wouter";
 import {
   BarChart3,
+  BookOpen,
   Briefcase,
   Building2,
   Calendar as CalendarIcon,
@@ -71,8 +72,10 @@ const ALL_SECTIONS: NavSection[] = [
     permission: "viewCrm",
     items: [
       { name: "CRM & WhatsApp", path: "/crm-whatsapp", icon: Zap, permission: "viewCrmWhatsapp" },
+      { name: "Sistema Comercial", path: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem" },
       { name: "Leads", path: "/leads", icon: Users, permission: "viewLeads" },
       { name: "Clientes", path: "/clients", icon: Building2, permission: "viewClients" },
+      { name: "Marketing", path: "/marketing-conteudo", icon: MessageSquare, permission: "viewMarketingContent" },
     ],
   },
   {
@@ -136,6 +139,7 @@ const ALL_SECTIONS: NavSection[] = [
       { name: "Venda de Materiais", path: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales" },
       { name: "Garantias", path: "/garantias", icon: Shield, permission: "viewWarranties" },
       { name: "Pós-venda & NPS", path: "/pos-venda", icon: Heart, permission: "viewPostSale" },
+      { name: "Como Trabalhar", path: "/como-trabalhar", icon: BookOpen, permission: "viewHelpCenter" },
     ],
   },
   {

@@ -103,6 +103,10 @@ export const TECHNICAL_BACKUP_TYPES: Record<string, { module: CompleteBackupModu
   condicoesPagamento: { module: "condicoesPagamento", tables: ["paymentConditions"], label: "Condições de Pagamento" },
   governancaComercial: { module: "governancaComercial", tables: ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"], label: "Governança Comercial" },
   qualidadeObras: { module: "qualidadeObras", tables: ["technicalProcedures", "checklistTemplates", "workOrderQualityRuns", "qualityEvents"], label: "Qualidade das Obras" },
+  sistemaComercial: { module: "sistemaComercial", tables: ["crmPipelineStatuses", "crmFollowUps", "crmInteractions"], label: "Sistema Comercial" },
+  marketingConteudo: { module: "marketingConteudo", tables: ["marketingContentPlans"], label: "Marketing e Conteúdo" },
+  centralAjuda: { module: "centralAjuda", tables: ["helpArticles"], label: "Como Trabalhar" },
+  auditoriaMateriais: { module: "auditoriaMateriais", tables: ["materialReturnPolicyAudits"], label: "Auditoria de Materiais" },
 };
 
 function recordCount(value: unknown) {

@@ -6,6 +6,7 @@ import {
   materialWithdrawals, materialWithdrawalItems, mobileImportAliases, mobileImportHistory,
   materialCustodyTransfers, materialResponsibilityCases, materialKits, materialKitItems, toolMaintenanceRecords, materialCountAudits, materialTrainingGuides,
   salaryDiscountRules, salaryDiscounts,
+  crmPipelineStatuses, crmFollowUps, crmInteractions, marketingContentPlans, helpArticles, materialReturnPolicyAudits,
   commercialPolicies, discountRequests, commissionRecords, logisticsRecords, quoteVersions, scopeChangeRequests,
   technicalProcedures, checklistTemplates, workOrderQualityRuns, qualityEvents,
   roles,
@@ -58,6 +59,10 @@ export const COMPLETE_BACKUP_MODULE_TABLES = {
   condicoesPagamento: ["paymentConditions"],
   governancaComercial: ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"],
   qualidadeObras: ["technicalProcedures", "checklistTemplates", "workOrderQualityRuns", "qualityEvents"],
+  sistemaComercial: ["crmPipelineStatuses", "crmFollowUps", "crmInteractions"],
+  marketingConteudo: ["marketingContentPlans"],
+  centralAjuda: ["helpArticles"],
+  auditoriaMateriais: ["materialReturnPolicyAudits"],
 } as const;
 
 export type CompleteBackupModule = keyof typeof COMPLETE_BACKUP_MODULE_TABLES;
@@ -120,6 +125,12 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   checklistTemplates: { table: checklistTemplates, dbName: "checklist_templates" },
   workOrderQualityRuns: { table: workOrderQualityRuns, dbName: "work_order_quality_runs" },
   qualityEvents: { table: qualityEvents, dbName: "quality_events" },
+  crmPipelineStatuses: { table: crmPipelineStatuses, dbName: "crm_pipeline_statuses" },
+  crmFollowUps: { table: crmFollowUps, dbName: "crm_followups" },
+  crmInteractions: { table: crmInteractions, dbName: "crm_interactions" },
+  marketingContentPlans: { table: marketingContentPlans, dbName: "marketing_content_plans" },
+  helpArticles: { table: helpArticles, dbName: "help_articles" },
+  materialReturnPolicyAudits: { table: materialReturnPolicyAudits, dbName: "material_return_policy_audits" },
 };
 
 function normalizeCompleteTableRow(tableKey: string, row: any) {
@@ -1370,6 +1381,12 @@ export function createMemoryStorage(): IStorage {
     checklistTemplates: [],
     workOrderQualityRuns: [],
     qualityEvents: [],
+    crmPipelineStatuses: [],
+    crmFollowUps: [],
+    crmInteractions: [],
+    marketingContentPlans: [],
+    helpArticles: [],
+    materialReturnPolicyAudits: [],
   };
 
   const ids: Record<string, number> = Object.fromEntries(Object.keys(data).map(key => [key, 1]));
@@ -1496,6 +1513,18 @@ export function createMemoryStorage(): IStorage {
     WorkOrderQualityRuns: "workOrderQualityRuns",
     QualityEvent: "qualityEvents",
     QualityEvents: "qualityEvents",
+    CrmPipelineStatus: "crmPipelineStatuses",
+    CrmPipelineStatuses: "crmPipelineStatuses",
+    CrmFollowUp: "crmFollowUps",
+    CrmFollowUps: "crmFollowUps",
+    CrmInteraction: "crmInteractions",
+    CrmInteractions: "crmInteractions",
+    MarketingContentPlan: "marketingContentPlans",
+    MarketingContentPlans: "marketingContentPlans",
+    HelpArticle: "helpArticles",
+    HelpArticles: "helpArticles",
+    MaterialReturnPolicyAudit: "materialReturnPolicyAudits",
+    MaterialReturnPolicyAudits: "materialReturnPolicyAudits",
   };
 
   const getTable = (name: string) => tableMap[name] || tableMap[name.replace(/s$/, "")] || "";

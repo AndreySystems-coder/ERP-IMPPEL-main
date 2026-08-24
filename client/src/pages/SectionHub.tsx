@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import {
   BarChart3,
+  BookOpen,
   Briefcase,
   Building2,
   Calendar,
@@ -116,8 +117,10 @@ export function CrmHub() {
         description: "Centralize leads, contatos, clientes, conversas e ações comerciais.",
         items: [
           { title: "Clientes", description: "Cadastro e histórico básico dos clientes.", href: "/clients", icon: Building2, permission: "viewClients", accent: accents.blue },
+          { title: "Sistema Comercial", description: "Funil, follow-up, duplicidades e marketing.", href: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem", accent: accents.violet },
           { title: "WhatsApp", description: "Pipeline, conversas, templates e próximas ações.", href: "/crm-whatsapp", icon: MessageSquare, permission: "viewCrmWhatsapp", accent: accents.emerald },
           { title: "Leads", description: "Entrada e acompanhamento de oportunidades.", href: "/leads", icon: Zap, permission: "viewLeads", accent: accents.orange },
+          { title: "Marketing", description: "Planejamento simples de conteúdos e campanhas.", href: "/marketing-conteudo", icon: MessageSquare, permission: "viewMarketingContent", accent: accents.cyan },
         ],
       }}
     />
@@ -203,6 +206,7 @@ export function TeamHub() {
           { title: "Controle de Materiais", description: "Retirada, uso, devolução, fotos e assinatura.", href: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials", accent: accents.orange },
           { title: "Venda de Materiais", description: "Carrinho, descontos autorizados e aprovação administrativa.", href: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales", accent: accents.blue },
           { title: "Pós-venda & NPS", description: "Acompanhamento após obra e pesquisa de satisfação.", href: "/pos-venda", icon: Heart, permission: "viewPostSale", accent: accents.rose },
+          { title: "Como Trabalhar", description: "Guias rápidos e procedimentos aprovados.", href: "/como-trabalhar", icon: BookOpen, permission: "viewHelpCenter", accent: accents.slate },
         ],
       }}
     />

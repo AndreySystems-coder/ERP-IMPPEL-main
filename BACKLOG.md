@@ -40,6 +40,10 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Definir procedimento administrativo/juridico para qualquer providencia financeira relacionada a perdas e danos.
 - Homologar em banco PostgreSQL descartavel a matriz final de permissoes das Etapas 4 a 6, repetindo os testes feitos localmente em memoria.
 - Testar visualmente o erro 409 de estoque insuficiente na tela de Movimentacoes com produto selecionado via autocomplete; a API ja esta validada, mas a mensagem final da UI deve ser confirmada em fluxo manual completo.
+- Homologar a Etapa 7 em PostgreSQL real com perfis comercial, marketing, financeiro, encarregado, aplicador e estoque.
+- Definir status oficiais do funil comercial e politicas de follow-up D+2/D+5/D+10 da IMPPEL.
+- Receber credenciais e documentacao oficial da Waseller antes de automatizar envio pelo WhatsApp.
+- Preencher a Central Como Trabalhar com conteudo operacional real aprovado.
 
 ### Melhoria
 
@@ -51,6 +55,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Evoluir indicadores de Qualidade das Obras com filtros por servico, funcionario, cliente, fase e periodo apos validacao dos dados reais.
 - Evoluir relatorios de materiais com filtros por obra, funcionario, periodo, categoria, severidade e tempo medio de resolucao apos coleta de dados reais.
 - Avaliar se Governanca Comercial deve permanecer somente Admin ou se cargos comercial/financeiro devem receber consultas especificas sem expor margens, com permissao explicita e teste de regressao.
+- Evoluir o Sistema Comercial com filtros por responsavel, periodo, origem, campanha, motivo de perda e SLA.
 
 ## Migrado de docs/task_plan.md
 

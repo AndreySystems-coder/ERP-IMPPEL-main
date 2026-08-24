@@ -372,6 +372,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const [quantity, setQuantity] = useState("");
   const [minStock, setMinStock] = useState("5");
   const [price, setPrice] = useState("");
+  const [returnPolicyReason, setReturnPolicyReason] = useState("");
 
   // Movement state
   const [selectedYM, setSelectedYM] = useState(nowYM());
@@ -801,6 +802,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const openNew = () => {
     setEditingItem(null);
     setName(""); setType("material"); setUnit("unid"); setQuantity(""); setMinStock("5"); setPrice("");
+    setReturnPolicyReason("");
     setIsModalOpen(true);
   };
 
@@ -809,13 +811,14 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
     setName(item.name); setType(item.type); setUnit(item.unit || "unid");
     setQuantity(item.quantity.toString()); setMinStock(item.minStock.toString());
     setPrice(item.pricePerUnit?.toString() || "");
+    setReturnPolicyReason("");
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const payload = { name, type, unit, quantity: Number(quantity) || 0, minStock: Number(minStock) || 0, pricePerUnit: Number(price) || 0 };
-    if (editingItem) await updateItem.mutateAsync({ id: editingItem.id, ...payload });
+    if (editingItem) await updateItem.mutateAsync({ id: editingItem.id, ...payload, returnPolicyReason: returnPolicyReason.trim() || undefined });
     else await createItem.mutateAsync(payload);
     setIsModalOpen(false);
   };
@@ -842,6 +845,8 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const currentExits = movementsList.filter(m => m.type === "SAÍDA").reduce((sum, movement) => sum + movement.quantity, 0);
   const emptyStockCount = itemsList.filter(i => i.quantity <= 0).length;
   const currentReturnPolicy = isReturnableMaterialItem({ name, type }) ? "retornavel" : "consumivel";
+  const editingReturnPolicy = editingItem ? (isReturnableMaterialItem(editingItem) ? "retornavel" : "consumivel") : currentReturnPolicy;
+  const returnPolicyChanged = !!editingItem && editingReturnPolicy !== currentReturnPolicy;
 
   return (
     <div className="space-y-6">
@@ -1074,6 +1079,20 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
             <Input label="Quantidade" type="number" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" data-testid="input-item-qty" />
             <Input label="Estoque Mínimo" type="number" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="5" data-testid="input-item-min" />
           </div>
+          {returnPolicyChanged && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <label className="text-sm font-semibold text-amber-900">Motivo da alteração de política *</label>
+              <textarea
+                required
+                value={returnPolicyReason}
+                onChange={e => setReturnPolicyReason(e.target.value)}
+                className="mt-2 min-h-[88px] w-full rounded-xl border-2 border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500"
+                placeholder="Explique por que este item mudou de retornável para consumível, ou o contrário."
+                data-testid="textarea-return-policy-reason"
+              />
+              <p className="mt-2 text-xs text-amber-800">Se houver retirada retornável em aberto, o ERP bloqueará a alteração para preservar o histórico.</p>
+            </div>
+          )}
           <Input label="Preço Unitário (R$)" type="number" step="0.01" value={price} onChange={e => setPrice(e.target.value)} placeholder="0,00" data-testid="input-item-price" />
           <div className="pt-4 flex justify-end gap-3 border-t">
             <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>

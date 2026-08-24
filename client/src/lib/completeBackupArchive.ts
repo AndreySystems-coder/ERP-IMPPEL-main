@@ -91,6 +91,12 @@ export const MODULE_LABELS: Record<string, string> = {
   configuracoes: "Configurações e templates",
   formasPagamento: "Formas de pagamento",
   condicoesPagamento: "Condições de pagamento",
+  governancaComercial: "Governança comercial",
+  qualidadeObras: "Qualidade das obras",
+  sistemaComercial: "Sistema comercial",
+  marketingConteudo: "Marketing e conteúdo",
+  centralAjuda: "Como Trabalhar",
+  auditoriaMateriais: "Auditoria de materiais",
 };
 
 export const TABLE_LABELS: Record<string, string> = {
@@ -132,6 +138,22 @@ export const TABLE_LABELS: Record<string, string> = {
   salaryDiscountRules: "Regras de desconto",
   paymentMethods: "Formas de pagamento",
   paymentConditions: "Condições de pagamento",
+  commercialPolicies: "Políticas comerciais",
+  discountRequests: "Solicitações de desconto",
+  commissionRecords: "Comissões",
+  logisticsRecords: "Logística comercial",
+  quoteVersions: "Versões de orçamento",
+  scopeChangeRequests: "Alterações de escopo",
+  technicalProcedures: "Procedimentos técnicos",
+  checklistTemplates: "Checklists",
+  workOrderQualityRuns: "Execuções de qualidade",
+  qualityEvents: "Ocorrências de qualidade",
+  crmPipelineStatuses: "Status do funil comercial",
+  crmFollowUps: "Follow-ups comerciais",
+  crmInteractions: "Interações comerciais",
+  marketingContentPlans: "Planejamento de marketing",
+  helpArticles: "Como Trabalhar",
+  materialReturnPolicyAudits: "Auditoria de política de retorno",
 };
 
 type TechnicalFile = { path: string; data: TechnicalBackupPayload; records: number };
@@ -178,6 +200,10 @@ export function buildTechnicalFiles(backup: CompleteBackupPackage): TechnicalFil
     ["condicoesPagamento.json", "condicoesPagamento", "condicoesPagamento", ["paymentConditions"], backup.data.condicoesPagamento || {}],
     ["governancaComercial.json", "governancaComercial", "governancaComercial", ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"], backup.data.governancaComercial || {}],
     ["qualidadeObras.json", "qualidadeObras", "qualidadeObras", ["technicalProcedures", "checklistTemplates", "workOrderQualityRuns", "qualityEvents"], backup.data.qualidadeObras || {}],
+    ["sistemaComercial.json", "sistemaComercial", "sistemaComercial", ["crmPipelineStatuses", "crmFollowUps", "crmInteractions"], backup.data.sistemaComercial || {}],
+    ["marketingConteudo.json", "marketingConteudo", "marketingConteudo", ["marketingContentPlans"], backup.data.marketingConteudo || {}],
+    ["centralAjuda.json", "centralAjuda", "centralAjuda", ["helpArticles"], backup.data.centralAjuda || {}],
+    ["auditoriaMateriais.json", "auditoriaMateriais", "auditoriaMateriais", ["materialReturnPolicyAudits"], backup.data.auditoriaMateriais || {}],
   ];
 
   return definitions.map(([path, name, module, tables, data]) => ({

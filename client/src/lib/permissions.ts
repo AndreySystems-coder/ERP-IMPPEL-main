@@ -6,6 +6,7 @@ export type PermissionUser = {
 export type PermissionKey =
   | "viewDashboard"
   | "viewCrm"
+  | "viewCommercialSystem"
   | "viewCrmWhatsapp"
   | "viewLeads"
   | "viewClients"
@@ -44,10 +45,13 @@ export type PermissionKey =
   | "viewBackups"
   | "viewBackupGeneration"
   | "viewRestore"
-  | "viewExports";
+  | "viewExports"
+  | "viewMarketingContent"
+  | "viewHelpCenter";
 
 const COMPATIBILITY: Partial<Record<PermissionKey, PermissionKey[]>> = {
-  viewCrm: ["viewLeads", "viewCrmWhatsapp", "viewClients"],
+  viewCrm: ["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp", "viewClients", "viewMarketingContent"],
+  viewCommercialSystem: ["viewCrm", "viewLeads", "viewCrmWhatsapp"],
   viewQuotes: ["viewQuoteTemplates", "viewQuoteRules"],
   viewWorks: ["viewWorkOrders", "viewObraRegistro", "viewCalendar"],
   viewWorkOrders: ["viewAllWorkOrders"],
@@ -62,7 +66,7 @@ const COMPATIBILITY: Partial<Record<PermissionKey, PermissionKey[]>> = {
   viewBackups: ["viewBackupGeneration", "viewRestore", "viewExports"],
 };
 
-const DEFAULT_EMPLOYEE_PERMISSIONS: PermissionKey[] = ["viewWorks", "viewObraRegistro", "viewTeam", "registrarMaterials"];
+const DEFAULT_EMPLOYEE_PERMISSIONS: PermissionKey[] = ["viewWorks", "viewObraRegistro", "viewTeam", "registrarMaterials", "viewHelpCenter"];
 
 export function canAccess(user: PermissionUser | null | undefined, permission?: PermissionKey) {
   if (!permission) return true;
@@ -85,6 +89,9 @@ export function canAccessAny(user: PermissionUser | null | undefined, permission
 const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = [
   { path: "/dashboard", permissions: ["viewDashboard"] },
   { path: "/crm", permissions: ["viewCrm", "viewLeads", "viewCrmWhatsapp", "viewClients"] },
+  { path: "/sistema-comercial", permissions: ["viewCommercialSystem", "viewCrm", "viewLeads"] },
+  { path: "/marketing-conteudo", permissions: ["viewMarketingContent", "viewCrm"] },
+  { path: "/como-trabalhar", permissions: ["viewHelpCenter", "viewTeam", "viewWorks", "viewInventory", "viewCrm"] },
   { path: "/leads", permissions: ["viewLeads"] },
   { path: "/crm-whatsapp", permissions: ["viewCrmWhatsapp"] },
   { path: "/clients", permissions: ["viewClients"] },
@@ -142,6 +149,7 @@ const LANDING_OPTIONS: Array<{ path: string; permissions: PermissionKey[] }> = [
   { path: "/obras", permissions: ["viewWorks", "viewWorkOrders", "viewObraRegistro", "viewCalendar"] },
   { path: "/estoque", permissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryCount", "viewInventoryMovements"] },
   { path: "/crm", permissions: ["viewCrm", "viewLeads", "viewCrmWhatsapp", "viewClients"] },
+  { path: "/como-trabalhar", permissions: ["viewHelpCenter"] },
   { path: "/financeiro", permissions: ["viewFinancials", "viewPayments", "viewCashFlow", "viewFinancialSettings"] },
   { path: "/backups-hub", permissions: ["viewBackups", "viewBackupGeneration", "viewRestore", "viewExports"] },
   { path: "/configuracoes", permissions: ["viewSettings", "viewCostSettings", "viewStatusSettings", "viewUsers", "viewPriorityRules"] },

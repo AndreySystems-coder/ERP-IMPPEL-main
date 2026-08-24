@@ -1038,4 +1038,26 @@ assert.equal(stage6Snapshot.toolMaintenanceRecords[0].status, "aberta", "ferrame
 assert.equal(stage6Snapshot.materialCountAudits[0].difference, -1, "divergência de contagem deve preservar diferença auditável");
 assert.equal(stage6Snapshot.materialTrainingGuides[0].status, "rascunho", "treinamento deve nascer como rascunho editável");
 
-console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel, entrada por cargo, qualidade das obras e responsabilidade de materiais.");
+const commercialUser = { role: "funcionario", permissions: { viewCrm: true, viewCommercialSystem: true, viewLeads: true } };
+const marketingUser = { role: "funcionario", permissions: { viewMarketingContent: true, viewCrm: true } };
+const helperUser = { role: "funcionario", permissions: { viewHelpCenter: true } };
+assert.equal(canAccess(commercialUser, "viewCommercialSystem"), true, "comercial deve acessar Sistema Comercial");
+assert.equal(canAccess(marketingUser, "viewMarketingContent"), true, "marketing deve acessar planejamento de conteúdo");
+assert.equal(canAccess(helperUser, "viewHelpCenter"), true, "usuário autorizado deve acessar Como Trabalhar");
+assert.equal(getDefaultLandingPath(helperUser), "/como-trabalhar", "cargo somente ajuda deve cair na Central Como Trabalhar");
+
+const stage7Storage = createMemoryStorage();
+const stage7Lead = await stage7Storage.createLead({ name: "Lead Etapa 7", phone: "11999990000", status: "qualificado", nextAction: "Enviar diagnóstico" } as any);
+await stage7Storage.createCompleteTableRow("crmPipelineStatuses", { name: "qualificado", label: "Qualificado", sortOrder: 40, isActive: true });
+await stage7Storage.createCompleteTableRow("crmFollowUps", { leadId: stage7Lead.id, status: "pendente", reason: "D+2", dueDate: new Date("2026-08-23T09:00:00Z"), channel: "manual", auditTrail: "[]" });
+await stage7Storage.createCompleteTableRow("crmInteractions", { leadId: stage7Lead.id, channel: "sistema", direction: "internal", summary: "Lead qualificado", status: "qualificado" });
+await stage7Storage.createCompleteTableRow("marketingContentPlans", { title: "Impermeabilização antes e depois", channel: "Instagram", objective: "Prova social", status: "ideia", auditTrail: "[]" });
+await stage7Storage.createCompleteTableRow("helpArticles", { moduleKey: "crm", title: "Como qualificar lead", audience: "Comercial", summary: "Validar contato, dor e próxima ação.", routePath: "/sistema-comercial", status: "ativo", version: 1 });
+await stage7Storage.createCompleteTableRow("materialReturnPolicyAudits", { inventoryId: stage6Tool.id, productName: stage6Tool.name, previousPolicy: "consumivel", newPolicy: "retornavel", previousType: "material", newType: "ferramenta", reason: "Correção operacional" });
+const stage7Snapshot = await stage7Storage.getCompleteBackupData();
+assert.equal(stage7Snapshot.crmFollowUps[0].reason, "D+2", "follow-up da Etapa 7 deve entrar no backup");
+assert.equal(stage7Snapshot.marketingContentPlans[0].objective, "Prova social", "marketing deve entrar no backup");
+assert.equal(stage7Snapshot.helpArticles[0].routePath, "/sistema-comercial", "Como Trabalhar deve entrar no backup");
+assert.equal(stage7Snapshot.materialReturnPolicyAudits[0].reason, "Correção operacional", "alteração de política de retorno deve ser auditável");
+
+console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel, entrada por cargo, qualidade das obras, responsabilidade de materiais e Etapa 7 comercial/ajuda/marketing.");

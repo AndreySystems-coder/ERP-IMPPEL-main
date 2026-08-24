@@ -4,6 +4,7 @@ import BackupCenter, { BackupExportPage, BackupGenerationPage, BackupRestorePage
 import Calendar from "@/pages/Calendar";
 import Catalog from "@/pages/Catalog";
 import Clients from "@/pages/Clients";
+import CommercialSystem from "@/pages/CommercialSystem";
 import CommercialGovernance from "@/pages/CommercialGovernance";
 import ContageEmFisica from "@/pages/ContageEmFisica";
 import Contracts from "@/pages/Contracts";
@@ -41,6 +42,7 @@ import WorkOrders from "@/pages/WorkOrders";
 import WorkQuality from "@/pages/WorkQuality";
 import MaterialSales from "@/pages/MaterialSales";
 import HomeRedirect from "@/pages/HomeRedirect";
+import HowToWork from "@/pages/HowToWork";
 import AccessDenied from "@/pages/AccessDenied";
 
 export type RouteAccess = "public" | "protected" | "admin";
@@ -68,6 +70,7 @@ export const protectedRoutes: AppRoute[] = [
   { path: "/registro-obra", component: RegistroObra, access: "protected", withLayout: true },
   { path: "/catalog", component: Catalog, access: "protected", withLayout: true },
   { path: "/vendas-materiais", component: MaterialSales, access: "protected", withLayout: true },
+  { path: "/como-trabalhar", component: HowToWork, access: "protected", withLayout: true },
 ];
 
 export const adminRoutes: AppRoute[] = [
@@ -82,6 +85,8 @@ export const adminRoutes: AppRoute[] = [
   { path: "/backups-hub", component: BackupsHub, access: "admin", withLayout: true },
   { path: "/leads", component: Leads, access: "admin", withLayout: true },
   { path: "/crm-whatsapp", component: CrmWhatsapp, access: "admin", withLayout: true },
+  { path: "/sistema-comercial", component: CommercialSystem, access: "admin", withLayout: true },
+  { path: "/marketing-conteudo", component: CommercialSystem, access: "admin", withLayout: true },
   { path: "/jobs", component: Jobs, access: "admin", withLayout: true },
   { path: "/work-orders", component: WorkOrders, access: "admin", withLayout: true },
   { path: "/qualidade-obras", component: WorkQuality, access: "admin", withLayout: true },

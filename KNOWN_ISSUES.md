@@ -12,6 +12,22 @@ Este arquivo registra riscos, problemas conhecidos, limitacoes e pendencias que 
 
 ## Problemas conhecidos atuais
 
+### KI-009 - Integracao Waseller depende de credenciais/API real
+
+- Severidade: Medio.
+- Causa raiz: a Etapa 7 nao recebeu token, endpoint ou contrato oficial da Waseller.
+- Impacto: o ERP nao envia mensagens automaticamente por Waseller; continua usando templates e operacao manual/WhatsApp.
+- Arquivos envolvidos: `client/src/pages/CommercialSystem.tsx`, `client/src/pages/CrmWhatsapp.tsx`, `server/routes.ts`.
+- Workaround: usar modelos de mensagem e follow-up manual ate a integracao real ser informada.
+
+### KI-010 - Conteudo real da Central Como Trabalhar ainda depende da IMPPEL
+
+- Severidade: Medio.
+- Causa raiz: procedimentos e instrucoes tecnicas reais nao devem ser inventados no codigo.
+- Impacto: a central possui estrutura e guias base, mas precisa de aprovacao operacional antes de virar referencia definitiva para equipe.
+- Arquivos envolvidos: `client/src/pages/HowToWork.tsx`, `shared/schema.ts`, `migrations/0005_stage_7_commercial_experience.sql`.
+- Workaround: manter artigos em rascunho/ativo somente apos revisao da IMPPEL.
+
 ### Corrigidos em 2026-08-24 - Gate Etapas 1 a 6
 
 - Rotas de leitura de Qualidade das Obras que dependiam apenas de autenticação agora exigem permissão explicita.

@@ -20,7 +20,7 @@ import {
   normalizeOperationalEmployee,
   type OperationalEmployeeInput,
 } from "@shared/operationalUsers";
-import { getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWithdrawalPending, normalizeReturnCondition, shouldRestoreReturnedQuantityToStock } from "@shared/materialReturnPolicy";
+import { getMaterialReturnPolicy, getMaterialReturnPolicyLabel, hasReturnableMaterialItems, isMaterialWithdrawalPending, isReturnableMaterialItem, normalizeReturnCondition, shouldRestoreReturnedQuantityToStock } from "@shared/materialReturnPolicy";
 import { getEffectiveMaterialSaleDiscountLimit } from "@shared/materialSalesPolicy";
 import { buildMobileNotesPreview, summarizeMobileRows, type MobileImportPreviewRow } from "@shared/mobileNotesImport";
 import { buildMaterialControlContract } from "@shared/materialControlBackup";
@@ -144,6 +144,17 @@ function parseNumber(value: unknown, fallback = 0) {
     .replace(",", ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function safeJsonArray(value: unknown) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function sessionActor(req: Request) {
@@ -1186,6 +1197,13 @@ export async function registerRoutes(
     { prefix: "/api/material-withdrawals", permissions: ["registrarMaterials", "viewAllMaterials"] },
     { prefix: "/api/material-responsibility", permissions: ["registrarMaterials", "viewAllMaterials", "editInventory", "viewInventoryCurrent"] },
     { prefix: "/api/commercial", permissions: ["viewSettings", "viewFinancials", "viewQuotes"] },
+    { prefix: "/api/stage7", permissions: ["viewCommercialSystem", "viewLeads", "viewCrm"] },
+    { prefix: "/api/crm-pipeline-statuses", permissions: ["viewCommercialSystem", "viewLeads", "viewCrm"] },
+    { prefix: "/api/crm-followups", permissions: ["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"] },
+    { prefix: "/api/crm-interactions", permissions: ["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"] },
+    { prefix: "/api/marketing-content", permissions: ["viewMarketingContent", "viewCrm"] },
+    { prefix: "/api/help-articles", permissions: ["viewHelpCenter", "viewTeam", "viewWorks", "viewInventory", "viewCrm"] },
+    { prefix: "/api/material-return-policy-audits", permissions: ["editInventory", "viewAllMaterials"] },
     { prefix: "/api/quality", permissions: ["viewWorkOrders", "editWorkOrders", "registrarMaterials", "viewSettings"] },
   ];
   app.use((req, res, next) => {
@@ -1276,6 +1294,109 @@ export async function registerRoutes(
       res.status(400).json({ message: err.message });
     }
   };
+
+  const defaultCrmStatuses = [
+    { name: "novo", label: "Novo", sortOrder: 10, color: "slate", requiresNextAction: true },
+    { name: "atendimento_iniciado", label: "Atendimento iniciado", sortOrder: 20, color: "blue", requiresNextAction: true },
+    { name: "aguardando_informacoes", label: "Aguardando informações", sortOrder: 30, color: "amber", requiresNextAction: true },
+    { name: "qualificado", label: "Qualificado", sortOrder: 40, color: "emerald", requiresNextAction: true },
+    { name: "visita_a_agendar", label: "Visita a agendar", sortOrder: 50, color: "cyan", requiresNextAction: true },
+    { name: "orcamento_enviado", label: "Orçamento enviado", sortOrder: 60, color: "violet", requiresNextAction: true },
+    { name: "follow_up", label: "Follow-up", sortOrder: 70, color: "orange", requiresNextAction: true },
+    { name: "negociacao", label: "Negociação", sortOrder: 80, color: "blue", requiresNextAction: true },
+    { name: "fechado", label: "Fechado", sortOrder: 90, color: "emerald", isWon: true },
+    { name: "perdido", label: "Perdido", sortOrder: 100, color: "rose", requiresLossReason: true, isLost: true },
+  ];
+
+  const normalizeLeadStatus = (value: unknown) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const isLostLeadStatus = (value: unknown) => ["perdido", "lost"].includes(normalizeLeadStatus(value));
+  const appendLeadHistory = (history: unknown, entry: Record<string, unknown>) => JSON.stringify([...safeJsonArray(history), entry]);
+
+  app.get("/api/crm-pipeline-statuses", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrm"]), async (_req, res) => {
+    try {
+      const rows = await storage.getCompleteTableRows("crmPipelineStatuses");
+      res.json(rows.length ? rows.sort((a, b) => parseNumber(a.sortOrder) - parseNumber(b.sortOrder)) : defaultCrmStatuses);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  app.post("/api/crm-pipeline-statuses", requireAdmin, (req, res) => createCompleteRow("crmPipelineStatuses", req, res));
+  app.patch("/api/crm-pipeline-statuses/:id", requireAdmin, (req, res) => patchCompleteRow("crmPipelineStatuses", req, res));
+
+  app.get("/api/crm-followups", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), (req, res) => listCompleteRows("crmFollowUps", req, res));
+  app.post("/api/crm-followups", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), (req, res) => createCompleteRow("crmFollowUps", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, createdByUserId: payload.createdByUserId || actor.userId, createdByUsername: payload.createdByUsername || actor.username };
+  }));
+  app.patch("/api/crm-followups/:id", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), (req, res) => patchCompleteRow("crmFollowUps", req, res));
+
+  app.get("/api/crm-interactions", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), (req, res) => listCompleteRows("crmInteractions", req, res));
+  app.post("/api/crm-interactions", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), (req, res) => createCompleteRow("crmInteractions", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, createdByUserId: payload.createdByUserId || actor.userId, createdByUsername: payload.createdByUsername || actor.username };
+  }));
+
+  app.get("/api/marketing-content", requireAnyPermission(["viewMarketingContent", "viewCrm"]), (req, res) => listCompleteRows("marketingContentPlans", req, res));
+  app.post("/api/marketing-content", requireAnyPermission(["viewMarketingContent", "viewCrm"]), (req, res) => createCompleteRow("marketingContentPlans", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, createdByUserId: payload.createdByUserId || actor.userId, createdByUsername: payload.createdByUsername || actor.username };
+  }));
+  app.patch("/api/marketing-content/:id", requireAnyPermission(["viewMarketingContent", "viewCrm"]), (req, res) => patchCompleteRow("marketingContentPlans", req, res));
+
+  app.get("/api/help-articles", requireAnyPermission(["viewHelpCenter", "viewTeam", "viewWorks", "viewInventory", "viewCrm"]), (req, res) => listCompleteRows("helpArticles", req, res));
+  app.post("/api/help-articles", requireAdmin, (req, res) => createCompleteRow("helpArticles", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, createdByUserId: payload.createdByUserId || actor.userId, createdByUsername: payload.createdByUsername || actor.username };
+  }));
+  app.patch("/api/help-articles/:id", requireAdmin, (req, res) => patchCompleteRow("helpArticles", req, res));
+
+  app.get("/api/material-return-policy-audits", requireAnyPermission(["editInventory", "viewAllMaterials"]), (req, res) => listCompleteRows("materialReturnPolicyAudits", req, res));
+
+  app.get("/api/stage7/commercial-dashboard", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrm"]), async (_req, res) => {
+    try {
+      const [leads, jobs, followUps, interactions, contentPlans] = await Promise.all([
+        storage.getLeads(),
+        storage.getJobs(),
+        storage.getCompleteTableRows("crmFollowUps"),
+        storage.getCompleteTableRows("crmInteractions"),
+        storage.getCompleteTableRows("marketingContentPlans"),
+      ]);
+      const statusCounts = leads.reduce((acc: Record<string, number>, lead: any) => {
+        const key = String(lead.status || "Novo");
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+      const sourceCounts = leads.reduce((acc: Record<string, number>, lead: any) => {
+        const key = String(lead.source || "Não informado");
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+      const duplicates = Object.values(leads.reduce((acc: Record<string, any[]>, lead: any) => {
+        const keys = [lead.phone, lead.email, lead.document].filter(Boolean).map((value) => String(value).trim().toLowerCase());
+        for (const key of keys) (acc[key] ||= []).push({ id: lead.id, name: lead.name, phone: lead.phone, email: lead.email, document: lead.document });
+        return acc;
+      }, {})).filter((group: any) => group.length > 1);
+      const now = Date.now();
+      res.json({
+        totals: {
+          leads: leads.length,
+          quotes: jobs.length,
+          won: leads.filter((lead: any) => ["fechado", "ganho", "won"].includes(normalizeLeadStatus(lead.status))).length,
+          lost: leads.filter((lead: any) => isLostLeadStatus(lead.status)).length,
+          pendingFollowUps: followUps.filter((row: any) => String(row.status || "pendente") === "pendente").length,
+          overdueFollowUps: followUps.filter((row: any) => String(row.status || "pendente") === "pendente" && new Date(row.dueDate).getTime() < now).length,
+          interactions: interactions.length,
+          contentPlans: contentPlans.length,
+          duplicates: duplicates.length,
+        },
+        byStatus: Object.entries(statusCounts).map(([name, value]) => ({ name, value })),
+        bySource: Object.entries(sourceCounts).map(([name, value]) => ({ name, value })),
+        duplicates,
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   app.get("/api/commercial/policies", requireAdmin, (req, res) => listCompleteRows("commercialPolicies", req, res));
   app.post("/api/commercial/policies", requireAdmin, (req, res) => createCompleteRow("commercialPolicies", req, res));
@@ -2162,7 +2283,24 @@ export async function registerRoutes(
   app.post(api.leads.create.path, async (req, res) => {
     try {
       const input = api.leads.create.input.parse(req.body);
+      if (isLostLeadStatus(input.status) && !String((input as any).lossReason || "").trim()) {
+        return res.status(400).json({ message: "Informe o motivo de perda do lead." });
+      }
+      const actor = sessionActor(req);
       const lead = await storage.createLead(input);
+      await storage.updateLead(lead.id, {
+        history: appendLeadHistory((lead as any).history, { action: "created", status: lead.status, user: actor.username, at: new Date().toISOString() }),
+        nextAction: (lead as any).nextAction || "Definir próxima ação",
+      } as any);
+      await storage.createCompleteTableRow("crmInteractions", {
+        leadId: lead.id,
+        channel: "sistema",
+        direction: "internal",
+        summary: "Lead criado no CRM.",
+        status: lead.status,
+        createdByUserId: actor.userId,
+        createdByUsername: actor.username,
+      });
       res.status(201).json(lead);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -2174,8 +2312,36 @@ export async function registerRoutes(
   app.put(api.leads.update.path, async (req, res) => {
     try {
       const input = api.leads.update.input.parse(req.body);
-      const lead = await storage.updateLead(Number(req.params.id), input);
+      const id = Number(req.params.id);
+      const current = (await storage.getLeads()).find(lead => Number(lead.id) === id);
+      if (!current) return res.status(404).json({ message: "Not found" });
+      if (isLostLeadStatus(input.status || current.status) && !String((input as any).lossReason || (current as any).lossReason || "").trim()) {
+        return res.status(400).json({ message: "Informe o motivo de perda do lead." });
+      }
+      const actor = sessionActor(req);
+      const statusChanged = input.status && input.status !== current.status;
+      const lead = await storage.updateLead(id, {
+        ...input,
+        updatedAt: new Date(),
+        stageEnteredAt: statusChanged ? new Date() : (input as any).stageEnteredAt,
+        lastInteractionAt: statusChanged ? new Date() : (input as any).lastInteractionAt,
+        nextAction: (input as any).nextAction || (current as any).nextAction || "Definir próxima ação",
+        history: statusChanged
+          ? appendLeadHistory((current as any).history, { action: "status_changed", from: current.status, to: input.status, user: actor.username, at: new Date().toISOString() })
+          : (input as any).history,
+      } as any);
       if (!lead) return res.status(404).json({ message: "Not found" });
+      if (statusChanged) {
+        await storage.createCompleteTableRow("crmInteractions", {
+          leadId: lead.id,
+          channel: "sistema",
+          direction: "internal",
+          summary: `Status alterado de ${current.status} para ${lead.status}.`,
+          status: lead.status,
+          createdByUserId: actor.userId,
+          createdByUsername: actor.username,
+        });
+      }
       res.json(lead);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -2467,7 +2633,38 @@ export async function registerRoutes(
   app.put(api.inventory.update.path, async (req, res) => {
     try {
       const current = (await storage.getInventoryItems()).find(item => Number(item.id) === Number(req.params.id));
+      if (!current) return res.status(404).json({ message: "Not found" });
       const input = normalizeInventoryPricingPayload(api.inventory.update.input.parse(req.body), current || {});
+      const previousPolicy = getMaterialReturnPolicy(current);
+      const newPolicy = getMaterialReturnPolicy({ ...current, ...input });
+      if (previousPolicy !== newPolicy) {
+        const reason = String((req.body as any).returnPolicyReason || "").trim();
+        if (!reason) return res.status(400).json({ message: "Informe o motivo da alteração da política de retorno." });
+        const withdrawals = await storage.getMaterialWithdrawals();
+        const activeCustody = withdrawals.filter((withdrawal: any) =>
+          isMaterialWithdrawalPending(withdrawal) &&
+          (withdrawal.items || []).some((item: any) => Number(item.inventoryId) === Number(current.id) && isReturnableMaterialItem(item))
+        );
+        if (previousPolicy === "retornavel" && newPolicy === "consumivel" && activeCustody.length > 0) {
+          return res.status(409).json({
+            message: "Não é possível transformar em consumível enquanto existir retirada retornável em aberto.",
+            activeCustody: activeCustody.length,
+          });
+        }
+        const actor = sessionActor(req);
+        await storage.createCompleteTableRow("materialReturnPolicyAudits", {
+          inventoryId: current.id,
+          productName: current.name,
+          previousType: current.type,
+          newType: input.type ?? current.type,
+          previousPolicy,
+          newPolicy,
+          reason,
+          impactSummary: JSON.stringify({ activeCustody: activeCustody.length }),
+          createdByUserId: actor.userId,
+          createdByUsername: actor.username,
+        });
+      }
       const item = await storage.updateInventoryItem(Number(req.params.id), input);
       if (!item) return res.status(404).json({ message: "Not found" });
       res.json(item);

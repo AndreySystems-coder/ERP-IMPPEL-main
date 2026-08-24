@@ -33,7 +33,7 @@ export function useCreateInventory() {
 export function useUpdateInventory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: number } & z.infer<typeof api.inventory.update.input>) => {
+    mutationFn: async ({ id, ...updates }: { id: number; returnPolicyReason?: string } & z.infer<typeof api.inventory.update.input>) => {
       const url = buildUrl(api.inventory.update.path, { id });
       const res = await fetch(url, {
         method: api.inventory.update.method,

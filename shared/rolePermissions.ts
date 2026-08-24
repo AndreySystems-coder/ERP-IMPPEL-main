@@ -19,14 +19,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Array<{ name: string; label: string; perm
     label: "Administrativo / Financeiro",
     permissions: {
       viewDashboard: true, viewFinancials: true, viewPayments: true, viewCashFlow: true, viewFinancialSettings: true,
-      viewClients: true, viewQuotes: true, viewWorks: true, viewWorkOrders: true, viewBackups: true, viewExports: true,
+      viewClients: true, viewQuotes: true, viewWorks: true, viewWorkOrders: true, viewBackups: true, viewExports: true, viewHelpCenter: true,
     },
   },
   {
     name: "comercial_atendimento",
     label: "Comercial / Atendimento",
     permissions: {
-      viewCrm: true, viewLeads: true, viewCrmWhatsapp: true, viewClients: true,
+      viewCrm: true, viewCommercialSystem: true, viewLeads: true, viewCrmWhatsapp: true, viewClients: true, viewHelpCenter: true,
       viewQuotes: true, viewQuoteTemplates: true, viewQuoteRules: true, viewWorks: true, viewWorkOrders: true,
     },
   },
@@ -34,7 +34,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Array<{ name: string; label: string; perm
     name: "marketing_redes_sociais",
     label: "Marketing / Redes Sociais",
     permissions: {
-      viewDashboard: true, viewCrm: true, viewLeads: true, viewCrmWhatsapp: true, viewClients: true, viewPostSale: true,
+      viewDashboard: true, viewCrm: true, viewCommercialSystem: true, viewMarketingContent: true, viewLeads: true, viewCrmWhatsapp: true, viewClients: true, viewPostSale: true, viewHelpCenter: true,
     },
   },
   {
@@ -42,7 +42,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Array<{ name: string; label: string; perm
     label: "Equipe Técnica",
     permissions: {
       viewWorks: true, viewWorkOrders: true, viewObraRegistro: true,
-      viewTeam: true, registrarMaterials: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true,
+      viewTeam: true, registrarMaterials: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true, viewHelpCenter: true,
     },
   },
   {
@@ -51,14 +51,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Array<{ name: string; label: string; perm
     permissions: {
       viewDashboard: true, viewWorks: true, viewWorkOrders: true, viewAllWorkOrders: true, editWorkOrders: true,
       viewObraRegistro: true, viewCalendar: true, viewTeam: true, viewProductivity: true, registrarMaterials: true,
-      viewAllMaterials: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true,
+      viewAllMaterials: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true, viewHelpCenter: true,
     },
   },
   {
     name: "gestao_epis",
     label: "Gestão de EPIs, Uniformes e Botas",
     permissions: {
-      viewTeam: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true, registrarMaterials: true,
+      viewTeam: true, viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true, registrarMaterials: true, viewHelpCenter: true,
     },
   },
   {
@@ -66,14 +66,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Array<{ name: string; label: string; perm
     label: "Materiais e Equipamentos",
     permissions: {
       viewInventory: true, viewInventoryCurrent: true, viewInventoryMovements: true, editInventory: true,
-      viewTeam: true, registrarMaterials: true, viewAllMaterials: true,
+      viewTeam: true, registrarMaterials: true, viewAllMaterials: true, viewHelpCenter: true,
     },
   },
   {
     name: "gestao_funcionarios",
     label: "Gestão de Funcionários",
     permissions: {
-      viewUsers: true, viewTeam: true, viewProductivity: true, viewSettings: true,
+      viewUsers: true, viewTeam: true, viewProductivity: true, viewSettings: true, viewHelpCenter: true,
     },
   },
   {
@@ -81,7 +81,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Array<{ name: string; label: string; perm
     label: "Obras / Operações",
     permissions: {
       viewWorks: true, viewWorkOrders: true, viewAllWorkOrders: true, editWorkOrders: true,
-      viewObraRegistro: true, viewCalendar: true, viewTeam: true, registrarMaterials: true, viewAllMaterials: true,
+      viewObraRegistro: true, viewCalendar: true, viewTeam: true, registrarMaterials: true, viewAllMaterials: true, viewHelpCenter: true,
     },
   },
 ];

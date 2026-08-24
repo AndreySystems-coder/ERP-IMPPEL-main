@@ -55,11 +55,33 @@ export const leads = pgTable("leads", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   phone: text("phone"),
+  email: text("email"),
+  company: text("company"),
+  document: text("document"),
+  city: text("city"),
+  address: text("address"),
   source: text("source"),
   status: text("status").notNull().default("New Lead"),
+  serviceInterest: text("service_interest"),
+  problemDescription: text("problem_description"),
+  approximateArea: real("approximate_area"),
+  urgency: text("urgency"),
+  campaign: text("campaign"),
+  assignedToUsername: text("assigned_to_username"),
+  priority: text("priority").default("normal"),
+  lastInteractionAt: timestamp("last_interaction_at"),
+  nextAction: text("next_action"),
+  lossReason: text("loss_reason"),
+  lossNotes: text("loss_notes"),
+  postponedReason: text("postponed_reason"),
+  qualificationData: text("qualification_data"),
+  sufficientInfo: boolean("sufficient_info").default(false),
+  stageEnteredAt: timestamp("stage_entered_at"),
+  history: text("history").default("[]"),
   notes: text("notes"),
   nextContactDate: timestamp("next_contact_date"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const jobs = pgTable("jobs", {
@@ -386,6 +408,58 @@ export const quoteVersions = pgTable("quote_versions", {
   createdByUserId: integer("created_by_user_id"),
   createdByUsername: text("created_by_username"),
   auditTrail: text("audit_trail").notNull().default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const crmPipelineStatuses = pgTable("crm_pipeline_statuses", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  label: text("label").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  color: text("color"),
+  isActive: boolean("is_active").notNull().default(true),
+  requiresLossReason: boolean("requires_loss_reason").notNull().default(false),
+  requiresNextAction: boolean("requires_next_action").notNull().default(false),
+  isWon: boolean("is_won").notNull().default(false),
+  isLost: boolean("is_lost").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const crmFollowUps = pgTable("crm_followups", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id"),
+  jobId: integer("job_id"),
+  status: text("status").notNull().default("pendente"),
+  reason: text("reason"),
+  messageTemplate: text("message_template"),
+  assignedToUsername: text("assigned_to_username"),
+  dueDate: timestamp("due_date").notNull(),
+  completedAt: timestamp("completed_at"),
+  result: text("result"),
+  channel: text("channel").notNull().default("manual"),
+  externalProvider: text("external_provider"),
+  externalMessageId: text("external_message_id"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const crmInteractions = pgTable("crm_interactions", {
+  id: serial("id").primaryKey(),
+  leadId: integer("lead_id"),
+  jobId: integer("job_id"),
+  channel: text("channel").notNull().default("manual"),
+  direction: text("direction").notNull().default("outbound"),
+  summary: text("summary").notNull(),
+  status: text("status"),
+  externalProvider: text("external_provider"),
+  externalMessageId: text("external_message_id"),
+  occurredAt: timestamp("occurred_at").defaultNow(),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -723,7 +797,7 @@ export const insertObraRegistroSchema = createInsertSchema(obraRegistros).omit({
 export const insertUserSchema = createInsertSchema(users).omit({ id: true });
 export const insertClientSchema = createInsertSchema(clients).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertServiceSchema = createInsertSchema(services).omit({ id: true, createdAt: true });
-export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true });
+export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true });
 // Job Statuses — custom statuses with WhatsApp messages
 export const jobStatuses = pgTable("job_statuses", {
   id: serial("id").primaryKey(),
@@ -1005,8 +1079,80 @@ export const salaryDiscounts = pgTable("salary_discounts", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const marketingContentPlans = pgTable("marketing_content_plans", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  idea: text("idea"),
+  category: text("category"),
+  channel: text("channel").notNull().default("Instagram"),
+  objective: text("objective"),
+  serviceName: text("service_name"),
+  workOrderId: integer("work_order_id"),
+  captionDraft: text("caption_draft"),
+  cta: text("cta"),
+  media: text("media"),
+  status: text("status").notNull().default("ideia"),
+  assignedToUsername: text("assigned_to_username"),
+  plannedAt: timestamp("planned_at"),
+  publishedAt: timestamp("published_at"),
+  publishedUrl: text("published_url"),
+  resultNotes: text("result_notes"),
+  aiPrompt: text("ai_prompt"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const helpArticles = pgTable("help_articles", {
+  id: serial("id").primaryKey(),
+  moduleKey: text("module_key").notNull(),
+  title: text("title").notNull(),
+  audience: text("audience"),
+  roleName: text("role_name"),
+  summary: text("summary"),
+  steps: text("steps").default("[]"),
+  commonErrors: text("common_errors").default("[]"),
+  relatedModules: text("related_modules").default("[]"),
+  routePath: text("route_path"),
+  status: text("status").notNull().default("ativo"),
+  version: integer("version").notNull().default(1),
+  media: text("media").default("[]"),
+  requiresAcknowledgement: boolean("requires_acknowledgement").notNull().default(false),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  approvedByUserId: integer("approved_by_user_id"),
+  approvedByUsername: text("approved_by_username"),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const materialReturnPolicyAudits = pgTable("material_return_policy_audits", {
+  id: serial("id").primaryKey(),
+  inventoryId: integer("inventory_id").notNull(),
+  productName: text("product_name").notNull(),
+  previousType: text("previous_type"),
+  newType: text("new_type"),
+  previousPolicy: text("previous_policy").notNull(),
+  newPolicy: text("new_policy").notNull(),
+  reason: text("reason").notNull(),
+  impactSummary: text("impact_summary"),
+  status: text("status").notNull().default("aplicado"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertSalaryDiscountRuleSchema = createInsertSchema(salaryDiscountRules).omit({ id: true, createdAt: true });
 export const insertSalaryDiscountSchema = createInsertSchema(salaryDiscounts).omit({ id: true, createdAt: true, approvedAt: true });
+export const insertCrmPipelineStatusSchema = createInsertSchema(crmPipelineStatuses).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCrmFollowUpSchema = createInsertSchema(crmFollowUps).omit({ id: true, createdAt: true, updatedAt: true, completedAt: true });
+export const insertCrmInteractionSchema = createInsertSchema(crmInteractions).omit({ id: true, createdAt: true });
+export const insertMarketingContentPlanSchema = createInsertSchema(marketingContentPlans).omit({ id: true, createdAt: true, updatedAt: true, publishedAt: true });
+export const insertHelpArticleSchema = createInsertSchema(helpArticles).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
+export const insertMaterialReturnPolicyAuditSchema = createInsertSchema(materialReturnPolicyAudits).omit({ id: true, createdAt: true });
 export const insertMaterialCustodyTransferSchema = createInsertSchema(materialCustodyTransfers).omit({ id: true, createdAt: true, updatedAt: true, acceptedAt: true });
 export const insertMaterialResponsibilityCaseSchema = createInsertSchema(materialResponsibilityCases).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
 export const insertMaterialKitSchema = createInsertSchema(materialKits).omit({ id: true, createdAt: true, updatedAt: true });
@@ -1029,6 +1175,18 @@ export type SalaryDiscountRule = typeof salaryDiscountRules.$inferSelect;
 export type SalaryDiscount = typeof salaryDiscounts.$inferSelect;
 export type InsertSalaryDiscountRule = typeof insertSalaryDiscountRuleSchema._type;
 export type InsertSalaryDiscount = typeof insertSalaryDiscountSchema._type;
+export type CrmPipelineStatus = typeof crmPipelineStatuses.$inferSelect;
+export type InsertCrmPipelineStatus = typeof insertCrmPipelineStatusSchema._type;
+export type CrmFollowUp = typeof crmFollowUps.$inferSelect;
+export type InsertCrmFollowUp = typeof insertCrmFollowUpSchema._type;
+export type CrmInteraction = typeof crmInteractions.$inferSelect;
+export type InsertCrmInteraction = typeof insertCrmInteractionSchema._type;
+export type MarketingContentPlan = typeof marketingContentPlans.$inferSelect;
+export type InsertMarketingContentPlan = typeof insertMarketingContentPlanSchema._type;
+export type HelpArticle = typeof helpArticles.$inferSelect;
+export type InsertHelpArticle = typeof insertHelpArticleSchema._type;
+export type MaterialReturnPolicyAudit = typeof materialReturnPolicyAudits.$inferSelect;
+export type InsertMaterialReturnPolicyAudit = typeof insertMaterialReturnPolicyAuditSchema._type;
 export type CommercialPolicy = typeof commercialPolicies.$inferSelect;
 export type InsertCommercialPolicy = typeof insertCommercialPolicySchema._type;
 export type DiscountRequest = typeof discountRequests.$inferSelect;

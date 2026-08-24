@@ -3,6 +3,27 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-24] - Implementacao da Etapa 7 comercial e experiencia operacional
+
+### Adicionado
+
+- Nova tela `Sistema Comercial` com funil, indicadores, busca de leads, duplicidades, follow-ups e planejamento de marketing.
+- Nova Central `Como Trabalhar` com guias por modulo e procedimentos de obra cadastrados.
+- Leads receberam campos de qualificacao, prioridade, proxima acao, historico, motivo de perda e dados B2B.
+- Novas tabelas para status de funil, follow-ups, interacoes, marketing, artigos de ajuda e auditoria de politica de retorno.
+- Backup completo passou a incluir `sistemaComercial`, `marketingConteudo`, `centralAjuda` e `auditoriaMateriais`.
+- Financeiro ganhou graficos de entradas/saidas e resultado por categoria usando Recharts.
+
+### Corrigido
+
+- Alteracao entre consumivel e retornavel agora exige justificativa e bloqueia conversao para consumivel quando ha custodia retornavel aberta.
+- Status de lead perdido exige motivo de perda no backend.
+
+### Observacoes
+
+- Nenhuma integracao falsa com Waseller foi criada; o ERP permanece pronto para integracao futura mediante credenciais/API real.
+- Conteudo tecnico real da IMPPEL nao foi inventado.
+
 ## [2026-08-24] - Correção final do gate das Etapas 1 a 6
 
 ### Corrigido
