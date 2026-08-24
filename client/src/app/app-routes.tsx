@@ -17,6 +17,7 @@ import Jobs from "@/pages/Jobs";
 import Leads from "@/pages/Leads";
 import Login from "@/pages/Login";
 import MaterialControl from "@/pages/MaterialControl";
+import MarketingContent from "@/pages/MarketingContent";
 import MobileJobDetail from "@/pages/mobile/MobileJobDetail";
 import MobileJobs from "@/pages/mobile/MobileJobs";
 import MobileLogin from "@/pages/mobile/MobileLogin";
@@ -32,7 +33,7 @@ import RegistroObra from "@/pages/RegistroObra";
 import Reports from "@/pages/Reports";
 import ServicesCatalog from "@/pages/ServicesCatalog";
 import Settings from "@/pages/Settings";
-import { BackupsHub, CrmHub, FinancialHub, InventoryHub, QuotesHub, SettingsHub, TeamHub, WorksHub } from "@/pages/SectionHub";
+import { BackupsHub, CrmHub, ExecutionQualityHub, FinancialHub, InventoryHub, MarketingHub, PostSaleHub, QuotesHub, SettingsHub, TeamHub, WorksHub } from "@/pages/SectionHub";
 import StatusPersonalizados from "@/pages/StatusPersonalizados";
 import TeamProductivity from "@/pages/TeamProductivity";
 import ToolsAndEquipment from "@/pages/ToolsAndEquipment";
@@ -76,18 +77,24 @@ export const protectedRoutes: AppRoute[] = [
 
 export const adminRoutes: AppRoute[] = [
   { path: "/dashboard", component: Dashboard, access: "admin", withLayout: true },
+  { path: "/marketing", component: MarketingHub, access: "admin", withLayout: true },
   { path: "/crm", component: CrmHub, access: "admin", withLayout: true },
   { path: "/orcamentos", component: QuotesHub, access: "admin", withLayout: true },
   { path: "/obras", component: WorksHub, access: "admin", withLayout: true },
+  { path: "/planejamento-obras", component: WorksHub, access: "admin", withLayout: true },
+  { path: "/execucao-qualidade", component: ExecutionQualityHub, access: "admin", withLayout: true },
   { path: "/estoque", component: InventoryHub, access: "admin", withLayout: true },
+  { path: "/materiais-equipamentos", component: InventoryHub, access: "admin", withLayout: true },
   { path: "/financeiro", component: FinancialHub, access: "admin", withLayout: true },
   { path: "/equipe", component: TeamHub, access: "admin", withLayout: true },
   { path: "/configuracoes", component: SettingsHub, access: "admin", withLayout: true },
+  { path: "/gestao", component: SettingsHub, access: "admin", withLayout: true },
+  { path: "/pos-venda-hub", component: PostSaleHub, access: "admin", withLayout: true },
   { path: "/backups-hub", component: BackupsHub, access: "admin", withLayout: true },
   { path: "/leads", component: Leads, access: "admin", withLayout: true },
   { path: "/crm-whatsapp", component: CrmWhatsapp, access: "admin", withLayout: true },
   { path: "/sistema-comercial", component: CommercialSystem, access: "admin", withLayout: true },
-  { path: "/marketing-conteudo", component: CommercialSystem, access: "admin", withLayout: true },
+  { path: "/marketing-conteudo", component: MarketingContent, access: "admin", withLayout: true },
   { path: "/identidade-visual", component: VisualIdentity, access: "admin", withLayout: true },
   { path: "/jobs", component: Jobs, access: "admin", withLayout: true },
   { path: "/work-orders", component: WorkOrders, access: "admin", withLayout: true },

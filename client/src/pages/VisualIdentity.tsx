@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Download, FileImage, ImagePlus, Palette, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Download, FileImage, ImagePlus, Palette, ShieldCheck, Sparkles, Upload } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,18 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const emptyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+const STEPS = [
+  { id: "marca", label: "Marca" },
+  { id: "padroes", label: "Padrões" },
+  { id: "autorizacoes", label: "Autorizações" },
+  { id: "midias", label: "Mídias" },
+  { id: "composicoes", label: "Antes/Depois" },
+  { id: "templates", label: "Templates" },
+  { id: "publicacao", label: "Gerar material" },
+  { id: "resumo", label: "Revisar" },
+] as const;
+
+type StepId = typeof STEPS[number]["id"];
 
 function readAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -39,6 +51,7 @@ export default function VisualIdentity() {
   const [template, setTemplate] = useState({ name: "WhatsApp - envio de orçamento", templateType: "whatsapp", channel: "WhatsApp", status: "rascunho", textTemplate: "Olá, {{cliente}}. Segue o orçamento para conferência. PENDENTE DE APROVAÇÃO DA IMPPEL." });
   const [composition, setComposition] = useState({ title: "Antes e Depois Sintético", beforeAssetId: "", afterAssetId: "", format: "whatsapp", caption: "PENDENTE DE APROVAÇÃO DA IMPPEL" });
   const [preview, setPreview] = useState<any>(null);
+  const [activeStep, setActiveStep] = useState<StepId>(() => (localStorage.getItem("imppel_visual_identity_step") as StepId) || "marca");
 
   const { data: summary } = useQuery<any>({ queryKey: ["/api/visual-identity/summary"] });
   const { data: kits = [] } = useQuery<any[]>({ queryKey: ["/api/visual-brand-kits"] });
@@ -72,6 +85,20 @@ export default function VisualIdentity() {
   });
 
   const approvedKit = useMemo(() => kits.find((item: any) => item.status === "aprovado"), [kits]);
+  const activeIndex = STEPS.findIndex(step => step.id === activeStep);
+
+  useEffect(() => {
+    localStorage.setItem("imppel_visual_identity_step", activeStep);
+  }, [activeStep]);
+
+  const goNext = () => {
+    const next = STEPS[Math.min(activeIndex + 1, STEPS.length - 1)];
+    setActiveStep(next.id);
+  };
+  const goBack = () => {
+    const previous = STEPS[Math.max(activeIndex - 1, 0)];
+    setActiveStep(previous.id);
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
@@ -84,27 +111,47 @@ export default function VisualIdentity() {
       </div>
 
       <Card className="border-blue-100 bg-blue-50/60">
-        <CardContent className="grid gap-3 p-4 text-sm text-blue-950 md:grid-cols-4">
-          {["Configurar marca", "Definir padrões", "Cadastrar autorização", "Enviar mídias", "Criar antes/depois", "Usar templates", "Gerar material", "Revisar antes de publicar"].map((step, index) => (
-            <div key={step} className="rounded-lg bg-white/70 p-3"><p className="text-xs font-bold text-blue-700">Passo {index + 1}</p><p className="font-semibold">{step}</p></div>
-          ))}
+        <CardContent className="space-y-4 p-4 text-sm text-blue-950">
+          <div className="grid gap-2 md:grid-cols-4">
+            {STEPS.map((step, index) => (
+              <button
+                key={step.id}
+                type="button"
+                onClick={() => setActiveStep(step.id)}
+                className={`rounded-lg border p-3 text-left transition ${activeStep === step.id ? "border-blue-600 bg-white shadow-sm" : "border-white/70 bg-white/70 hover:bg-white"}`}
+              >
+                <p className="flex items-center gap-1 text-xs font-bold text-blue-700">
+                  {index < activeIndex ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+                  Passo {index + 1}
+                </p>
+                <p className="font-semibold">{step.label}</p>
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" onClick={goBack} disabled={activeIndex === 0}>Voltar</Button>
+            <Button type="button" onClick={goNext} disabled={activeIndex === STEPS.length - 1}>Próximo</Button>
+          </div>
         </CardContent>
       </Card>
 
-      <section className="grid gap-3 md:grid-cols-6">
-        {[
-          ["Kits", summary?.totals?.brandKits || 0],
-          ["Padrões", summary?.totals?.standards || 0],
-          ["Autorizações", summary?.totals?.authorizations || 0],
-          ["Mídias", summary?.totals?.assets || 0],
-          ["Templates", summary?.totals?.templates || 0],
-          ["Antes/Depois", summary?.totals?.compositions || 0],
-        ].map(([label, value]) => (
-          <Card key={String(label)}><CardContent className="p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></CardContent></Card>
-        ))}
-      </section>
+      {activeStep === "resumo" && (
+        <section className="grid gap-3 md:grid-cols-6">
+          {[
+            ["Kits", summary?.totals?.brandKits || 0],
+            ["Padrões", summary?.totals?.standards || 0],
+            ["Autorizações", summary?.totals?.authorizations || 0],
+            ["Mídias", summary?.totals?.assets || 0],
+            ["Templates", summary?.totals?.templates || 0],
+            ["Antes/Depois", summary?.totals?.compositions || 0],
+          ].map(([label, value]) => (
+            <Card key={String(label)}><CardContent className="p-4"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></CardContent></Card>
+          ))}
+        </section>
+      )}
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      {(["marca", "padroes"] as StepId[]).includes(activeStep) && <section className="grid gap-4 lg:grid-cols-2">
+        {activeStep === "marca" && (
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> Marca</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -119,7 +166,9 @@ export default function VisualIdentity() {
             <Button onClick={() => createKit.mutate(kit)} disabled={createKit.isPending}>Salvar marca</Button>
           </CardContent>
         </Card>
+        )}
 
+        {activeStep === "padroes" && (
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><FileImage className="h-5 w-5" /> Padrão de foto/vídeo</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -137,9 +186,11 @@ export default function VisualIdentity() {
             <Button className="sm:col-span-2" onClick={() => createStandard.mutate(standard)} disabled={createStandard.isPending}>Salvar padrão</Button>
           </CardContent>
         </Card>
-      </section>
+        )}
+      </section>}
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      {(["autorizacoes", "midias"] as StepId[]).includes(activeStep) && <section className="grid gap-4 lg:grid-cols-2">
+        {activeStep === "autorizacoes" && (
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> Autorização de imagem</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -153,7 +204,9 @@ export default function VisualIdentity() {
             <Button className="sm:col-span-2" onClick={() => createAuthorization.mutate(authorization)} disabled={createAuthorization.isPending}>Salvar autorização</Button>
           </CardContent>
         </Card>
+        )}
 
+        {activeStep === "midias" && (
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Biblioteca de mídias</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
@@ -176,9 +229,11 @@ export default function VisualIdentity() {
             <p className="text-xs text-slate-500">O original é preservado. Vídeos ficam com processamento externo pendente.</p>
           </CardContent>
         </Card>
-      </section>
+        )}
+      </section>}
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      {(["composicoes", "templates", "publicacao"] as StepId[]).includes(activeStep) && <section className="grid gap-4 lg:grid-cols-2">
+        {(["composicoes", "publicacao"] as StepId[]).includes(activeStep) && (
         <Card>
           <CardHeader><CardTitle>Antes e Depois</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -204,7 +259,9 @@ export default function VisualIdentity() {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {(["templates", "publicacao"] as StepId[]).includes(activeStep) && (
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5" /> Templates</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
@@ -221,17 +278,18 @@ export default function VisualIdentity() {
             <Button onClick={() => createTemplate.mutate(template)} disabled={createTemplate.isPending}>Salvar template</Button>
           </CardContent>
         </Card>
-      </section>
+        )}
+      </section>}
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      {activeStep === "resumo" && <section className="grid gap-4 lg:grid-cols-3">
         <ListCard title="Padrões" items={standards} fields={["mediaType", "purpose", "phase", "status"]} />
         <ListCard title="Mídias" items={assets} fields={["name", "purpose", "authorizationStatus", "processingStatus"]} />
         <ListCard title="Templates" items={templates} fields={["name", "templateType", "channel", "status"]} />
-      </section>
-      <section className="grid gap-4 lg:grid-cols-2">
+      </section>}
+      {activeStep === "resumo" && <section className="grid gap-4 lg:grid-cols-2">
         <ListCard title="Autorizações" items={authorizations} fields={["clientName", "purpose", "status"]} />
         <ListCard title="Composições" items={compositions} fields={["title", "format", "authorizationStatus", "status"]} />
-      </section>
+      </section>}
     </div>
   );
 }

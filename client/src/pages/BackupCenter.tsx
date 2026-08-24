@@ -7,6 +7,7 @@ import {
   ShieldAlert, Eraser,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/Card";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import BackupManager, {
   getBackupHistory, getRestoreLog, generatePDF, fmtDateTime,
@@ -284,7 +285,7 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
             <p className="text-sm text-slate-600">{page.panelDescription}</p>
           </div>
           <CompleteBackupGeneration isAdmin={isAdmin} />
-          <BackupCoverageMatrix />
+          <TechnicalCoverageDetails />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
               const Icon = cfg.icon;
@@ -393,7 +394,7 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
               <p>4. PDFs restauram apenas os módulos declarados; módulos novos das Etapas 4 a 8 ficam no backup técnico completo.</p>
             </CardContent>
           </Card>
-          <BackupCoverageMatrix />
+          <TechnicalCoverageDetails />
           <PdfBackupRestore isAdmin={isAdmin} username={user?.username || "Admin"} onRestored={() => setRefresh(r => r + 1)} />
         </div>
       )}
@@ -516,6 +517,19 @@ function BackupCoverageMatrix() {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function TechnicalCoverageDetails() {
+  return (
+    <Accordion type="single" collapsible className="rounded-xl border bg-white px-4">
+      <AccordionItem value="coverage" className="border-none">
+        <AccordionTrigger className="text-sm font-semibold text-slate-800">Detalhes técnicos e cobertura do backup</AccordionTrigger>
+        <AccordionContent>
+          <BackupCoverageMatrix />
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 }
 

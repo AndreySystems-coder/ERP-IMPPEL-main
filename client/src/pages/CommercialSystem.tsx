@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CalendarClock, Megaphone, MessageSquare, Search, Users } from "lucide-react";
+import { CalendarClock, CheckCircle2, MessageSquare, Search, Users, XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,15 +23,12 @@ type SummaryCard = { label: string; value: number; Icon: typeof Users };
 export default function CommercialSystem() {
   const { toast } = useToast();
   const [leadFilter, setLeadFilter] = useState("");
-  const [followUp, setFollowUp] = useState({ leadId: "", reason: "Follow-up D+2", dueDate: "", messageTemplate: "" });
-  const [content, setContent] = useState({ title: "", channel: "Instagram", objective: "", idea: "", category: "prova", serviceName: "", cta: "" });
-  const [generatedPost, setGeneratedPost] = useState<any>(null);
+  const [followUp, setFollowUp] = useState({ leadId: "", reason: "Próximo contato", dueDate: "", messageTemplate: "" });
 
   const { data: dashboard } = useQuery<Dashboard>({ queryKey: ["/api/stage7/commercial-dashboard"] });
   const { data: leads = [] } = useQuery<any[]>({ queryKey: ["/api/leads"] });
   const { data: statuses = [] } = useQuery<any[]>({ queryKey: ["/api/crm-pipeline-statuses"] });
   const { data: followUps = [] } = useQuery<any[]>({ queryKey: ["/api/crm-followups"] });
-  const { data: plans = [] } = useQuery<any[]>({ queryKey: ["/api/marketing-content"] });
 
   const filteredLeads = useMemo(() => {
     const term = leadFilter.trim().toLowerCase();
@@ -62,21 +59,6 @@ export default function CommercialSystem() {
     },
   });
 
-  const createPlan = useMutation({
-    mutationFn: async () => apiRequest("POST", "/api/marketing-content", content),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/marketing-content"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stage7/commercial-dashboard"] });
-      setContent({ title: "", channel: "Instagram", objective: "", idea: "", category: "prova", serviceName: "", cta: "" });
-      toast({ title: "Ideia de conteúdo registrada" });
-    },
-  });
-
-  const generatePost = useMutation({
-    mutationFn: async () => apiRequest("POST", "/api/marketing-content/generate-post", content),
-    onSuccess: async (response) => setGeneratedPost(await response.json()),
-  });
-
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
       <div>
@@ -87,11 +69,12 @@ export default function CommercialSystem() {
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="new">Novos Contatos</TabsTrigger>
+          <TabsTrigger value="qualification">Qualificação</TabsTrigger>
           <TabsTrigger value="funnel">Funil</TabsTrigger>
-          <TabsTrigger value="leads">Leads</TabsTrigger>
           <TabsTrigger value="followups">Follow-ups</TabsTrigger>
           <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-          <TabsTrigger value="marketing">Marketing</TabsTrigger>
+          <TabsTrigger value="closed">Fechados/Perdidos</TabsTrigger>
           <TabsTrigger value="help">Ajuda</TabsTrigger>
         </TabsList>
 
@@ -100,9 +83,9 @@ export default function CommercialSystem() {
             {([
               { label: "Leads", value: dashboard?.totals?.leads || 0, Icon: Users },
               { label: "Orçamentos", value: dashboard?.totals?.quotes || 0, Icon: MessageSquare },
-              { label: "Follow-ups", value: dashboard?.totals?.pendingFollowUps || 0, Icon: CalendarClock },
-              { label: "Vencidos", value: dashboard?.totals?.overdueFollowUps || 0, Icon: CalendarClock },
-              { label: "Conteúdos", value: dashboard?.totals?.contentPlans || plans.length, Icon: Megaphone },
+              { label: "Follow-ups hoje", value: dashboard?.totals?.pendingFollowUps || 0, Icon: CalendarClock },
+              { label: "Fechados", value: dashboard?.totals?.closedLeads || 0, Icon: CheckCircle2 },
+              { label: "Perdidos", value: dashboard?.totals?.lostLeads || 0, Icon: XCircle },
             ] satisfies SummaryCard[]).map(({ label, value, Icon }) => (
               <Card key={label}><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-bold">{value}</p></div><Icon className="h-5 w-5 text-primary" /></CardContent></Card>
             ))}
@@ -126,8 +109,21 @@ export default function CommercialSystem() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="new" className="space-y-4">
+          <Card className="border-slate-200 bg-white"><CardContent className="p-4 text-sm text-slate-600">Novos contatos são oportunidades recém-chegadas por indicação, WhatsApp, site ou prospecção. O primeiro trabalho é identificar cliente, necessidade, urgência e responsável.</CardContent></Card>
+          <LeadList title="Novos contatos" leads={filteredLeads} empty="Nenhum contato novo encontrado neste filtro." />
+        </TabsContent>
+
+        <TabsContent value="qualification" className="space-y-4">
+          <Card className="border-amber-100 bg-amber-50/60"><CardContent className="p-4 text-sm text-amber-900">Qualificação serve para entender problema, local, metragem aproximada, urgência e se precisa visita técnica ou orçamento preliminar.</CardContent></Card>
+          <LeadList title="Leads para qualificar" leads={filteredLeads} empty="Nenhum lead pendente de qualificação neste filtro." />
+        </TabsContent>
+
         <TabsContent value="funnel" className="space-y-4">
           <Card className="border-blue-100 bg-blue-50/50"><CardContent className="p-4 text-sm text-blue-900">Funil é o caminho que um possível cliente percorre desde o primeiro contato até o fechamento ou perda da oportunidade.</CardContent></Card>
+          <div className="grid gap-2 md:grid-cols-4 xl:grid-cols-8">
+            {["Novo", "Em contato", "Qualificado", "Diagnóstico/Visita", "Orçamento", "Follow-up", "Negociação", "Fechado"].map(step => <div key={step} className="rounded-lg border bg-white p-3 text-center text-xs font-semibold text-slate-700">{step}</div>)}
+          </div>
           <section className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader><CardTitle>Funil</CardTitle></CardHeader>
@@ -147,15 +143,13 @@ export default function CommercialSystem() {
           </section>
         </TabsContent>
 
-        <TabsContent value="leads" className="space-y-4">
+        <TabsContent value="closed" className="space-y-4">
           <Card className="border-slate-200 bg-white"><CardContent className="p-4 text-sm text-slate-600">Lead é uma pessoa ou empresa que demonstrou interesse e ainda pode se tornar cliente. Não obrigue dados que ainda não são conhecidos; complete conforme o atendimento evolui.</CardContent></Card>
           <Card>
-          <CardHeader><CardTitle>Leads e duplicidades</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Fechados, perdidos e possíveis contatos duplicados</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input className="pl-9" placeholder="Buscar por nome, telefone, e-mail ou origem" value={leadFilter} onChange={(event) => setLeadFilter(event.target.value)} /></div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {filteredLeads.map((lead) => <div key={lead.id} className="rounded-lg border p-3 text-sm"><div className="font-semibold">{lead.name}</div><div className="text-slate-500">{lead.phone || lead.email || "Sem contato"}</div><Badge className="mt-2" variant="outline">{lead.status}</Badge></div>)}
-            </div>
+            <LeadList title="Registros encontrados" leads={filteredLeads} empty="Nenhum registro encontrado neste filtro." compact />
             {(dashboard?.duplicates?.length || 0) > 0 ? <p className="text-sm text-amber-700">Possíveis duplicidades são contatos que podem ter sido cadastrados mais de uma vez. Há {dashboard?.duplicates.length} grupo(s) por telefone, e-mail ou documento. Abra os registros antes de decidir mesclar.</p> : <p className="text-sm text-slate-500">Nenhuma duplicidade encontrada.</p>}
           </CardContent>
         </Card>
@@ -183,39 +177,8 @@ export default function CommercialSystem() {
           <Card><CardContent className="space-y-3 p-4 text-sm text-slate-600"><p>WhatsApp reúne roteiros de atendimento, diagnóstico, envio de orçamento, follow-up, confirmação de obra, pós-venda, manutenção e garantia.</p><p>Enquanto não houver API/credenciais reais da Waseller, o ERP prepara mensagens para cópia e envio manual. Isso não é automação externa.</p></CardContent></Card>
         </TabsContent>
 
-        <TabsContent value="marketing" className="space-y-4">
-          <Card className="border-purple-100 bg-purple-50/50"><CardContent className="p-4 text-sm text-purple-900">Marketing é dedicado a conteúdo. Sistema Comercial é dedicado a vendas. Sem provedor de IA configurado, os textos são rascunhos baseados em modelo local para revisão humana.</CardContent></Card>
-          <Card>
-            <CardHeader><CardTitle>Planejamento de marketing</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-4">
-              <Input placeholder="Título" value={content.title} onChange={(event) => setContent({ ...content, title: event.target.value })} />
-              <Input placeholder="Canal" value={content.channel} onChange={(event) => setContent({ ...content, channel: event.target.value })} />
-              <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={content.category} onChange={(event) => setContent({ ...content, category: event.target.value })}>
-                <option value="prova">Prova de resultado</option>
-                <option value="autoridade">Autoridade</option>
-                <option value="conversao">Conversão</option>
-                <option value="orientacao">Orientação técnica</option>
-              </select>
-              <Input placeholder="Serviço" value={content.serviceName} onChange={(event) => setContent({ ...content, serviceName: event.target.value })} />
-              <Input placeholder="Objetivo" value={content.objective} onChange={(event) => setContent({ ...content, objective: event.target.value })} />
-              <Input placeholder="CTA" value={content.cta} onChange={(event) => setContent({ ...content, cta: event.target.value })} />
-              <Button onClick={() => generatePost.mutate()} disabled={generatePost.isPending}>Gerar rascunho</Button>
-              <Button onClick={() => createPlan.mutate()} disabled={!content.title.trim() || createPlan.isPending}>Salvar ideia</Button>
-              <Textarea className="md:col-span-4" placeholder="Ideia, roteiro ou gancho do conteúdo" value={content.idea} onChange={(event) => setContent({ ...content, idea: event.target.value })} />
-              {generatedPost && (
-                <div className="md:col-span-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-                  <p className="font-semibold">Rascunho gerado para revisão humana</p>
-                  <p className="mt-2">{generatedPost.caption}</p>
-                  <p className="mt-2 text-slate-600">{generatedPost.shortScript}</p>
-                  <p className="mt-2 text-amber-700">{generatedPost.warning}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="help">
-          <Card><CardContent className="space-y-2 p-4 text-sm text-slate-600"><p><strong>Lead:</strong> contato com potencial de virar cliente.</p><p><strong>Follow-up:</strong> retorno combinado para continuar a negociação.</p><p><strong>Duplicidade:</strong> alerta para cadastros parecidos; nunca mescle sem conferir.</p><p><strong>Prospecção:</strong> lead criado ativamente pela equipe, sem CRM paralelo.</p></CardContent></Card>
+          <Card><CardContent className="space-y-2 p-4 text-sm text-slate-600"><p><strong>Lead:</strong> contato com potencial de virar cliente.</p><p><strong>Qualificação:</strong> etapa para entender necessidade, local, urgência e próximo passo.</p><p><strong>Follow-up:</strong> próximo contato planejado para continuar a negociação.</p><p><strong>Duplicidade:</strong> alerta para cadastros parecidos; nunca mescle sem conferir.</p><p><strong>Marketing:</strong> fica em Marketing & Captação; aqui aparecem apenas impactos comerciais.</p></CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>
@@ -224,4 +187,18 @@ export default function CommercialSystem() {
 
 function ActionHint({ title, description }: { title: string; description: string }) {
   return <div className="rounded-lg border bg-white p-3 text-sm"><p className="font-semibold text-slate-900">{title}</p><p className="mt-1 text-slate-600">{description}</p></div>;
+}
+
+function LeadList({ title, leads, empty, compact = false }: { title: string; leads: any[]; empty: string; compact?: boolean }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
+      <CardContent>
+        <div className={`grid gap-2 ${compact ? "sm:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`}>
+          {leads.map((lead) => <div key={lead.id} className="rounded-lg border p-3 text-sm"><div className="font-semibold">{lead.name}</div><div className="text-slate-500">{lead.phone || lead.email || "Sem contato"}</div><Badge className="mt-2" variant="outline">{lead.status}</Badge></div>)}
+        </div>
+        {leads.length === 0 && <p className="text-sm text-slate-500">{empty}</p>}
+      </CardContent>
+    </Card>
+  );
 }

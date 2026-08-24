@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -122,7 +123,28 @@ export default function WorkQuality() {
         <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4" /> Ocorrências</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{indicators.data?.openEvents || 0}</CardContent></Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
+          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="procedures">Procedimentos</TabsTrigger>
+          <TabsTrigger value="checklists">Checklists</TabsTrigger>
+          <TabsTrigger value="events">Ocorrências</TabsTrigger>
+          <TabsTrigger value="inspections">Inspeções</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle className="text-base">Rotina de qualidade</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 text-sm md:grid-cols-3">
+              <InfoBlock title="1. Procedimento" text="Cadastre o padrão técnico da execução e aprove somente quando estiver validado." />
+              <InfoBlock title="2. Checklist" text="Vincule itens obrigatórios à OS para comprovar execução, segurança e entrega." />
+              <InfoBlock title="3. Evidências" text="Registre ocorrências, inspeções e bloqueios antes de encerrar a OS." />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="procedures">
+          <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><BookOpenCheck className="h-4 w-4" /> Procedimentos Técnicos</CardTitle>
@@ -149,7 +171,11 @@ export default function WorkQuality() {
             </div>
           </CardContent>
         </Card>
+          </div>
+        </TabsContent>
 
+        <TabsContent value="checklists">
+          <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><ClipboardCheck className="h-4 w-4" /> Checklists Configuráveis</CardTitle>
@@ -212,7 +238,11 @@ export default function WorkQuality() {
             </div>
           </CardContent>
         </Card>
+          </div>
+        </TabsContent>
 
+        <TabsContent value="events">
+          <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><Camera className="h-4 w-4" /> Evidências, Ocorrências e Inspeções</CardTitle>
@@ -248,7 +278,28 @@ export default function WorkQuality() {
             </div>
           </CardContent>
         </Card>
-      </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="inspections">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Inspeções registradas</CardTitle>
+              <CardDescription>Inspeções usam o mesmo registro oficial de evidências e ficam separadas visualmente para conferência rápida.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {(events.data || []).filter(item => item.type === "inspecao").slice(0, 10).map(item => (
+                <div key={item.id} className="rounded-md border p-3 text-sm">
+                  <div className="flex items-center justify-between gap-2"><span>OS #{item.workOrderId} · {item.phase}</span><StatusBadge value={item.status} /></div>
+                  <p className="text-muted-foreground">{item.description}</p>
+                </div>
+              ))}
+              {(events.data || []).filter(item => item.type === "inspecao").length === 0 && <p className="text-sm text-muted-foreground">Nenhuma inspeção registrada.</p>}
+              <Button type="button" variant="outline" onClick={() => setEvent({ ...event, type: "inspecao" })}>Preparar novo registro de inspeção</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

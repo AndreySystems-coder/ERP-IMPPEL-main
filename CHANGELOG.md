@@ -3,6 +3,27 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-24] - Reorganizacao final da navegacao por funcoes
+
+### Alterado
+
+- Sidebar reorganizada por fluxo real da IMPPEL: Inicio, Marketing, Atendimento Comercial, Orcamentos, Planejamento, Execucao, Materiais, Financeiro, Equipe, Pos-venda, Gestao e Backups.
+- Grupos da sidebar agora sao recolhiveis e respeitam permissoes antes de aparecer.
+- Hubs foram alinhados por funcao, com responsavel, primeiro passo, sequencia recomendada e acesso para `Como Trabalhar`.
+- `Sistema Comercial` ficou focado em vendas, qualificacao, funil, follow-ups, WhatsApp e fechados/perdidos.
+- `Planejamento de Conteudo` virou pagina separada dentro de Marketing & Captacao, reutilizando as APIs existentes.
+- `Identidade e Conteudo` passou a ter fluxo em etapas para marca, padroes, autorizacoes, midias, antes/depois, templates, geracao e revisao.
+- `Qualidade das Obras` foi simplificada em abas: Visao Geral, Procedimentos, Checklists, Ocorrencias e Inspecoes.
+- `Backups` manteve os fluxos existentes, mas recolheu a matriz tecnica em detalhes expandiveis.
+
+### Documentacao
+
+- Criado `docs/erp_role_based_navigation.md` com a navegacao oficial por funcoes, rotas preservadas, regras mantidas e pendencias operacionais.
+
+### Observacoes
+
+- Nenhum schema, migration, dado real, regra de negocio, regra de estoque ou permissao de backend foi alterado.
+
 ## [2026-08-24] - Simplificacao de UX, treinamento e preparo operacional
 
 ### Alterado

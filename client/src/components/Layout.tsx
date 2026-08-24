@@ -6,6 +6,7 @@ import {
   Briefcase,
   Building2,
   Calendar as CalendarIcon,
+  ChevronDown,
   Clipboard,
   ClipboardList,
   CreditCard,
@@ -28,6 +29,7 @@ import {
   Shield,
   ShoppingCart,
   Palette,
+  PhoneCall,
   Tag,
   TrendingDown,
   Users,
@@ -62,103 +64,150 @@ const ALL_SECTIONS: NavSection[] = [
     path: "/",
     icon: LayoutDashboard,
     permission: "viewDashboard",
-    items: [{ name: "Dashboard", path: "/dashboard", icon: LayoutDashboard }],
-  },
-  {
-    label: "Comercial",
-    path: "/crm",
-    icon: MessageSquare,
-    adminOnly: true,
-    permission: "viewCrm",
     items: [
-      { name: "Sistema Comercial", path: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem" },
-      { name: "Clientes", path: "/clients", icon: Building2, permission: "viewClients" },
-      { name: "Identidade Visual", path: "/identidade-visual", icon: Palette, permission: "viewVisualIdentity" },
+      { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+      { name: "Calendário", path: "/calendar", icon: CalendarIcon, permission: "viewCalendar" },
     ],
   },
   {
-    label: "Orçamentos",
+    label: "Marketing & Captação",
+    path: "/marketing",
+    icon: Palette,
+    adminOnly: true,
+    permission: "viewMarketingContent",
+    items: [
+      { name: "Visão da função", path: "/marketing", icon: Palette, permission: "viewMarketingContent" },
+      { name: "Planejamento de Conteúdo", path: "/marketing-conteudo", icon: MessageSquare, permission: "viewMarketingContent" },
+      { name: "Identidade e Conteúdo", path: "/identidade-visual", icon: Palette, permission: "viewVisualIdentity" },
+    ],
+  },
+  {
+    label: "Atendimento Comercial",
+    path: "/crm",
+    icon: PhoneCall,
+    adminOnly: true,
+    permission: "viewCrm",
+    items: [
+      { name: "Visão da função", path: "/crm", icon: PhoneCall, permission: "viewCrm" },
+      { name: "Sistema Comercial", path: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem" },
+      { name: "Leads", path: "/leads", icon: Users, permission: "viewLeads" },
+      { name: "Clientes", path: "/clients", icon: Building2, permission: "viewClients" },
+      { name: "CRM e WhatsApp", path: "/crm-whatsapp", icon: MessageSquare, permission: "viewCrmWhatsapp" },
+    ],
+  },
+  {
+    label: "Orçamentos & Negociação",
     path: "/orcamentos",
     icon: Briefcase,
     adminOnly: true,
     permission: "viewQuotes",
     items: [
+      { name: "Visão da função", path: "/orcamentos", icon: Briefcase, permission: "viewQuotes" },
       { name: "Orçamentos", path: "/jobs", icon: Briefcase, permission: "viewQuotes" },
+      { name: "Calculadora de Preço", path: "/calculator", icon: TrendingDown, permission: "viewQuotes" },
       { name: "Catálogo de Serviços", path: "/services", icon: Layers, permission: "viewQuoteRules" },
       { name: "Catálogo de Materiais", path: "/catalog", icon: Package, permission: "viewQuoteRules" },
-      { name: "Templates", path: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates" },
+      { name: "Governança Comercial", path: "/governanca-comercial", icon: Scale, permission: "viewSettings" },
+      { name: "Templates de Orçamento", path: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates" },
     ],
   },
   {
-    label: "Obras",
-    path: "/obras",
+    label: "Planejamento da Obra",
+    path: "/planejamento-obras",
     icon: ClipboardList,
     permission: "viewWorks",
     items: [
-      { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, adminOnly: true, permission: "viewWorkOrders" },
-      { name: "Calendário", path: "/calendar", icon: CalendarIcon, adminOnly: true, permission: "viewCalendar" },
+      { name: "Visão da função", path: "/planejamento-obras", icon: ClipboardList, permission: "viewWorkOrders" },
+      { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders" },
+      { name: "Agenda", path: "/calendar", icon: CalendarIcon, permission: "viewCalendar" },
     ],
   },
   {
-    label: "Estoque",
-    path: "/estoque",
+    label: "Execução & Qualidade",
+    path: "/execucao-qualidade",
+    icon: Clipboard,
+    permission: "viewWorks",
+    items: [
+      { name: "Visão da função", path: "/execucao-qualidade", icon: Clipboard, permission: "viewWorkOrders" },
+      { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders" },
+      { name: "Registro de Obra", path: "/registro-obra", icon: Clipboard, permission: "viewWorks" },
+      { name: "Qualidade das Obras", path: "/qualidade-obras", icon: ListChecks, permission: "viewWorkOrders" },
+    ],
+  },
+  {
+    label: "Materiais & Equipamentos",
+    path: "/materiais-equipamentos",
     icon: Package,
     adminOnly: true,
     permission: "viewInventory",
     items: [
+      { name: "Visão da função", path: "/materiais-equipamentos", icon: Package, permission: "viewInventory" },
       { name: "Estoque Atual", path: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent" },
-      { name: "Ferramentas e Equipamentos", path: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent" },
-      { name: "Movimentações de Estoque", path: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements" },
+      { name: "Movimentações", path: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements" },
+      { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials" },
+      { name: "Ferramentas", path: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent" },
       { name: "Contagem Rápida", path: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount" },
+      { name: "Venda de Materiais", path: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales" },
     ],
   },
   {
-    label: "Financeiro",
+    label: "Financeiro & Administrativo",
     path: "/financeiro",
     icon: DollarSign,
     adminOnly: true,
     permission: "viewFinancials",
     items: [
-      { name: "Pagamentos", path: "/payments", icon: CreditCard, permission: "viewPayments" },
+      { name: "Visão da função", path: "/financeiro", icon: DollarSign, permission: "viewFinancials" },
       { name: "Fluxo de Caixa", path: "/financials", icon: DollarSign, permission: "viewCashFlow" },
+      { name: "Pagamentos", path: "/payments", icon: CreditCard, permission: "viewPayments" },
       { name: "Config. Pagamentos", path: "/pagamentos-config", icon: Tag, permission: "viewFinancialSettings" },
-      { name: "Relatórios", path: "/relatorios", icon: BarChart3, permission: "viewFinancials" },
+      { name: "Contratos", path: "/contratos", icon: FileText, permission: "viewSettings" },
+      { name: "Relatórios Financeiros", path: "/relatorios", icon: BarChart3, permission: "viewFinancials" },
     ],
   },
   {
-    label: "Equipe",
+    label: "Equipe & Treinamento",
     path: "/equipe",
     icon: Users,
     adminOnly: true,
     permission: "viewTeam",
     items: [
+      { name: "Visão da função", path: "/equipe", icon: Users, permission: "viewTeam" },
+      { name: "Usuários e Cargos", path: "/usuarios", icon: UserCog, permission: "viewUsers" },
       { name: "Produtividade", path: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity" },
-      { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials" },
-      { name: "Venda de Materiais", path: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales" },
-      { name: "Garantias", path: "/garantias", icon: Shield, permission: "viewWarranties" },
-      { name: "Pós-venda & NPS", path: "/pos-venda", icon: Heart, permission: "viewPostSale" },
       { name: "Como Trabalhar", path: "/como-trabalhar", icon: BookOpen, permission: "viewHelpCenter" },
     ],
   },
   {
-    label: "Configurações",
-    path: "/configuracoes",
+    label: "Pós-venda & Relacionamento",
+    path: "/pos-venda-hub",
+    icon: Heart,
+    adminOnly: true,
+    permission: "viewPostSale",
+    items: [
+      { name: "Visão da função", path: "/pos-venda-hub", icon: Heart, permission: "viewPostSale" },
+      { name: "Garantias", path: "/garantias", icon: Shield, permission: "viewWarranties" },
+      { name: "Pós-venda & NPS", path: "/pos-venda", icon: Heart, permission: "viewPostSale" },
+    ],
+  },
+  {
+    label: "Gestão & Configurações",
+    path: "/gestao",
     icon: Settings,
     adminOnly: true,
     permission: "viewSettings",
     items: [
-      { name: "Custos, Margens e Zonas", path: "/custos-margens", icon: TrendingDown, permission: "viewCostSettings" },
+      { name: "Visão da função", path: "/gestao", icon: Settings, permission: "viewSettings" },
+      { name: "Configurações Gerais", path: "/settings", icon: Settings, permission: "viewSettings" },
       { name: "Status Personalizados", path: "/status-personalizados", icon: Hash, permission: "viewStatusSettings" },
       { name: "Regras de Prioridade", path: "/priority-rules", icon: Scale, permission: "viewPriorityRules" },
-      { name: "Usuários", path: "/usuarios", icon: UserCog, permission: "viewUsers" },
-      { name: "Configurações Gerais", path: "/settings", icon: Settings, permission: "viewSettings" },
       { name: "Formas de Pagamento", path: "/formas-pagamento", icon: CreditCard, permission: "viewFinancialSettings" },
       { name: "Condições de Pagamento", path: "/condicoes-pagamento", icon: Clipboard, permission: "viewFinancialSettings" },
-      { name: "Contratos", path: "/contratos", icon: FileText, permission: "viewSettings" },
+      { name: "Custos e Margens", path: "/custos-margens", icon: TrendingDown, permission: "viewCostSettings" },
     ],
   },
   {
-    label: "Backups",
+    label: "Backups & Restauração",
     path: "/backups-hub",
     icon: FileText,
     adminOnly: true,
@@ -186,6 +235,7 @@ function NavSectionGroup({
   user: any;
   onNavClick: () => void;
 }) {
+  const [isOpen, setIsOpen] = React.useState(false);
   const visibleItems = section.items.filter((item) => canAccess(user, item.permission));
   const sectionPermissions = [section.permission, ...section.items.map((item) => item.permission)].filter(Boolean) as PermissionKey[];
   if (!canAccessAny(user, sectionPermissions)) return null;
@@ -194,18 +244,42 @@ function NavSectionGroup({
   const hasActive =
     location === section.path ||
     visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
+  const open = isOpen || hasActive;
 
   return (
-    <Link
-      href={section.path}
-      onClick={onNavClick}
-      className={`mb-1 flex min-w-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
-        hasActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-      }`}
-    >
-      <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
-      <span className="truncate">{section.label}</span>
-    </Link>
+    <div className="mb-1">
+      <button
+        type="button"
+        onClick={() => setIsOpen(value => !value)}
+        className={`flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
+          hasActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+        }`}
+      >
+        <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
+        <span className="truncate">{section.label}</span>
+        <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-1 space-y-1 pl-4">
+          {visibleItems.map((item) => {
+            const active = location === item.path || (item.path !== "/" && location.startsWith(item.path));
+            return (
+              <Link
+                key={`${item.name}-${item.path}`}
+                href={item.path}
+                onClick={onNavClick}
+                className={`flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                  active ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                }`}
+              >
+                <item.icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{item.name}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

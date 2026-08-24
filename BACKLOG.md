@@ -25,6 +25,8 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 ### Medio
 
 - Consolidar a documentacao historica de `docs/` nos arquivos oficiais conforme novas sprints forem acontecendo.
+- Homologar a nova navegacao por funcoes com usuarios reais da IMPPEL em desktop e celular, validando se os grupos e nomes batem com a rotina interna.
+- Revisar, apos a homologacao de uso, se alguma rota antiga deve virar atalho, redirecionamento ou permanecer apenas por compatibilidade.
 - Revisar se `docs/gemini.md`, `docs/PASSO A PASSO/protocolo_vlaeg.md` e outros documentos auxiliares ainda devem ser mantidos como referencia tecnica.
 - Avaliar criacao de um indice de arquitetura caso a auditoria das proximas sprints identifique necessidade.
 - Validar com funcionario novo se a Central Como Trabalhar e suficiente para executar rotina sem apoio externo.

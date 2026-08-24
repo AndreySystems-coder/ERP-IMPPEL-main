@@ -10,31 +10,34 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 const baseGuides = [
-  { moduleKey: "crm", title: "Atendimento comercial", summary: "Registrar lead, qualificar, criar orçamento e acompanhar follow-up.", routePath: "/sistema-comercial", audience: "Comercial", order: ["Novo contato", "Cadastrar lead", "Qualificar necessidade", "Criar orçamento", "Agendar follow-up", "Fechar ou perder oportunidade"] },
-  { moduleKey: "orcamentos", title: "Orçamento com margem", summary: "Criar proposta, validar margem e solicitar aprovação quando necessário.", routePath: "/jobs", audience: "Comercial", order: ["Selecionar cliente", "Adicionar serviços", "Conferir custos e margem", "Gerar proposta", "Enviar e acompanhar"] },
-  { moduleKey: "obras", title: "Planejamento e ordem de serviço", summary: "Transformar venda aprovada em execução acompanhável pela equipe.", routePath: "/work-orders", audience: "Obras", order: ["Aprovar orçamento", "Criar OS", "Definir equipe/data", "Acompanhar execução", "Concluir sem pendências"] },
-  { moduleKey: "qualidade", title: "Qualidade da obra", summary: "Garantir procedimento, checklist, evidência, inspeção e bloqueios críticos antes de encerrar.", routePath: "/qualidade-obras", audience: "Gestor de obras", order: ["Cadastrar procedimento", "Criar checklist", "Vincular à OS", "Registrar evidências", "Resolver bloqueios"] },
-  { moduleKey: "materiais", title: "Materiais e ferramentas", summary: "Registrar retirada, transferência, consumo e devolução com foto/assinatura.", routePath: "/controle-materiais", audience: "Equipe", order: ["Conferir estoque", "Registrar retirada", "Acompanhar em campo", "Registrar consumo/devolução", "Tratar dano/perda/manutenção"] },
-  { moduleKey: "estoque", title: "Estoque", summary: "Consultar saldo físico, ferramentas em campo, danos, perdas e manutenção.", routePath: "/estoque", audience: "Estoque", order: ["Cadastrar item", "Registrar entrada", "Auditar movimentações", "Contar fisicamente", "Corrigir por movimentação"] },
-  { moduleKey: "financeiro", title: "Financeiro", summary: "Acompanhar pagamentos, recebimentos, fluxo de caixa e relatórios.", routePath: "/financeiro", audience: "Administrativo / Financeiro", order: ["Registrar previsão", "Conferir vencimentos", "Baixar pagamento/recebimento", "Analisar fluxo", "Gerar relatório"] },
-  { moduleKey: "visual", title: "Identidade visual e marketing", summary: "Preservar originais, seguir padrões, solicitar autorização e gerar antes/depois sem publicar automaticamente.", routePath: "/identidade-visual", audience: "Equipe e Marketing", order: ["Configurar marca", "Definir padrões", "Registrar autorização", "Enviar mídia", "Gerar material aprovado"] },
-  { moduleKey: "governanca", title: "Governança comercial", summary: "Controlar políticas, alçadas, descontos, comissões, custos logísticos e aditivos.", routePath: "/governanca-comercial", audience: "Admin", order: ["Cadastrar regra em rascunho", "Solicitar desconto/aditivo", "Avaliar impacto", "Aprovar ou rejeitar", "Manter histórico"] },
-  { moduleKey: "backup", title: "Backup e restauração", summary: "Gerar backup completo e usar preview antes de qualquer restauração.", routePath: "/backups", audience: "Admin", order: ["Exportar backup", "Guardar arquivo fora do ERP", "Selecionar restauração", "Conferir preview", "Confirmar somente com segurança"] },
+  { moduleKey: "marketing", title: "Marketing & Captação", summary: "Atrair oportunidades com conteúdo, identidade visual e mídias autorizadas.", routePath: "/marketing", audience: "Marketing", order: ["Definir ideia", "Escolher canal", "Separar mídia autorizada", "Gerar rascunho", "Revisar", "Publicar manualmente"] },
+  { moduleKey: "atendimento", title: "Atendimento Comercial", summary: "Receber contatos, criar leads, qualificar necessidade e programar follow-up.", routePath: "/crm", audience: "Comercial", order: ["Novo contato", "Cadastrar lead", "Qualificar", "Definir próxima ação", "Encaminhar para orçamento"] },
+  { moduleKey: "orcamentos", title: "Orçamentos & Negociação", summary: "Transformar oportunidade qualificada em proposta segura com preço, margem e aprovação.", routePath: "/orcamentos", audience: "Orçamentista", order: ["Diagnóstico ou visita", "Cliente", "Serviços", "Preço/margem", "Proposta", "Aprovação"] },
+  { moduleKey: "planejamento", title: "Planejamento da Obra", summary: "Preparar OS, agenda, equipe e materiais antes da execução.", routePath: "/planejamento-obras", audience: "Gestor de obras", order: ["Orçamento aprovado", "Criar OS", "Agendar", "Definir equipe", "Conferir materiais", "Liberar execução"] },
+  { moduleKey: "execucao", title: "Execução & Qualidade", summary: "Registrar execução, evidências, ocorrências, checklists e inspeção final.", routePath: "/execucao-qualidade", audience: "Equipe técnica", order: ["Abrir OS", "Registrar obra", "Adicionar fotos", "Informar consumo", "Resolver ocorrências", "Concluir checklist"] },
+  { moduleKey: "materiais", title: "Materiais & Equipamentos", summary: "Controlar estoque, ferramentas, retiradas, devoluções, perdas e manutenção.", routePath: "/materiais-equipamentos", audience: "Materiais", order: ["Conferir saldo", "Registrar retirada", "Acompanhar em campo", "Devolver/consumir", "Tratar dano/perda", "Contar fisicamente"] },
+  { moduleKey: "financeiro", title: "Financeiro & Administrativo", summary: "Acompanhar caixa, pagamentos, recebimentos, contratos e relatórios autorizados.", routePath: "/financeiro", audience: "Financeiro", order: ["Conferir vencimentos", "Registrar previsão", "Baixar pagamento", "Analisar fluxo", "Emitir relatório"] },
+  { moduleKey: "equipe", title: "Equipe & Treinamento", summary: "Gerenciar pessoas, acessos, permissões, produtividade e capacitação.", routePath: "/equipe", audience: "Gestão de pessoas", order: ["Cadastrar usuário", "Definir cargo", "Revisar permissões", "Orientar pelo manual", "Acompanhar produtividade"] },
+  { moduleKey: "pos-venda", title: "Pós-venda & Relacionamento", summary: "Acompanhar garantias, manutenção, satisfação e histórico depois da entrega.", routePath: "/pos-venda-hub", audience: "Pós-venda", order: ["Entrega", "Garantia", "Pesquisa", "Manutenção", "Histórico", "Indicadores"] },
+  { moduleKey: "gestao", title: "Gestão & Configurações", summary: "Administrar parâmetros, status, pagamentos, custos, permissões e backups.", routePath: "/gestao", audience: "Admin", order: ["Configurar", "Validar permissão", "Testar impacto", "Gerar backup", "Liberar uso"] },
+  { moduleKey: "backup", title: "Backups & Restauração", summary: "Criar cópia segura e restaurar somente com preview, confirmação e banco correto.", routePath: "/backups-hub", audience: "Admin", order: ["Backup completo", "Exportar módulo", "Enviar arquivo", "Conferir preview", "Confirmar", "Registrar relatório"] },
 ];
 
 const startFlow = [
-  "Novo contato",
+  "Marketing",
   "Lead",
-  "Qualificação",
+  "Atendimento",
+  "Diagnóstico/Visita",
   "Orçamento",
-  "Follow-up",
-  "Venda fechada",
+  "Aprovação",
+  "Planejamento",
   "Ordem de Serviço",
-  "Materiais e execução",
+  "Execução",
   "Qualidade",
-  "Financeiro",
-  "Garantia e pós-venda",
-  "Backup",
+  "Encerramento",
+  "Garantia",
+  "Pós-venda",
+  "Financeiro e indicadores",
 ];
 
 const glossary = [
