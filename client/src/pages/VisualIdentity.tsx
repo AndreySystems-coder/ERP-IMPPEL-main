@@ -62,7 +62,7 @@ export default function VisualIdentity() {
   const createKit = create("/api/visual-brand-kits", "Kit visual registrado");
   const createStandard = create("/api/visual-media-standards", "Padrão registrado");
   const createAuthorization = create("/api/visual-media-authorizations", "Autorização registrada");
-  const createAsset = create("/api/visual-assets", "Asset salvo com original preservado");
+  const createAsset = create("/api/visual-assets", "Arquivo salvo com original preservado");
   const createTemplate = create("/api/visual-templates", "Template registrado");
   const createComposition = create("/api/visual-compositions", "Composição registrada");
   const generatePreview = useMutation({
@@ -77,18 +77,26 @@ export default function VisualIdentity() {
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Identidade Visual</h1>
-          <p className="text-sm text-slate-600">Kit, padrões, autorizações e materiais visuais. Conteúdo definitivo depende da aprovação da IMPPEL.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Identidade e Conteúdo</h1>
+          <p className="text-sm text-slate-600">Marca, fotos, autorizações, biblioteca, antes/depois e templates. Conteúdo definitivo depende da aprovação da IMPPEL.</p>
         </div>
         <Badge variant={approvedKit ? "default" : "outline"}>{approvedKit ? "Kit aprovado ativo" : "Sem kit aprovado"}</Badge>
       </div>
+
+      <Card className="border-blue-100 bg-blue-50/60">
+        <CardContent className="grid gap-3 p-4 text-sm text-blue-950 md:grid-cols-4">
+          {["Configurar marca", "Definir padrões", "Cadastrar autorização", "Enviar mídias", "Criar antes/depois", "Usar templates", "Gerar material", "Revisar antes de publicar"].map((step, index) => (
+            <div key={step} className="rounded-lg bg-white/70 p-3"><p className="text-xs font-bold text-blue-700">Passo {index + 1}</p><p className="font-semibold">{step}</p></div>
+          ))}
+        </CardContent>
+      </Card>
 
       <section className="grid gap-3 md:grid-cols-6">
         {[
           ["Kits", summary?.totals?.brandKits || 0],
           ["Padrões", summary?.totals?.standards || 0],
           ["Autorizações", summary?.totals?.authorizations || 0],
-          ["Assets", summary?.totals?.assets || 0],
+          ["Mídias", summary?.totals?.assets || 0],
           ["Templates", summary?.totals?.templates || 0],
           ["Antes/Depois", summary?.totals?.compositions || 0],
         ].map(([label, value]) => (
@@ -98,8 +106,9 @@ export default function VisualIdentity() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> Kit visual</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" /> Marca</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
+            <p className="sm:col-span-2 text-sm text-slate-600">Reúne logotipo, cores, tipografia, marca d'água e regras de aplicação. Mantenha como rascunho até aprovação.</p>
             <Input placeholder="Nome" value={kit.name} onChange={(e) => setKit({ ...kit, name: e.target.value })} />
             <Input placeholder="Marca" value={kit.brandName} onChange={(e) => setKit({ ...kit, brandName: e.target.value })} />
             <Input type="color" value={kit.primaryColor} onChange={(e) => setKit({ ...kit, primaryColor: e.target.value })} />
@@ -107,13 +116,14 @@ export default function VisualIdentity() {
             <select className="rounded-md border px-3 py-2 text-sm" value={kit.status} onChange={(e) => setKit({ ...kit, status: e.target.value })}>
               <option value="rascunho">Rascunho</option><option value="em_revisao">Em revisão</option><option value="aprovado">Aprovado</option><option value="arquivado">Arquivado</option>
             </select>
-            <Button onClick={() => createKit.mutate(kit)} disabled={createKit.isPending}>Salvar kit</Button>
+            <Button onClick={() => createKit.mutate(kit)} disabled={createKit.isPending}>Salvar marca</Button>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><FileImage className="h-5 w-5" /> Padrão de foto/vídeo</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
+            <p className="sm:col-span-2 text-sm text-slate-600">Orienta a equipe sobre antes, durante e depois da obra: enquadramento, iluminação, quantidade e finalidade.</p>
             <select className="rounded-md border px-3 py-2 text-sm" value={standard.mediaType} onChange={(e) => setStandard({ ...standard, mediaType: e.target.value })}>
               <option value="foto">Foto</option><option value="video">Vídeo</option>
             </select>
@@ -133,6 +143,7 @@ export default function VisualIdentity() {
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> Autorização de imagem</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
+            <p className="sm:col-span-2 text-sm text-slate-600">Registre quem autorizou, finalidade, canais permitidos, validade e restrições. Marketing nunca deve ser presumido como autorizado.</p>
             <Input placeholder="Cliente" value={authorization.clientName} onChange={(e) => setAuthorization({ ...authorization, clientName: e.target.value })} />
             <Input placeholder="Finalidade" value={authorization.purpose} onChange={(e) => setAuthorization({ ...authorization, purpose: e.target.value })} />
             <select className="rounded-md border px-3 py-2 text-sm" value={authorization.status} onChange={(e) => setAuthorization({ ...authorization, status: e.target.value })}>
@@ -144,8 +155,9 @@ export default function VisualIdentity() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Biblioteca visual</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Biblioteca de mídias</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
+            <p className="text-sm text-slate-600">Área para logos, fotos, vídeos e arquivos visuais. Informe obra, fase, finalidade e autorização antes de usar externamente.</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Input placeholder="Nome do arquivo" value={asset.name} onChange={(e) => setAsset({ ...asset, name: e.target.value })} />
               <Input placeholder="Finalidade" value={asset.purpose} onChange={(e) => setAsset({ ...asset, purpose: e.target.value })} />
@@ -160,7 +172,7 @@ export default function VisualIdentity() {
                 }} />
               </div>
             </div>
-            <Button onClick={() => createAsset.mutate(asset)} disabled={createAsset.isPending}><ImagePlus className="mr-2 h-4 w-4" />Salvar asset</Button>
+            <Button onClick={() => createAsset.mutate(asset)} disabled={createAsset.isPending}><ImagePlus className="mr-2 h-4 w-4" />Salvar mídia</Button>
             <p className="text-xs text-slate-500">O original é preservado. Vídeos ficam com processamento externo pendente.</p>
           </CardContent>
         </Card>
@@ -168,8 +180,9 @@ export default function VisualIdentity() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>Antes / Depois</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Antes e Depois</CardTitle></CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
+            <p className="sm:col-span-2 text-sm text-slate-600">Escolha uma foto de antes, uma de depois, revise o template e só publique quando a autorização permitir.</p>
             <Input placeholder="Título" value={composition.title} onChange={(e) => setComposition({ ...composition, title: e.target.value })} />
             <select className="rounded-md border px-3 py-2 text-sm" value={composition.format} onChange={(e) => setComposition({ ...composition, format: e.target.value })}>
               <option value="whatsapp">WhatsApp</option><option value="story">Story</option><option value="feed">Feed</option><option value="orcamento">Orçamento</option>
@@ -195,6 +208,7 @@ export default function VisualIdentity() {
         <Card>
           <CardHeader><CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5" /> Templates</CardTitle></CardHeader>
           <CardContent className="grid gap-3">
+            <p className="text-sm text-slate-600">Templates são modelos reutilizáveis para WhatsApp, orçamento, Instagram, relatório de obra, garantia e pós-venda.</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <Input placeholder="Nome" value={template.name} onChange={(e) => setTemplate({ ...template, name: e.target.value })} />
               <Input placeholder="Tipo" value={template.templateType} onChange={(e) => setTemplate({ ...template, templateType: e.target.value })} />
@@ -211,7 +225,7 @@ export default function VisualIdentity() {
 
       <section className="grid gap-4 lg:grid-cols-3">
         <ListCard title="Padrões" items={standards} fields={["mediaType", "purpose", "phase", "status"]} />
-        <ListCard title="Assets" items={assets} fields={["name", "purpose", "authorizationStatus", "processingStatus"]} />
+        <ListCard title="Mídias" items={assets} fields={["name", "purpose", "authorizationStatus", "processingStatus"]} />
         <ListCard title="Templates" items={templates} fields={["name", "templateType", "channel", "status"]} />
       </section>
       <section className="grid gap-4 lg:grid-cols-2">

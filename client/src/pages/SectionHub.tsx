@@ -15,7 +15,6 @@ import {
   Heart,
   Layers,
   ListChecks,
-  MessageSquare,
   Package,
   PackageCheck,
   Palette,
@@ -28,7 +27,6 @@ import {
   UserCog,
   Users,
   Wrench,
-  Zap,
 } from "lucide-react";
 import { useUser } from "@/hooks/use-auth";
 import { canAccess, type PermissionKey } from "@/lib/permissions";
@@ -114,15 +112,12 @@ export function CrmHub() {
   return (
     <HubPage
       config={{
-        title: "CRM",
-        description: "Centralize leads, contatos, clientes, conversas e ações comerciais.",
+        title: "Comercial",
+        description: "Comece pelo Sistema Comercial. Ele reúne funil, leads, follow-ups, WhatsApp e marketing em uma experiência guiada.",
         items: [
-          { title: "Clientes", description: "Cadastro e histórico básico dos clientes.", href: "/clients", icon: Building2, permission: "viewClients", accent: accents.blue },
-          { title: "Sistema Comercial", description: "Funil, follow-up, duplicidades e marketing.", href: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem", accent: accents.violet },
-          { title: "WhatsApp", description: "Pipeline, conversas, templates e próximas ações.", href: "/crm-whatsapp", icon: MessageSquare, permission: "viewCrmWhatsapp", accent: accents.emerald },
-          { title: "Leads", description: "Entrada e acompanhamento de oportunidades.", href: "/leads", icon: Zap, permission: "viewLeads", accent: accents.orange },
-          { title: "Marketing", description: "Planejamento simples de conteúdos e campanhas.", href: "/marketing-conteudo", icon: MessageSquare, permission: "viewMarketingContent", accent: accents.cyan },
-          { title: "Identidade Visual", description: "Kit visual, padrões, assets, autorizações e antes/depois.", href: "/identidade-visual", icon: Palette, permission: "viewVisualIdentity", accent: accents.slate },
+          { title: "Sistema Comercial", description: "Visão geral, funil, leads, follow-ups, WhatsApp, marketing, indicadores e ajuda.", href: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem", accent: accents.violet },
+          { title: "Clientes", description: "Cadastro e histórico básico dos clientes que já existem ou vieram do funil.", href: "/clients", icon: Building2, permission: "viewClients", accent: accents.blue },
+          { title: "Identidade e Conteúdo", description: "Marca, fotos, autorizações, biblioteca visual, templates e antes/depois.", href: "/identidade-visual", icon: Palette, permission: "viewVisualIdentity", accent: accents.slate },
         ],
       }}
     />

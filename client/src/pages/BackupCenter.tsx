@@ -40,6 +40,17 @@ const MONTHS = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
+const BACKUP_COVERAGE = [
+  ["Usuários, cargos e permissões", "Sim", "PDF operacional", "PDF/backup técnico", "Restaurar antes dos módulos com responsáveis."],
+  ["Clientes, leads, CRM e follow-ups", "Sim", "Parcial por PDF/relatórios", "Backup completo", "Clientes e leads antes de orçamentos."],
+  ["Produtos e serviços", "Sim", "PDF", "PDF/backup técnico", "Base do orçamento, estoque e restauração de materiais."],
+  ["Estoque, ferramentas e movimentações", "Sim", "PDF", "PDF/backup técnico", "Produtos/serviços devem existir antes."],
+  ["Controle de materiais, custódias e devoluções", "Sim", "PDF", "PDF/backup técnico", "Usuários e estoque devem existir antes."],
+  ["Orçamentos, OS e registros de obra", "Sim", "PDF/relatório quando disponível", "Backup completo", "Clientes, produtos e serviços antes."],
+  ["Financeiro, garantias e pós-venda", "Sim", "PDF/relatório quando disponível", "Backup completo", "Depende de clientes, orçamentos e OS."],
+  ["Governança, qualidade, marketing e identidade visual", "Sim", "Relatório/backup técnico", "Backup completo", "Módulos das Etapas 4 a 8 ficam no backup técnico."],
+];
+
 function reDownloadPDF(entry: BackupHistoryEntry) {
   generatePDF(entry.type, entry.backup);
 }
@@ -273,6 +284,7 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
             <p className="text-sm text-slate-600">{page.panelDescription}</p>
           </div>
           <CompleteBackupGeneration isAdmin={isAdmin} />
+          <BackupCoverageMatrix />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
               const Icon = cfg.icon;
@@ -372,6 +384,16 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
       {/* Tab: Restauração */}
       {mode === "restore" && (
         <div className="space-y-4">
+          <Card>
+            <CardContent className="space-y-2 p-5 text-sm text-slate-600">
+              <p className="font-bold text-slate-900">Como restaurar com segurança</p>
+              <p>1. Confirme se o banco é Desenvolvimento, Replit ou Produção antes de importar.</p>
+              <p>2. Gere backup antes de qualquer restauração.</p>
+              <p>3. Use preview, confira conflitos e confirme somente o que estiver seguro.</p>
+              <p>4. PDFs restauram apenas os módulos declarados; módulos novos das Etapas 4 a 8 ficam no backup técnico completo.</p>
+            </CardContent>
+          </Card>
+          <BackupCoverageMatrix />
           <PdfBackupRestore isAdmin={isAdmin} username={user?.username || "Admin"} onRestored={() => setRefresh(r => r + 1)} />
         </div>
       )}
@@ -457,6 +479,43 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
         </div>
       )}
     </div>
+  );
+}
+
+function BackupCoverageMatrix() {
+  return (
+    <Card>
+      <CardContent className="space-y-3 p-5">
+        <div>
+          <h3 className="text-base font-bold text-slate-900">Matriz de cobertura do backup</h3>
+          <p className="text-sm text-slate-600">Resumo operacional das Etapas 1 a 8. O backup técnico completo é a fonte restaurável mais abrangente; PDF é conferência ou importação apenas quando o módulo declara suporte.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-[760px] w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Módulo</th>
+                <th className="px-3 py-2">Backup completo</th>
+                <th className="px-3 py-2">Exportação simples</th>
+                <th className="px-3 py-2">Restauração</th>
+                <th className="px-3 py-2">Dependência</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {BACKUP_COVERAGE.map(([module, full, exportMode, restoreMode, dependency]) => (
+                <tr key={module}>
+                  <td className="px-3 py-2 font-medium text-slate-800">{module}</td>
+                  <td className="px-3 py-2">{full}</td>
+                  <td className="px-3 py-2">{exportMode}</td>
+                  <td className="px-3 py-2">{restoreMode}</td>
+                  <td className="px-3 py-2 text-slate-600">{dependency}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

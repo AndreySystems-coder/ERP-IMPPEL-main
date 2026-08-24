@@ -107,6 +107,14 @@ export default function WorkQuality() {
         <p className="text-sm text-muted-foreground">Procedimentos, checklists, evidências, ocorrências, inspeções e bloqueios de encerramento da OS.</p>
       </div>
 
+      <Card className="border-emerald-100 bg-emerald-50/60">
+        <CardContent className="grid gap-3 p-4 text-sm text-emerald-950 md:grid-cols-3">
+          <InfoBlock title="Para que serve?" text="Garantir que a obra siga o padrão técnico antes de permitir encerramento seguro da OS." />
+          <InfoBlock title="Ordem correta" text="Orçamento define o vendido; OS define a execução; procedimento ensina; checklist comprova; ocorrência registra problema." />
+          <InfoBlock title="O que precisa de atenção?" text="Bloqueios, checklists obrigatórios incompletos, não conformidades e procedimentos ainda sem aprovação técnica." />
+        </CardContent>
+      </Card>
+
       <div className="grid gap-3 md:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><ClipboardCheck className="h-4 w-4" /> Checklists</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{indicators.data?.checklistRuns || 0}</CardContent></Card>
         <Card><CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><CheckCircle2 className="h-4 w-4" /> Concluídos</CardTitle></CardHeader><CardContent className="text-2xl font-semibold">{indicators.data?.completedChecklistRuns || 0}</CardContent></Card>
@@ -243,4 +251,8 @@ export default function WorkQuality() {
       </div>
     </div>
   );
+}
+
+function InfoBlock({ title, text }: { title: string; text: string }) {
+  return <div className="rounded-lg bg-white/70 p-3"><p className="font-semibold">{title}</p><p className="mt-1">{text}</p></div>;
 }

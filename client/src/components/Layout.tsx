@@ -33,7 +33,6 @@ import {
   Users,
   UserCog,
   Wrench,
-  Zap,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -66,17 +65,14 @@ const ALL_SECTIONS: NavSection[] = [
     items: [{ name: "Dashboard", path: "/dashboard", icon: LayoutDashboard }],
   },
   {
-    label: "CRM",
+    label: "Comercial",
     path: "/crm",
     icon: MessageSquare,
     adminOnly: true,
     permission: "viewCrm",
     items: [
-      { name: "CRM & WhatsApp", path: "/crm-whatsapp", icon: Zap, permission: "viewCrmWhatsapp" },
       { name: "Sistema Comercial", path: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem" },
-      { name: "Leads", path: "/leads", icon: Users, permission: "viewLeads" },
       { name: "Clientes", path: "/clients", icon: Building2, permission: "viewClients" },
-      { name: "Marketing", path: "/marketing-conteudo", icon: MessageSquare, permission: "viewMarketingContent" },
       { name: "Identidade Visual", path: "/identidade-visual", icon: Palette, permission: "viewVisualIdentity" },
     ],
   },

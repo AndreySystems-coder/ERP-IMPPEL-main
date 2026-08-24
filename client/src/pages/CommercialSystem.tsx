@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -80,59 +81,89 @@ export default function CommercialSystem() {
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Sistema Comercial</h1>
-        <p className="mt-1 text-sm text-slate-500">Fluxo único de lead, orçamento, follow-up, fechamento e conteúdo.</p>
+        <p className="mt-1 text-sm text-slate-500">Fluxo único para transformar contato em lead, orçamento, follow-up, venda ou oportunidade perdida.</p>
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {([
-          { label: "Leads", value: dashboard?.totals?.leads || 0, Icon: Users },
-          { label: "Orçamentos", value: dashboard?.totals?.quotes || 0, Icon: MessageSquare },
-          { label: "Follow-ups", value: dashboard?.totals?.pendingFollowUps || 0, Icon: CalendarClock },
-          { label: "Vencidos", value: dashboard?.totals?.overdueFollowUps || 0, Icon: CalendarClock },
-          { label: "Conteúdos", value: dashboard?.totals?.contentPlans || plans.length, Icon: Megaphone },
-        ] satisfies SummaryCard[]).map(({ label, value, Icon }) => (
-          <Card key={label}><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-bold">{value}</p></div><Icon className="h-5 w-5 text-primary" /></CardContent></Card>
-        ))}
-      </section>
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
+          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="funnel">Funil</TabsTrigger>
+          <TabsTrigger value="leads">Leads</TabsTrigger>
+          <TabsTrigger value="followups">Follow-ups</TabsTrigger>
+          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+          <TabsTrigger value="marketing">Marketing</TabsTrigger>
+          <TabsTrigger value="help">Ajuda</TabsTrigger>
+        </TabsList>
 
-      {((dashboard?.totals?.leadsWithoutResponsible || 0) > 0 || (dashboard?.totals?.leadsWithoutNextAction || 0) > 0) && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="p-4 text-sm text-amber-900">
-            Atenção: {dashboard?.totals?.leadsWithoutResponsible || 0} lead(s) ativo(s) sem responsável e {dashboard?.totals?.leadsWithoutNextAction || 0} sem próxima ação/data. Corrija em Leads antes da rotina comercial.
-          </CardContent>
-        </Card>
-      )}
+        <TabsContent value="overview" className="space-y-4">
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {([
+              { label: "Leads", value: dashboard?.totals?.leads || 0, Icon: Users },
+              { label: "Orçamentos", value: dashboard?.totals?.quotes || 0, Icon: MessageSquare },
+              { label: "Follow-ups", value: dashboard?.totals?.pendingFollowUps || 0, Icon: CalendarClock },
+              { label: "Vencidos", value: dashboard?.totals?.overdueFollowUps || 0, Icon: CalendarClock },
+              { label: "Conteúdos", value: dashboard?.totals?.contentPlans || plans.length, Icon: Megaphone },
+            ] satisfies SummaryCard[]).map(({ label, value, Icon }) => (
+              <Card key={label}><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-bold">{value}</p></div><Icon className="h-5 w-5 text-primary" /></CardContent></Card>
+            ))}
+          </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>Funil</CardTitle></CardHeader>
-          <CardContent className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dashboard?.byStatus || []}><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} /></BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Status configuráveis</CardTitle></CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {statuses.map((status) => <Badge key={status.name || status.label} variant="secondary">{status.label || status.name}</Badge>)}
-          </CardContent>
-        </Card>
-      </section>
+          {((dashboard?.totals?.leadsWithoutResponsible || 0) > 0 || (dashboard?.totals?.leadsWithoutNextAction || 0) > 0) && (
+            <Card className="border-amber-200 bg-amber-50">
+              <CardContent className="p-4 text-sm text-amber-900">
+                Atenção: {dashboard?.totals?.leadsWithoutResponsible || 0} lead(s) ativo(s) sem responsável e {dashboard?.totals?.leadsWithoutNextAction || 0} sem próxima ação/data. Corrija em Leads antes da rotina comercial.
+              </CardContent>
+            </Card>
+          )}
 
-      <section className="grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
+          <Card>
+            <CardHeader><CardTitle className="text-base">O que devo fazer agora?</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <ActionHint title="Atender novos contatos" description="Cadastre ou complete leads que chegaram por WhatsApp, indicação ou prospecção." />
+              <ActionHint title="Resolver follow-ups vencidos" description="Priorize retornos pendentes antes de criar novas oportunidades." />
+              <ActionHint title="Revisar orçamentos enviados" description="Confira propostas sem resposta e mova o lead para negociação, fechado ou perdido." />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="funnel" className="space-y-4">
+          <Card className="border-blue-100 bg-blue-50/50"><CardContent className="p-4 text-sm text-blue-900">Funil é o caminho que um possível cliente percorre desde o primeiro contato até o fechamento ou perda da oportunidade.</CardContent></Card>
+          <section className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle>Funil</CardTitle></CardHeader>
+              <CardContent className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dashboard?.byStatus || []}><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} /></BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Status configuráveis</CardTitle></CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {statuses.map((status) => <Badge key={status.name || status.label} variant="secondary">{status.label || status.name}</Badge>)}
+                {statuses.length === 0 && <p className="text-sm text-slate-500">Nenhum status personalizado cadastrado.</p>}
+              </CardContent>
+            </Card>
+          </section>
+        </TabsContent>
+
+        <TabsContent value="leads" className="space-y-4">
+          <Card className="border-slate-200 bg-white"><CardContent className="p-4 text-sm text-slate-600">Lead é uma pessoa ou empresa que demonstrou interesse e ainda pode se tornar cliente. Não obrigue dados que ainda não são conhecidos; complete conforme o atendimento evolui.</CardContent></Card>
+          <Card>
           <CardHeader><CardTitle>Leads e duplicidades</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input className="pl-9" placeholder="Buscar por nome, telefone, e-mail ou origem" value={leadFilter} onChange={(event) => setLeadFilter(event.target.value)} /></div>
             <div className="grid gap-2 sm:grid-cols-2">
               {filteredLeads.map((lead) => <div key={lead.id} className="rounded-lg border p-3 text-sm"><div className="font-semibold">{lead.name}</div><div className="text-slate-500">{lead.phone || lead.email || "Sem contato"}</div><Badge className="mt-2" variant="outline">{lead.status}</Badge></div>)}
             </div>
-            {(dashboard?.duplicates?.length || 0) > 0 && <p className="text-sm text-amber-700">Há {dashboard?.duplicates.length} possível(is) duplicidade(s) por telefone, e-mail ou documento.</p>}
+            {(dashboard?.duplicates?.length || 0) > 0 ? <p className="text-sm text-amber-700">Possíveis duplicidades são contatos que podem ter sido cadastrados mais de uma vez. Há {dashboard?.duplicates.length} grupo(s) por telefone, e-mail ou documento. Abra os registros antes de decidir mesclar.</p> : <p className="text-sm text-slate-500">Nenhuma duplicidade encontrada.</p>}
           </CardContent>
         </Card>
+        </TabsContent>
 
-        <Card>
+        <TabsContent value="followups" className="space-y-4">
+          <Card className="border-emerald-100 bg-emerald-50/50"><CardContent className="p-4 text-sm text-emerald-900">Follow-up é o retorno programado ao cliente. D+2, D+5 e D+10 significam dois, cinco e dez dias após o evento de referência, mas aqui você sempre pode escolher uma data real.</CardContent></Card>
+          <Card>
           <CardHeader><CardTitle>Novo follow-up</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <Input placeholder="ID do lead" value={followUp.leadId} onChange={(event) => setFollowUp({ ...followUp, leadId: event.target.value })} />
@@ -143,38 +174,54 @@ export default function CommercialSystem() {
             <Button className="w-full" variant="outline" onClick={() => createFollowUpSequence.mutate()} disabled={!followUp.leadId || createFollowUpSequence.isPending}>Gerar D+2/D+5/D+10</Button>
           </CardContent>
         </Card>
-      </section>
+          <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {followUps.slice(0, 6).map((item) => <Card key={item.id}><CardContent className="p-4 text-sm"><div className="font-semibold">{item.reason || "Follow-up"}</div><div className="text-slate-500">{new Date(item.dueDate).toLocaleString("pt-BR")}</div><Badge className="mt-2" variant={item.status === "pendente" ? "secondary" : "outline"}>{item.status}</Badge></CardContent></Card>)}
+          </section>
+        </TabsContent>
 
-      <Card>
-        <CardHeader><CardTitle>Planejamento de marketing</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
-          <Input placeholder="Título" value={content.title} onChange={(event) => setContent({ ...content, title: event.target.value })} />
-          <Input placeholder="Canal" value={content.channel} onChange={(event) => setContent({ ...content, channel: event.target.value })} />
-          <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={content.category} onChange={(event) => setContent({ ...content, category: event.target.value })}>
-            <option value="prova">Prova</option>
-            <option value="autoridade">Autoridade</option>
-            <option value="conversao">Conversão</option>
-          </select>
-          <Input placeholder="Serviço" value={content.serviceName} onChange={(event) => setContent({ ...content, serviceName: event.target.value })} />
-          <Input placeholder="Objetivo" value={content.objective} onChange={(event) => setContent({ ...content, objective: event.target.value })} />
-          <Input placeholder="CTA" value={content.cta} onChange={(event) => setContent({ ...content, cta: event.target.value })} />
-          <Button onClick={() => generatePost.mutate()} disabled={generatePost.isPending}>Gerar rascunho</Button>
-          <Button onClick={() => createPlan.mutate()} disabled={!content.title.trim() || createPlan.isPending}>Salvar ideia</Button>
-          <Textarea className="md:col-span-4" placeholder="Ideia, roteiro ou gancho do conteúdo" value={content.idea} onChange={(event) => setContent({ ...content, idea: event.target.value })} />
-          {generatedPost && (
-            <div className="md:col-span-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-              <p className="font-semibold">Rascunho gerado para revisão humana</p>
-              <p className="mt-2">{generatedPost.caption}</p>
-              <p className="mt-2 text-slate-600">{generatedPost.shortScript}</p>
-              <p className="mt-2 text-amber-700">{generatedPost.warning}</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="whatsapp">
+          <Card><CardContent className="space-y-3 p-4 text-sm text-slate-600"><p>WhatsApp reúne roteiros de atendimento, diagnóstico, envio de orçamento, follow-up, confirmação de obra, pós-venda, manutenção e garantia.</p><p>Enquanto não houver API/credenciais reais da Waseller, o ERP prepara mensagens para cópia e envio manual. Isso não é automação externa.</p></CardContent></Card>
+        </TabsContent>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {followUps.slice(0, 6).map((item) => <Card key={item.id}><CardContent className="p-4 text-sm"><div className="font-semibold">{item.reason || "Follow-up"}</div><div className="text-slate-500">{new Date(item.dueDate).toLocaleString("pt-BR")}</div><Badge className="mt-2" variant={item.status === "pendente" ? "secondary" : "outline"}>{item.status}</Badge></CardContent></Card>)}
-      </section>
+        <TabsContent value="marketing" className="space-y-4">
+          <Card className="border-purple-100 bg-purple-50/50"><CardContent className="p-4 text-sm text-purple-900">Marketing é dedicado a conteúdo. Sistema Comercial é dedicado a vendas. Sem provedor de IA configurado, os textos são rascunhos baseados em modelo local para revisão humana.</CardContent></Card>
+          <Card>
+            <CardHeader><CardTitle>Planejamento de marketing</CardTitle></CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-4">
+              <Input placeholder="Título" value={content.title} onChange={(event) => setContent({ ...content, title: event.target.value })} />
+              <Input placeholder="Canal" value={content.channel} onChange={(event) => setContent({ ...content, channel: event.target.value })} />
+              <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={content.category} onChange={(event) => setContent({ ...content, category: event.target.value })}>
+                <option value="prova">Prova de resultado</option>
+                <option value="autoridade">Autoridade</option>
+                <option value="conversao">Conversão</option>
+                <option value="orientacao">Orientação técnica</option>
+              </select>
+              <Input placeholder="Serviço" value={content.serviceName} onChange={(event) => setContent({ ...content, serviceName: event.target.value })} />
+              <Input placeholder="Objetivo" value={content.objective} onChange={(event) => setContent({ ...content, objective: event.target.value })} />
+              <Input placeholder="CTA" value={content.cta} onChange={(event) => setContent({ ...content, cta: event.target.value })} />
+              <Button onClick={() => generatePost.mutate()} disabled={generatePost.isPending}>Gerar rascunho</Button>
+              <Button onClick={() => createPlan.mutate()} disabled={!content.title.trim() || createPlan.isPending}>Salvar ideia</Button>
+              <Textarea className="md:col-span-4" placeholder="Ideia, roteiro ou gancho do conteúdo" value={content.idea} onChange={(event) => setContent({ ...content, idea: event.target.value })} />
+              {generatedPost && (
+                <div className="md:col-span-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <p className="font-semibold">Rascunho gerado para revisão humana</p>
+                  <p className="mt-2">{generatedPost.caption}</p>
+                  <p className="mt-2 text-slate-600">{generatedPost.shortScript}</p>
+                  <p className="mt-2 text-amber-700">{generatedPost.warning}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="help">
+          <Card><CardContent className="space-y-2 p-4 text-sm text-slate-600"><p><strong>Lead:</strong> contato com potencial de virar cliente.</p><p><strong>Follow-up:</strong> retorno combinado para continuar a negociação.</p><p><strong>Duplicidade:</strong> alerta para cadastros parecidos; nunca mescle sem conferir.</p><p><strong>Prospecção:</strong> lead criado ativamente pela equipe, sem CRM paralelo.</p></CardContent></Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
+}
+
+function ActionHint({ title, description }: { title: string; description: string }) {
+  return <div className="rounded-lg border bg-white p-3 text-sm"><p className="font-semibold text-slate-900">{title}</p><p className="mt-1 text-slate-600">{description}</p></div>;
 }

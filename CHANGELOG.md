@@ -3,6 +3,26 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-24] - Simplificacao de UX, treinamento e preparo operacional
+
+### Alterado
+
+- Menu principal consolidou a area `Comercial`, reduzindo duplicidade visual entre Leads, WhatsApp, Marketing e Sistema Comercial.
+- `Sistema Comercial` passou a organizar a experiencia em abas: Visao Geral, Funil, Leads, Follow-ups, WhatsApp, Marketing e Ajuda.
+- `Como Trabalhar` foi ampliado para manual interativo com fluxo recomendado, trilhas por modulo, ordem das acoes, orientacao para funcionario novo/admin e glossario.
+- `Identidade Visual` passou a usar linguagem operacional: Marca, Biblioteca de midias, Antes e Depois e Templates, mantendo o backend tecnico preservado.
+- `Qualidade das Obras` e `Governanca Comercial` receberam blocos explicativos com finalidade, ordem de uso e proximos passos.
+- `Backups` recebeu matriz de cobertura das Etapas 1 a 8, distinguindo backup completo, exportacao simples, restauracao e dependencias.
+
+### Documentacao
+
+- Criado `docs/erp_usability_and_training_rework.md` com diagnostico, nova navegacao, treinamento, matriz de backup, Replit, Vercel e pendencias.
+
+### Observacoes
+
+- Nenhuma regra de negocio, schema, migration, seed, dado real, credencial ou restauracao foi alterada.
+- Rotas antigas foram preservadas para compatibilidade, mas deixaram de competir como entradas duplicadas no menu principal.
+
 ## [2026-08-24] - Implementacao da Etapa 8 identidade visual
 
 ### Adicionado

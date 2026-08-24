@@ -27,6 +27,9 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Consolidar a documentacao historica de `docs/` nos arquivos oficiais conforme novas sprints forem acontecendo.
 - Revisar se `docs/gemini.md`, `docs/PASSO A PASSO/protocolo_vlaeg.md` e outros documentos auxiliares ainda devem ser mantidos como referencia tecnica.
 - Avaliar criacao de um indice de arquitetura caso a auditoria das proximas sprints identifique necessidade.
+- Validar com funcionario novo se a Central Como Trabalhar e suficiente para executar rotina sem apoio externo.
+- Homologar no Replit a restauracao controlada da base limpa com os PDFs aprovados, sem duplicar Admin e sem alterar banco real.
+- Definir se as rotas antigas de Leads, WhatsApp e Marketing devem permanecer acessiveis por links internos ou virar redirecionamentos documentados para Sistema Comercial.
 - Criar migration para tabela dedicada de `import_jobs`/`import_fingerprints`, substituindo fingerprints em observacoes por auditoria estruturada.
 - Homologar visualmente em desktop e celular as telas de Custos e Margens, Calculadora, Orçamentos e Financeiro usando usuario real de teste.
 - Definir politica real de comissao: base de calculo, porcentagens, liberacao por recebimento, cancelamento e estorno.

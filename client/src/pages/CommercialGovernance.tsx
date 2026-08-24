@@ -110,8 +110,16 @@ export default function CommercialGovernance() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-normal">Governança Comercial</h1>
-        <p className="text-sm text-muted-foreground">Margem, descontos, comissões, logística, versões e aditivos sem regras fixas inventadas.</p>
+        <p className="text-sm text-muted-foreground">Regras, alçadas, descontos, comissões, logística, versões e aditivos sem inventar percentuais oficiais da IMPPEL.</p>
       </div>
+
+      <Card className="border-blue-100 bg-blue-50/60">
+        <CardContent className="grid gap-3 p-4 text-sm text-blue-950 md:grid-cols-3">
+          <InfoBlock title="Para que serve?" text="Controlar exceções comerciais antes que desconto, comissão ou custo extra vire decisão sem registro." />
+          <InfoBlock title="Como usar?" text="Cadastre regras como rascunho, registre solicitações e aprove/rejeite com histórico administrativo." />
+          <InfoBlock title="Próximo passo" text="Definir com a direção as alçadas reais, limites e responsáveis antes do uso definitivo em produção." />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-3 md:grid-cols-4">
         <Card>
@@ -309,4 +317,8 @@ export default function CommercialGovernance() {
       </div>
     </div>
   );
+}
+
+function InfoBlock({ title, text }: { title: string; text: string }) {
+  return <div className="rounded-lg bg-white/70 p-3"><p className="font-semibold">{title}</p><p className="mt-1">{text}</p></div>;
 }

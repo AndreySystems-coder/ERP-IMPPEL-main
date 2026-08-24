@@ -12,6 +12,22 @@ Este arquivo registra riscos, problemas conhecidos, limitacoes e pendencias que 
 
 ## Problemas conhecidos atuais
 
+### KI-015 - Central Como Trabalhar ainda precisa de homologacao com funcionario novo
+
+- Severidade: Medio.
+- Causa raiz: a sprint ampliou a orientacao dentro do ERP, mas o conteudo operacional definitivo depende de validacao da equipe IMPPEL.
+- Impacto: o sistema esta mais autoexplicativo, porem a confirmacao de que uma pessoa nova executa a rotina sozinha exige teste real assistido.
+- Arquivos envolvidos: `client/src/pages/HowToWork.tsx`, `docs/erp_usability_and_training_rework.md`.
+- Workaround: usar a central como guia inicial e registrar duvidas reais no backlog de treinamento.
+
+### KI-016 - Vercel segue com ressalvas para ERP full stack
+
+- Severidade: Medio.
+- Causa raiz: o ERP possui Express, sessoes, PostgreSQL, PDFs e anexos; Vercel exige banco persistente, cookies seguros e armazenamento externo bem configurados.
+- Impacto: o Replit permanece ambiente operacional temporario recomendado ate validar infraestrutura completa fora dele.
+- Arquivos envolvidos: `server/index.ts`, `server/db.ts`, `DEPLOYMENT.md`, `docs/erp_usability_and_training_rework.md`.
+- Workaround: manter Replit para piloto e preparar Vercel somente com PostgreSQL persistente, secrets e validacao real de API/login.
+
 ### KI-012 - Identidade visual oficial depende de aprovacao da IMPPEL
 
 - Severidade: Medio.
