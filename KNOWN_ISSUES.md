@@ -12,6 +12,15 @@ Este arquivo registra riscos, problemas conhecidos, limitacoes e pendencias que 
 
 ## Problemas conhecidos atuais
 
+### Corrigidos em 2026-08-24 - Gate Etapas 1 a 6
+
+- Rotas de leitura de Qualidade das Obras que dependiam apenas de autenticação agora exigem permissão explicita.
+- Movimentações manuais de estoque com saldo insuficiente deixaram de retornar `500` e passaram a retornar `409`.
+- Movimentações com quantidade zero ou negativa retornam `400`.
+- Procedimentos técnicos aceitam `title` apenas como compatibilidade legada, mas persistem e exportam o contrato canônico `name`.
+
+Esses itens permanecem rastreados no `CHANGELOG.md` e nos testes operacionais.
+
 ### KI-001 - Documentacao oficial criada somente nesta sprint
 
 - Severidade: Medio
@@ -134,10 +143,19 @@ Essa informacao foi preservada aqui como historico, mas nao substitui uma audito
 ### KI-012 - Validacao visual completa ainda depende de ambiente local com login
 
 - Severidade: Medio.
-- Causa raiz: as validacoes automatizadas e build passaram, mas a homologacao visual completa requer servidor local aberto, usuario valido e navegacao pelas telas.
-- Impacto: problemas de UX responsiva podem restar mesmo com TypeScript/build/testes passando.
+- Causa raiz: a homologacao visual completa exige servidor local aberto, usuario valido, dados sinteticos e execucao de formulários reais.
+- Impacto: problemas de UX responsiva podem restar mesmo com TypeScript/build/testes passando, principalmente em fluxos longos de formulario.
 - Arquivos envolvidos: telas de Orçamentos, Financeiro, Custos e Margens, Estoque, OS, Garantias e Backup.
-- Plano: executar validacao visual desktop/mobile antes do piloto real ou durante a homologacao operacional.
+- Status: parcialmente mitigado em 2026-08-24 com validacao desktop e mobile 390x844 das telas principais das Etapas 4 a 6, sem erros de console e sem overflow relevante. Ainda exige piloto real com dados da IMPPEL.
+
+### KI-014 - GitHub ainda pode depender de autenticacao local
+
+- Severidade: Critico para continuidade em outros ambientes.
+- Causa raiz: historicamente, o Git Credential Manager local falhou com `SEC_E_NO_CREDENTIALS` durante tentativas de push.
+- Impacto: commits locais podem ficar preservados no computador, mas indisponiveis para Replit/GitHub ate autenticar novamente.
+- Arquivos envolvidos: repositorio Git local e credenciais do GitHub.
+- Workaround: autenticar o GitHub no Windows/Git Credential Manager e executar `git push origin main`; nunca usar reset para tentar resolver credencial.
+- Status: validar novamente ao final deste gate.
 
 ### KI-013 - Etapa 6 depende de regras administrativas reais da IMPPEL
 

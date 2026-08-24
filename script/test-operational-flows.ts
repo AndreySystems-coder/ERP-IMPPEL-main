@@ -117,7 +117,47 @@ await assert.rejects(
   /Estoque insuficiente/,
   "movimentacao manual acima do estoque deve ser bloqueada na camada de storage",
 );
+await assert.rejects(
+  () => storage.createInventoryMovement({
+    inventoryId: normalizedInventory.id,
+    productName: normalizedInventory.name,
+    type: "SAÍDA",
+    quantity: 0,
+    date: "2026-06-30",
+  }),
+  /Quantidade deve ser maior que zero/,
+  "movimentacao manual com quantidade zero deve ser rejeitada como dado invalido",
+);
+await assert.rejects(
+  () => storage.createInventoryMovement({
+    inventoryId: normalizedInventory.id,
+    productName: normalizedInventory.name,
+    type: "SAÍDA",
+    quantity: -1,
+    date: "2026-06-30",
+  }),
+  /Quantidade deve ser maior que zero/,
+  "movimentacao manual com quantidade negativa deve ser rejeitada como dado invalido",
+);
 assert.equal((await storage.getInventoryItems()).find(item => item.id === normalizedInventory.id)?.quantity, 5, "saldo deve permanecer intacto quando movimento manual e bloqueado");
+const protectedMovement = await storage.createInventoryMovement({
+  inventoryId: exactInventory.id,
+  productName: exactInventory.name,
+  type: "SAÍDA",
+  quantity: 1,
+  date: "2026-06-30",
+});
+await assert.rejects(
+  () => storage.updateInventoryMovement(protectedMovement.id, {
+    inventoryId: exactInventory.id,
+    productName: exactInventory.name,
+    type: "SAÍDA",
+    quantity: 99,
+    date: "2026-06-30",
+  }),
+  /Estoque insuficiente/,
+  "atualizacao direta de movimentacao nao pode contornar saldo disponivel",
+);
 const mobileNegativeMovement = await storage.createInventoryMovement({
   inventoryId: normalizedInventory.id,
   productName: normalizedInventory.name,
@@ -849,6 +889,21 @@ const qualityProcedure = await qualityStorage.createCompleteTableRow("technicalP
   createdByUsername: "AdminTeste",
   auditTrail: "[]",
 });
+const legacyTitleProcedure = await qualityStorage.createCompleteTableRow("technicalProcedures", {
+  title: "Procedimento legado com title",
+  serviceName: "Impermeabilização sintética",
+  version: "1.0",
+  status: "rascunho",
+  objective: "Objetivo legado",
+  preparation: "Preparação legada",
+  execution: "Execução legada",
+  acceptanceCriteria: "Critério legado",
+  auditTrail: "[]",
+} as any);
+assert.equal(legacyTitleProcedure.name, "Procedimento legado com title", "procedimento legado deve salvar title como name canonico");
+assert.equal("title" in legacyTitleProcedure, false, "campo title legado nao deve permanecer no contrato persistido");
+const renamedLegacyProcedure = await qualityStorage.updateCompleteTableRow("technicalProcedures", legacyTitleProcedure.id, { title: "Procedimento legado renomeado" } as any);
+assert.equal(renamedLegacyProcedure?.name, "Procedimento legado renomeado", "atualizacao legada deve preservar contrato canonico name");
 const qualityChecklist = await qualityStorage.createCompleteTableRow("checklistTemplates", {
   name: "Checklist sintético de entrega",
   serviceName: "Impermeabilização sintética",
@@ -908,7 +963,8 @@ await qualityStorage.updateCompleteTableRow("qualityEvents", qualityEvent.id, {
 });
 assert.equal(await hasQualityClosureBlocker(), false, "OS com checklist concluído e ocorrência resolvida deve ficar apta ao fechamento");
 const qualitySnapshot = await qualityStorage.getCompleteBackupData();
-assert.equal(qualitySnapshot.technicalProcedures.length, 1, "procedimento técnico deve entrar no storage");
+assert.equal(qualitySnapshot.technicalProcedures.length, 2, "procedimentos técnicos devem entrar no storage");
+assert.equal(qualitySnapshot.technicalProcedures.some((procedure: any) => "title" in procedure), false, "backup de qualidade nao deve exportar title legado");
 assert.equal(qualitySnapshot.checklistTemplates[0].procedureId, qualityProcedure.id, "checklist deve preservar vínculo com procedimento");
 assert.equal(qualitySnapshot.workOrderQualityRuns[0].status, "concluido", "execução de checklist deve registrar conclusão");
 assert.equal(qualitySnapshot.qualityEvents[0].status, "resolvida", "ocorrência deve registrar resolução");

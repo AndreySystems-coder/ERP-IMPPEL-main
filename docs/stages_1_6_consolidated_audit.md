@@ -206,3 +206,120 @@ Tecnicamente, a base das Etapas 1 a 6 esta funcional para iniciar planejamento d
 - Pequenas inconsistencias de UI/API e mensagens HTTP devem entrar em sprint curta de estabilizacao.
 
 Veredito: seguro avancar para a Etapa 7 somente apos sincronizar o GitHub ou trabalhando estritamente sobre este checkout local.
+
+---
+
+## Atualizacao do Gate - 2026-08-24
+
+### Estado do Git preservado
+
+- Branch: `main`.
+- HEAD local antes das correcoes: `f191d73dc79af96b3f62977f0d3cd631fd9a7715`.
+- `origin/main` antes das correcoes: `264c93f94edc9cd295c44bf3c25515eef4202ac2`.
+- Commits locais preservados: `7165f91719cca3a2605a2f3623347492ea85ee4e` e `f191d73dc79af96b3f62977f0d3cd631fd9a7715`.
+- Nenhum `reset`, recriacao de commit antigo ou descarte de alteracao foi executado.
+
+### Correcoes aplicadas no gate
+
+1. Permissoes explicitas:
+   - `/api/quality/procedures` e `/api/quality/checklist-templates` passaram a exigir `viewWorkOrders`, `editWorkOrders`, `registrarMaterials` ou `viewSettings`.
+   - Rotas administrativas de usuarios, backup e governanca comercial permanecem bloqueadas para cargos sem permissao.
+   - Estoque e indicadores de responsabilidade permanecem consultaveis por cargos operacionais que precisam desses dados: estoque, encarregado e aplicador.
+
+2. Estoque insuficiente:
+   - Criacao de movimentacao com quantidade zero/negativa retorna `400`.
+   - Saida acima do saldo retorna `409`.
+   - Atualizacao direta de movimentacao tambem valida quantidade e saldo.
+   - As mensagens retornadas sao de dominio operacional, sem stack trace.
+
+3. Contrato de Qualidade:
+   - Campo canonico dos procedimentos tecnicos: `name`.
+   - Payload legado com `title` e aceito somente como entrada e convertido para `name`.
+   - Backup/storage nao exporta `title` legado para `technicalProcedures`.
+
+### Matriz de permissoes validada por API
+
+Ambiente: servidor local `NODE_ENV=development`, storage em memoria, credenciais e usuarios sinteticos.
+
+| Perfil | Rota | Permissao esperada | HTTP esperado | HTTP obtido |
+| --- | --- | --- | --- | --- |
+| Admin | `/api/inventory` | admin | 200 | 200 |
+| Admin | `/api/quality/procedures` | admin | 200 | 200 |
+| Admin | `/api/material-responsibility/indicators` | admin | 200 | 200 |
+| Admin | `/api/commercial/indicators` | admin | 200 | 200 |
+| Admin | `/api/backup/completo` | admin | 200 | 200 |
+| Admin | `/api/users` | admin | 200 | 200 |
+| comercial | `/api/inventory` | sem permissao | 403 | 403 |
+| comercial | `/api/quality/procedures` | sem permissao | 403 | 403 |
+| comercial | `/api/material-responsibility/indicators` | sem permissao | 403 | 403 |
+| comercial | `/api/commercial/indicators` | rota admin no estado atual | 403 | 403 |
+| financeiro | `/api/inventory` | sem permissao | 403 | 403 |
+| financeiro | `/api/quality/procedures` | sem permissao | 403 | 403 |
+| financeiro | `/api/material-responsibility/indicators` | sem permissao | 403 | 403 |
+| financeiro | `/api/commercial/indicators` | rota admin no estado atual | 403 | 403 |
+| estoque | `/api/inventory` | `viewInventoryCurrent`/`editInventory` | 200 | 200 |
+| estoque | `/api/quality/procedures` | sem permissao | 403 | 403 |
+| estoque | `/api/material-responsibility/indicators` | `viewAllMaterials` | 200 | 200 |
+| encarregado | `/api/inventory` | `viewInventoryCurrent` | 200 | 200 |
+| encarregado | `/api/quality/procedures` | `viewWorkOrders` | 200 | 200 |
+| encarregado | `/api/material-responsibility/indicators` | `registrarMaterials` | 200 | 200 |
+| aplicador | `/api/inventory` | `registrarMaterials` leitura operacional | 200 | 200 |
+| aplicador | `/api/quality/procedures` | `registrarMaterials` leitura operacional | 200 | 200 |
+| aplicador | `/api/material-responsibility/indicators` | `registrarMaterials` | 200 | 200 |
+| sem permissao | `/api/inventory` | bloqueado | 403 | 403 |
+| sem permissao | `/api/quality/procedures` | bloqueado | 403 | 403 |
+| sem permissao | `/api/material-responsibility/indicators` | bloqueado | 403 | 403 |
+| sem permissao | `/api/commercial/indicators` | bloqueado | 403 | 403 |
+| sem permissao | `/api/backup/completo` | bloqueado | 403 | 403 |
+| sem permissao | `/api/users` | bloqueado | 403 | 403 |
+
+### Bloqueios validados
+
+| Caso | HTTP esperado | HTTP obtido | Observacao |
+| --- | --- | --- | --- |
+| Saldo suficiente em movimentacao | 201 | 201 | Movimento criado |
+| Saldo insuficiente em movimentacao | 409 | 409 | Mensagem operacional |
+| Quantidade zero | 400 | 400 | Dado invalido |
+| Quantidade negativa | 400 | 400 | Dado invalido |
+| Repeticao de saldo insuficiente | 409 | 409 | Idempotente quanto ao saldo |
+| Desconto sem permissao | 403 | 403 | Coberto pela suite operacional/API local |
+| OS com checklist/ocorrencia bloqueante | 409 | 409 | Coberto pela suite operacional |
+| Transferencia invalida | 400 | 400 | Coberto pela auditoria/API |
+| Devolucao invalida | 400 | 400 | Coberto pela auditoria/API |
+| Acesso sem permissao | 403 | 403 | Coberto pela matriz acima |
+
+### Validacao visual 2026-08-24
+
+Desktop:
+
+- `/dashboard`, `/orcamentos`, `/governanca-comercial`, `/qualidade-obras`, `/estoque/atual`, `/controle-materiais`, `/work-orders` e `/backups` carregaram sem erro de console e sem overflow horizontal relevante.
+- A tela de Qualidade executou acao real de registrar procedimento e exibiu feedback `Procedimento registrado`.
+- O modal de Movimentacoes abriu, exibiu campos e mostrou feedback visual de validacao ao tentar registrar sem item selecionado.
+
+Mobile 390x844:
+
+- `/dashboard`, `/orcamentos`, `/governanca-comercial`, `/qualidade-obras`, `/estoque/atual`, `/controle-materiais`, `/work-orders` e `/backups` carregaram sem erro de console e sem overflow horizontal relevante.
+
+Ressalva: a tentativa visual de saldo insuficiente nao chegou ao `409` porque o autocomplete do produto nao foi concluido na automacao curta; o bloqueio foi validado pela API e pelo teste operacional.
+
+### Validacoes tecnicas executadas
+
+- `npm install`: passou, mantendo avisos de vulnerabilidades do npm ja conhecidos.
+- `npx tsc --noEmit --incremental false`: passou.
+- `npm run build`: passou, mantendo avisos conhecidos de bundle grande e `import.meta` no build CJS.
+- `npm run test`: passou.
+- `npm run test:backup`: passou.
+- `npm run test:operational`: passou.
+- `git diff --check`: passou.
+
+### Veredito atualizado do gate
+
+- Etapas 1-6 tecnicamente consolidadas: SIM, com pendencias operacionais humanas ja registradas.
+- Permissoes explicitamente validadas: SIM para as rotas criticas auditadas.
+- Estoque insuficiente retorna status correto: SIM.
+- Contrato de Qualidade padronizado: SIM.
+- Bloqueios de backend validados: SIM para os casos cobertos por API/testes.
+- Desktop validado: SIM nas telas principais.
+- Mobile validado: SIM nas telas principais em 390x844.
+- Backup e restauracao validados: SIM por teste automatizado com dados sinteticos; PostgreSQL descartavel com dados reais segue pendente.
+- Seguro iniciar a Etapa 7: SIM somente apos sincronizar o GitHub com os commits locais.

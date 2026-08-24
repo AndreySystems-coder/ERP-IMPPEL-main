@@ -3,6 +3,28 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-24] - Correção final do gate das Etapas 1 a 6
+
+### Corrigido
+
+- APIs de leitura de Qualidade das Obras passaram a exigir permissões explicitas, deixando de depender apenas de usuário autenticado.
+- Movimentações de estoque com quantidade zero ou negativa agora retornam erro de domínio `400`.
+- Saídas de estoque acima do saldo disponível agora retornam `409` com mensagem operacional clara, sem stack trace ou erro interno.
+- Atualização direta de movimentação também passou a validar saldo antes de aplicar a alteração.
+- Contrato de Procedimentos Técnicos foi padronizado em `name`; payloads legados com `title` são aceitos apenas como compatibilidade de entrada e salvos no campo canônico.
+
+### Validação
+
+- `npm install`
+- `npx tsc --noEmit --incremental false`
+- `npm run build`
+- `npm run test`
+- `npm run test:backup`
+- `npm run test:operational`
+- `git diff --check`
+- Validação local em servidor `NODE_ENV=development` com storage em memória, usuários sintéticos e matriz de permissões por API.
+- Validação visual desktop e mobile 390x844 das áreas: Dashboard, Orçamentos, Governança Comercial, Qualidade das Obras, Estoque, Controle de Materiais, OS e Backups.
+
 ## [2026-08-21] - Fechamento tecnico da Etapa 6 de materiais e responsabilidade
 
 ### Adicionado

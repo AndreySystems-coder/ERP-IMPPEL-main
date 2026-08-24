@@ -579,6 +579,27 @@ function permissionMatches(permissions: Record<string, boolean>, permission: str
   return (COMPATIBLE_PERMISSIONS[permission] || []).some((key) => permissions[key]);
 }
 
+function isStockConflictError(error: unknown) {
+  return error instanceof Error && /estoque insuficiente/i.test(error.message);
+}
+
+function stockConflictResponse(error: unknown) {
+  return {
+    message: error instanceof Error
+      ? error.message
+      : "Estoque insuficiente para concluir a movimentação.",
+  };
+}
+
+function normalizeTechnicalProcedurePayload(payload: any) {
+  const next = { ...(payload || {}) };
+  if (!String(next.name || "").trim() && String(next.title || "").trim()) {
+    next.name = String(next.title).trim();
+  }
+  delete next.title;
+  return next;
+}
+
 function parsePermissionPayload(value: unknown) {
   if (typeof value === "string") {
     try { return JSON.parse(value); } catch { return {}; }
@@ -1343,17 +1364,17 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/quality/procedures", requireAuth, (req, res) => listCompleteRows("technicalProcedures", req, res));
+  app.get("/api/quality/procedures", requireAnyPermission(["viewWorkOrders", "editWorkOrders", "registrarMaterials", "viewSettings"]), (req, res) => listCompleteRows("technicalProcedures", req, res));
   app.post("/api/quality/procedures", requireAdmin, (req, res) => createCompleteRow("technicalProcedures", req, res, (payload) => {
     const actor = sessionActor(req);
     return {
-      ...payload,
+      ...normalizeTechnicalProcedurePayload(payload),
       status: payload.status || "rascunho",
       createdByUserId: payload.createdByUserId || actor.userId,
       createdByUsername: payload.createdByUsername || actor.username,
     };
   }));
-  app.patch("/api/quality/procedures/:id", requireAdmin, (req, res) => patchCompleteRow("technicalProcedures", req, res));
+  app.patch("/api/quality/procedures/:id", requireAdmin, (req, res) => patchCompleteRow("technicalProcedures", req, res, (payload) => normalizeTechnicalProcedurePayload(payload)));
   app.post("/api/quality/procedures/:id/approve", requireAdmin, async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -1379,7 +1400,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/quality/checklist-templates", requireAuth, (req, res) => listCompleteRows("checklistTemplates", req, res));
+  app.get("/api/quality/checklist-templates", requireAnyPermission(["viewWorkOrders", "editWorkOrders", "registrarMaterials", "viewSettings"]), (req, res) => listCompleteRows("checklistTemplates", req, res));
   app.post("/api/quality/checklist-templates", requireAdmin, (req, res) => createCompleteRow("checklistTemplates", req, res, (payload) => {
     const actor = sessionActor(req);
     return {
@@ -2472,6 +2493,7 @@ export async function registerRoutes(
     try {
       const { inventoryId, productName, type, quantity, date, month, notes } = req.body;
       if (!inventoryId || !type || !quantity) return res.status(400).json({ message: "inventoryId, type e quantity são obrigatórios" });
+      if (Number(quantity) <= 0) return res.status(400).json({ message: "Quantidade deve ser maior que zero." });
       const today = date || new Date().toISOString().split("T")[0];
       const mov = await storage.createInventoryMovement({
         inventoryId: Number(inventoryId), productName, type, quantity: Number(quantity), date: today,
@@ -2479,6 +2501,7 @@ export async function registerRoutes(
       });
       res.status(201).json(mov);
     } catch (err: any) {
+      if (isStockConflictError(err)) return res.status(409).json(stockConflictResponse(err));
       res.status(500).json({ message: err.message });
     }
   });
@@ -2487,6 +2510,7 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       const { inventoryId, productName, type, quantity, date, notes } = req.body;
       if (!inventoryId || !type || !quantity || !date) return res.status(400).json({ message: "Campos obrigatórios ausentes" });
+      if (Number(quantity) <= 0) return res.status(400).json({ message: "Quantidade deve ser maior que zero." });
       const monthLabel = new Date(date + "T12:00:00").toLocaleString("pt-BR", { month: "long", year: "numeric" });
       const updated = await storage.updateInventoryMovement(id, {
         inventoryId: Number(inventoryId), productName, type, quantity: Number(quantity),
@@ -2495,6 +2519,7 @@ export async function registerRoutes(
       if (!updated) return res.status(404).json({ message: "Movimentação não encontrada" });
       res.json(updated);
     } catch (err: any) {
+      if (isStockConflictError(err)) return res.status(409).json(stockConflictResponse(err));
       res.status(500).json({ message: err.message });
     }
   });
@@ -2526,7 +2551,7 @@ export async function registerRoutes(
       const results = [];
       for (const item of deduped.values()) {
         const qty = Number(item.quantity);
-        if (!qty) continue;
+        if (qty <= 0) return res.status(400).json({ message: "Quantidade deve ser maior que zero." });
         const itemType = item.type === "SAÍDA" ? "SAÍDA" : "ENTRADA";
         const mov = await storage.createInventoryMovement({
           inventoryId: Number(item.inventoryId),
@@ -2541,6 +2566,7 @@ export async function registerRoutes(
       }
       res.status(201).json(results);
     } catch (err: any) {
+      if (isStockConflictError(err)) return res.status(409).json(stockConflictResponse(err));
       res.status(500).json({ message: err.message });
     }
   });

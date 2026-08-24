@@ -122,6 +122,17 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   qualityEvents: { table: qualityEvents, dbName: "quality_events" },
 };
 
+function normalizeCompleteTableRow(tableKey: string, row: any) {
+  const next = { ...(row || {}) };
+  if (tableKey === "technicalProcedures") {
+    if (!String(next.name || "").trim() && String(next.title || "").trim()) {
+      next.name = String(next.title).trim();
+    }
+    delete next.title;
+  }
+  return next;
+}
+
 function selectedCompleteTables(modules: CompleteBackupModule[]) {
   return Array.from(new Set(modules.flatMap(moduleName => [...COMPLETE_BACKUP_MODULE_TABLES[moduleName]])));
 }
@@ -578,6 +589,9 @@ export class DatabaseStorage implements IStorage {
     return mov;
   }
   async createInventoryMovement(data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }, options: { applyToStock?: boolean; allowNegativeStock?: boolean } = {}): Promise<InventoryMovement> {
+    if (Number(data.quantity || 0) <= 0) {
+      throw new Error("Quantidade deve ser maior que zero.");
+    }
     if (options.applyToStock !== false && data.type !== "ENTRADA" && options.allowNegativeStock !== true) {
       const [item] = await db.select().from(inventory).where(eq(inventory.id, data.inventoryId));
       const available = Number(item?.quantity || 0);
@@ -596,8 +610,22 @@ export class DatabaseStorage implements IStorage {
     return mov;
   }
   async updateInventoryMovement(id: number, data: { inventoryId: number; productName: string; type: string; quantity: number; date: string; month?: string; notes?: string }): Promise<InventoryMovement | undefined> {
+    if (Number(data.quantity || 0) <= 0) {
+      throw new Error("Quantidade deve ser maior que zero.");
+    }
     const old = await this.getInventoryMovement(id);
     if (!old) return undefined;
+    if (data.type !== "ENTRADA") {
+      const [currentTarget] = await db.select().from(inventory).where(eq(inventory.id, data.inventoryId));
+      const sameItemRestored = Number(old.inventoryId) === Number(data.inventoryId) && old.type !== "ENTRADA"
+        ? Number(old.quantity || 0)
+        : 0;
+      const available = Number(currentTarget?.quantity || 0) + sameItemRestored;
+      const requested = Number(data.quantity || 0);
+      if (!currentTarget || requested > available) {
+        throw new Error(`Estoque insuficiente para ${data.productName}: solicitado ${requested}, disponível ${available}.`);
+      }
+    }
     // Reverse old movement effect on inventory
     const oldDelta = old.type === "ENTRADA" ? -old.quantity : old.quantity;
     await db.update(inventory)
@@ -1198,7 +1226,7 @@ export class DatabaseStorage implements IStorage {
   async createCompleteTableRow(tableKey: string, row: any): Promise<any> {
     const config = COMPLETE_TABLES[tableKey];
     if (!config) throw new Error(`Tabela de backup desconhecida: ${tableKey}`);
-    const [created] = await (db as any).insert(config.table).values(row || {}).returning();
+    const [created] = await (db as any).insert(config.table).values(normalizeCompleteTableRow(tableKey, row)).returning();
     return created;
   }
 
@@ -1207,7 +1235,7 @@ export class DatabaseStorage implements IStorage {
     if (!config) throw new Error(`Tabela de backup desconhecida: ${tableKey}`);
     const [updated] = await (db as any)
       .update(config.table)
-      .set({ ...(updates || {}), updatedAt: new Date() })
+      .set({ ...normalizeCompleteTableRow(tableKey, updates), updatedAt: new Date() })
       .where(eq((config.table as any).id, id))
       .returning();
     return updated;
@@ -1246,10 +1274,11 @@ export class DatabaseStorage implements IStorage {
         const schemaColumns = getTableColumns(config.table) as Record<string, { name: string }>;
 
         for (const row of rows) {
-          const entries = Object.entries(schemaColumns).filter(([property]) => row[property] !== undefined);
+          const normalizedRow = normalizeCompleteTableRow(key, row);
+          const entries = Object.entries(schemaColumns).filter(([property]) => normalizedRow[property] !== undefined);
           if (entries.length === 0) continue;
           const columnNames = entries.map(([, column]) => quoteIdentifier(column.name));
-          const values = entries.map(([property]) => row[property] ?? null);
+          const values = entries.map(([property]) => normalizedRow[property] ?? null);
           const placeholders = values.map((_, index) => `$${index + 1}`);
           const hasId = entries.some(([property]) => property === "id");
           const updates = entries
@@ -1346,14 +1375,16 @@ export function createMemoryStorage(): IStorage {
   const ids: Record<string, number> = Object.fromEntries(Object.keys(data).map(key => [key, 1]));
   const now = () => new Date();
   const insert = (table: string, row: any) => {
-    const saved = { id: ids[table]++, ...row, createdAt: row.createdAt ?? now() };
+    const normalizedRow = normalizeCompleteTableRow(table, row);
+    const saved = { id: ids[table]++, ...normalizedRow, createdAt: normalizedRow.createdAt ?? now() };
     data[table].push(saved);
     return saved;
   };
   const updateById = (table: string, id: number, updates: any) => {
     const index = data[table].findIndex(row => row.id === id);
     if (index < 0) return undefined;
-    data[table][index] = { ...data[table][index], ...updates, updatedAt: updates.updatedAt ?? data[table][index].updatedAt };
+    const normalizedUpdates = normalizeCompleteTableRow(table, updates);
+    data[table][index] = { ...data[table][index], ...normalizedUpdates, updatedAt: normalizedUpdates.updatedAt ?? data[table][index].updatedAt };
     return data[table][index];
   };
   const deleteById = (table: string, id: number) => {
@@ -1482,9 +1513,10 @@ export function createMemoryStorage(): IStorage {
         const rows = Array.isArray(backupData[key]) ? structuredClone(backupData[key]) : [];
         if (mode === "replace") data[key] = [];
         for (const row of rows) {
-          const index = data[key].findIndex(existing => existing.id === row.id);
-          if (index >= 0) data[key][index] = { ...data[key][index], ...row };
-          else data[key].push(row);
+          const normalizedRow = normalizeCompleteTableRow(key, row);
+          const index = data[key].findIndex(existing => existing.id === normalizedRow.id);
+          if (index >= 0) data[key][index] = { ...data[key][index], ...normalizedRow };
+          else data[key].push(normalizedRow);
         }
         ids[key] = Math.max(0, ...data[key].map(row => Number(row.id) || 0)) + 1;
         restored[key] = rows.length;
@@ -1549,6 +1581,9 @@ export function createMemoryStorage(): IStorage {
     getInventoryMovementsByProduct: async (inventoryId: number) => data.inventoryMovements.filter(row => row.inventoryId === inventoryId),
     getInventoryMovement: async (id: number) => data.inventoryMovements.find(row => row.id === id),
     createInventoryMovement: async (row: any, options: { applyToStock?: boolean; allowNegativeStock?: boolean } = {}) => {
+      if (Number(row?.quantity || 0) <= 0) {
+        throw new Error("Quantidade deve ser maior que zero.");
+      }
       if (options.applyToStock !== false && row?.type !== "ENTRADA" && options.allowNegativeStock !== true) {
         const item = data.inventory.find(inv => Number(inv.id) === Number(row.inventoryId));
         const available = Number(item?.quantity || 0);
@@ -1565,8 +1600,23 @@ export function createMemoryStorage(): IStorage {
       return movement;
     },
     updateInventoryMovement: async (id: number, updates: any) => {
+      if (Number(updates?.quantity || 0) <= 0) {
+        throw new Error("Quantidade deve ser maior que zero.");
+      }
       const old = data.inventoryMovements.find(row => row.id === id);
       if (!old) return undefined;
+      if (updates?.type !== "ENTRADA") {
+        const targetId = Number(updates?.inventoryId ?? old.inventoryId);
+        const targetItem = data.inventory.find(inv => Number(inv.id) === targetId);
+        const sameItemRestored = Number(old.inventoryId) === targetId && old.type !== "ENTRADA"
+          ? Number(old.quantity || 0)
+          : 0;
+        const available = Number(targetItem?.quantity || 0) + sameItemRestored;
+        const requested = Number(updates?.quantity || 0);
+        if (!targetItem || requested > available) {
+          throw new Error(`Estoque insuficiente para ${updates?.productName || old.productName}: solicitado ${requested}, disponível ${available}.`);
+        }
+      }
       const oldItem = data.inventory.find(inv => inv.id === old.inventoryId);
       if (oldItem) oldItem.quantity = Number(oldItem.quantity || 0) + (old.type === "ENTRADA" ? -Number(old.quantity || 0) : Number(old.quantity || 0));
       Object.assign(old, updates || {});

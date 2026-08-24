@@ -20,6 +20,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Homologar restore dos cinco PDFs reais em PostgreSQL descartavel, com segunda importacao e comparacao de saldo/idempotencia.
 - Confirmar com a IMPPEL/contabilidade a aliquota fiscal real antes de usar `taxPercent` em producao comercial definitiva.
 - Definir oficialmente alçadas, limites de desconto, regras de excecao de margem, gatilhos de bloqueio e responsaveis por aprovacao antes de operar a Governanca Comercial em producao.
+- Antes da Etapa 7, concluir o push dos commits locais para `origin/main` ou executar a etapa somente em checkout onde `HEAD` e `origin/main` estejam iguais.
 
 ### Medio
 
@@ -37,6 +38,8 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Homologar a Etapa 6 em piloto real: retirada, devolucao, transferencia, dano, perda, manutencao, contagem, treinamento e fechamento de OS.
 - Definir prazos reais de devolucao por categoria, obra, funcionario ou tipo de item.
 - Definir procedimento administrativo/juridico para qualquer providencia financeira relacionada a perdas e danos.
+- Homologar em banco PostgreSQL descartavel a matriz final de permissoes das Etapas 4 a 6, repetindo os testes feitos localmente em memoria.
+- Testar visualmente o erro 409 de estoque insuficiente na tela de Movimentacoes com produto selecionado via autocomplete; a API ja esta validada, mas a mensagem final da UI deve ser confirmada em fluxo manual completo.
 
 ### Melhoria
 
@@ -47,6 +50,7 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Integrar, em sprint futura, aprovacoes comerciais diretamente ao fluxo operacional de aceite do orcamento quando a politica da IMPPEL estiver definida.
 - Evoluir indicadores de Qualidade das Obras com filtros por servico, funcionario, cliente, fase e periodo apos validacao dos dados reais.
 - Evoluir relatorios de materiais com filtros por obra, funcionario, periodo, categoria, severidade e tempo medio de resolucao apos coleta de dados reais.
+- Avaliar se Governanca Comercial deve permanecer somente Admin ou se cargos comercial/financeiro devem receber consultas especificas sem expor margens, com permissao explicita e teste de regressao.
 
 ## Migrado de docs/task_plan.md
 
