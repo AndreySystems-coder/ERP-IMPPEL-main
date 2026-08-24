@@ -157,6 +157,14 @@ function safeJsonArray(value: unknown) {
   }
 }
 
+function coerceLeadPayloadDates(payload: any) {
+  const next = { ...(payload || {}) };
+  for (const field of ["nextContactDate", "lastInteractionAt", "stageEnteredAt"]) {
+    if (typeof next[field] === "string" && next[field].trim()) next[field] = new Date(next[field]);
+  }
+  return next;
+}
+
 function sessionActor(req: Request) {
   const session = req.session as any;
   return {
@@ -1310,7 +1318,14 @@ export async function registerRoutes(
 
   const normalizeLeadStatus = (value: unknown) => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const isLostLeadStatus = (value: unknown) => ["perdido", "lost"].includes(normalizeLeadStatus(value));
+  const isClosedLeadStatus = (value: unknown) => ["fechado", "ganho", "won", "perdido", "lost"].includes(normalizeLeadStatus(value));
   const appendLeadHistory = (history: unknown, entry: Record<string, unknown>) => JSON.stringify([...safeJsonArray(history), entry]);
+  const addDaysAtBusinessHour = (base: Date, days: number) => {
+    const due = new Date(base);
+    due.setDate(due.getDate() + days);
+    due.setHours(9, 0, 0, 0);
+    return due;
+  };
 
   app.get("/api/crm-pipeline-statuses", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrm"]), async (_req, res) => {
     try {
@@ -1329,6 +1344,43 @@ export async function registerRoutes(
     return { ...payload, createdByUserId: payload.createdByUserId || actor.userId, createdByUsername: payload.createdByUsername || actor.username };
   }));
   app.patch("/api/crm-followups/:id", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), (req, res) => patchCompleteRow("crmFollowUps", req, res));
+  app.post("/api/crm-followups/sequence", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), async (req, res) => {
+    try {
+      const leadId = Number(req.body?.leadId);
+      if (!leadId) return res.status(400).json({ message: "leadId é obrigatório." });
+      const lead = (await storage.getLeads()).find((item: any) => Number(item.id) === leadId);
+      if (!lead) return res.status(404).json({ message: "Lead não encontrado." });
+      if (isClosedLeadStatus((lead as any).status)) return res.status(409).json({ message: "Lead fechado ou perdido não recebe nova sequência automática." });
+      const actor = sessionActor(req);
+      const existing = await storage.getCompleteTableRows("crmFollowUps");
+      const baseDate = req.body?.baseDate ? new Date(req.body.baseDate) : new Date();
+      const created: any[] = [];
+      const skipped: any[] = [];
+      for (const days of [2, 5, 10]) {
+        const reason = `Follow-up D+${days}`;
+        const duplicate = existing.some((row: any) => Number(row.leadId) === leadId && String(row.reason || "") === reason && String(row.status || "pendente") === "pendente");
+        if (duplicate) {
+          skipped.push({ reason, motivo: "já existe pendente" });
+          continue;
+        }
+        created.push(await storage.createCompleteTableRow("crmFollowUps", {
+          leadId,
+          status: "pendente",
+          reason,
+          messageTemplate: req.body?.messageTemplate || `Mensagem sugerida para ${lead.name}. Confirmar envio manualmente antes de marcar como enviado.`,
+          assignedToUsername: req.body?.assignedToUsername || (lead as any).assignedToUsername || actor.username,
+          dueDate: addDaysAtBusinessHour(baseDate, days),
+          channel: "manual",
+          auditTrail: appendAuditTrail("[]", { action: "sequence_created", userId: actor.userId, username: actor.username, days }),
+          createdByUserId: actor.userId,
+          createdByUsername: actor.username,
+        }));
+      }
+      res.status(201).json({ created, skipped });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
 
   app.get("/api/crm-interactions", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), (req, res) => listCompleteRows("crmInteractions", req, res));
   app.post("/api/crm-interactions", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp"]), (req, res) => createCompleteRow("crmInteractions", req, res, (payload) => {
@@ -1342,6 +1394,37 @@ export async function registerRoutes(
     return { ...payload, createdByUserId: payload.createdByUserId || actor.userId, createdByUsername: payload.createdByUsername || actor.username };
   }));
   app.patch("/api/marketing-content/:id", requireAnyPermission(["viewMarketingContent", "viewCrm"]), (req, res) => patchCompleteRow("marketingContentPlans", req, res));
+  app.post("/api/marketing-content/generate-post", requireAnyPermission(["viewMarketingContent", "viewCrm"]), async (req, res) => {
+    try {
+      const type = String(req.body?.type || req.body?.category || "prova");
+      const serviceName = String(req.body?.serviceName || "Serviço IMPPEL");
+      const objective = String(req.body?.objective || "gerar conversa qualificada");
+      const channel = String(req.body?.channel || "Instagram");
+      const tone = String(req.body?.tone || "profissional e direto");
+      const cta = String(req.body?.cta || "Chame a IMPPEL no WhatsApp para avaliar seu caso.");
+      const allowedInfo = String(req.body?.allowedInfo || req.body?.idea || "usar apenas informações aprovadas pelo usuário");
+      const generated = {
+        provider: process.env.MARKETING_AI_PROVIDER || "mock-copy-mode",
+        status: process.env.MARKETING_AI_API_KEY ? "provider-ready" : "mock",
+        requiresHumanReview: true,
+        titles: [
+          `${serviceName}: o que observar antes de contratar`,
+          `Impermeabilização com foco em ${objective}`,
+          `Como a IMPPEL trata ${serviceName}`,
+        ],
+        caption: `[RASCUNHO PARA REVISÃO] Conteúdo de ${type} para ${channel}. Serviço: ${serviceName}. Objetivo: ${objective}. Tom: ${tone}. Informações permitidas: ${allowedInfo}.`,
+        cta,
+        hashtags: ["#impermeabilizacao", "#obras", "#imppel"],
+        shortScript: `Cena 1: problema. Cena 2: cuidado técnico. Cena 3: convite para diagnóstico. CTA: ${cta}`,
+        whatsappVariation: `Olá! Preparamos uma orientação sobre ${serviceName}. ${cta}`,
+        instagramVariation: `${serviceName} exige diagnóstico correto e execução responsável. ${cta}`,
+        warning: "Revisão humana obrigatória. Não publicar automaticamente, não usar fotos sem autorização e não prometer garantia não aprovada.",
+      };
+      res.json(generated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
 
   app.get("/api/help-articles", requireAnyPermission(["viewHelpCenter", "viewTeam", "viewWorks", "viewInventory", "viewCrm"]), (req, res) => listCompleteRows("helpArticles", req, res));
   app.post("/api/help-articles", requireAdmin, (req, res) => createCompleteRow("helpArticles", req, res, (payload) => {
@@ -1385,6 +1468,8 @@ export async function registerRoutes(
           lost: leads.filter((lead: any) => isLostLeadStatus(lead.status)).length,
           pendingFollowUps: followUps.filter((row: any) => String(row.status || "pendente") === "pendente").length,
           overdueFollowUps: followUps.filter((row: any) => String(row.status || "pendente") === "pendente" && new Date(row.dueDate).getTime() < now).length,
+          leadsWithoutResponsible: leads.filter((lead: any) => !isClosedLeadStatus(lead.status) && !String(lead.assignedToUsername || "").trim()).length,
+          leadsWithoutNextAction: leads.filter((lead: any) => !isClosedLeadStatus(lead.status) && (!String(lead.nextAction || "").trim() || !lead.nextContactDate)).length,
           interactions: interactions.length,
           contentPlans: contentPlans.length,
           duplicates: duplicates.length,
@@ -2282,7 +2367,7 @@ export async function registerRoutes(
   });
   app.post(api.leads.create.path, async (req, res) => {
     try {
-      const input = api.leads.create.input.parse(req.body);
+      const input = api.leads.create.input.parse(coerceLeadPayloadDates(req.body));
       if (isLostLeadStatus(input.status) && !String((input as any).lossReason || "").trim()) {
         return res.status(400).json({ message: "Informe o motivo de perda do lead." });
       }
@@ -2311,7 +2396,7 @@ export async function registerRoutes(
   });
   app.put(api.leads.update.path, async (req, res) => {
     try {
-      const input = api.leads.update.input.parse(req.body);
+      const input = api.leads.update.input.parse(coerceLeadPayloadDates(req.body));
       const id = Number(req.params.id);
       const current = (await storage.getLeads()).find(lead => Number(lead.id) === id);
       if (!current) return res.status(404).json({ message: "Not found" });

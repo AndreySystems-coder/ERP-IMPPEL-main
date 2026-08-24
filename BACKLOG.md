@@ -43,6 +43,9 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Homologar a Etapa 7 em PostgreSQL real com perfis comercial, marketing, financeiro, encarregado, aplicador e estoque.
 - Definir status oficiais do funil comercial e politicas de follow-up D+2/D+5/D+10 da IMPPEL.
 - Receber credenciais e documentacao oficial da Waseller antes de automatizar envio pelo WhatsApp.
+- Definir se a automacao futura sera direta Waseller ou via n8n; a base atual nao depende do n8n.
+- Configurar provedor de IA via variavel de ambiente para transformar o mock de geracao de posts em geracao real.
+- Configurar Meta/Instagram com conta de teste antes de qualquer publicacao automatica.
 - Preencher a Central Como Trabalhar com conteudo operacional real aprovado.
 
 ### Melhoria

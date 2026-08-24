@@ -20,6 +20,14 @@ Este arquivo registra riscos, problemas conhecidos, limitacoes e pendencias que 
 - Arquivos envolvidos: `client/src/pages/CommercialSystem.tsx`, `client/src/pages/CrmWhatsapp.tsx`, `server/routes.ts`.
 - Workaround: usar modelos de mensagem e follow-up manual ate a integracao real ser informada.
 
+### KI-011 - Geracao real de posts depende de provedor externo
+
+- Severidade: Medio.
+- Causa raiz: nao ha credencial de IA configurada no projeto.
+- Impacto: o ERP gera rascunho estruturado em modo mock/copy, mas nao comprova geracao por IA real.
+- Arquivos envolvidos: `client/src/pages/CommercialSystem.tsx`, `server/routes.ts`.
+- Workaround: usar o rascunho gerado para revisao humana e copiar para ferramenta externa ate configurar provedor oficial.
+
 ### KI-010 - Conteudo real da Central Como Trabalhar ainda depende da IMPPEL
 
 - Severidade: Medio.

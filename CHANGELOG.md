@@ -8,6 +8,8 @@ Usar entradas cronologicas, com impacto funcional, arquivos principais e validac
 ### Adicionado
 
 - Nova tela `Sistema Comercial` com funil, indicadores, busca de leads, duplicidades, follow-ups e planejamento de marketing.
+- Sequencia de follow-up D+2/D+5/D+10 com tarefas manuais idempotentes.
+- Gerador seguro de rascunho de post para revisão humana, em modo mock/copy quando nao ha provedor externo configurado.
 - Nova Central `Como Trabalhar` com guias por modulo e procedimentos de obra cadastrados.
 - Leads receberam campos de qualificacao, prioridade, proxima acao, historico, motivo de perda e dados B2B.
 - Novas tabelas para status de funil, follow-ups, interacoes, marketing, artigos de ajuda e auditoria de politica de retorno.
@@ -22,6 +24,7 @@ Usar entradas cronologicas, com impacto funcional, arquivos principais e validac
 ### Observacoes
 
 - Nenhuma integracao falsa com Waseller foi criada; o ERP permanece pronto para integracao futura mediante credenciais/API real.
+- n8n foi classificado como opcional, nao necessario para operar a Etapa 7 em fluxo assistido.
 - Conteudo tecnico real da IMPPEL nao foi inventado.
 
 ## [2026-08-24] - Correção final do gate das Etapas 1 a 6

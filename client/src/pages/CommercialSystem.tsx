@@ -23,7 +23,8 @@ export default function CommercialSystem() {
   const { toast } = useToast();
   const [leadFilter, setLeadFilter] = useState("");
   const [followUp, setFollowUp] = useState({ leadId: "", reason: "Follow-up D+2", dueDate: "", messageTemplate: "" });
-  const [content, setContent] = useState({ title: "", channel: "Instagram", objective: "", idea: "" });
+  const [content, setContent] = useState({ title: "", channel: "Instagram", objective: "", idea: "", category: "prova", serviceName: "", cta: "" });
+  const [generatedPost, setGeneratedPost] = useState<any>(null);
 
   const { data: dashboard } = useQuery<Dashboard>({ queryKey: ["/api/stage7/commercial-dashboard"] });
   const { data: leads = [] } = useQuery<any[]>({ queryKey: ["/api/leads"] });
@@ -50,14 +51,29 @@ export default function CommercialSystem() {
     },
   });
 
+  const createFollowUpSequence = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/crm-followups/sequence", { leadId: Number(followUp.leadId), messageTemplate: followUp.messageTemplate }),
+    onSuccess: async (response) => {
+      const result = await response.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/crm-followups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stage7/commercial-dashboard"] });
+      toast({ title: "Sequência criada", description: `${result.created?.length || 0} tarefas criadas, ${result.skipped?.length || 0} ignoradas.` });
+    },
+  });
+
   const createPlan = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/marketing-content", content),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/marketing-content"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stage7/commercial-dashboard"] });
-      setContent({ title: "", channel: "Instagram", objective: "", idea: "" });
+      setContent({ title: "", channel: "Instagram", objective: "", idea: "", category: "prova", serviceName: "", cta: "" });
       toast({ title: "Ideia de conteúdo registrada" });
     },
+  });
+
+  const generatePost = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/marketing-content/generate-post", content),
+    onSuccess: async (response) => setGeneratedPost(await response.json()),
   });
 
   return (
@@ -78,6 +94,14 @@ export default function CommercialSystem() {
           <Card key={label}><CardContent className="flex items-center justify-between p-4"><div><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-bold">{value}</p></div><Icon className="h-5 w-5 text-primary" /></CardContent></Card>
         ))}
       </section>
+
+      {((dashboard?.totals?.leadsWithoutResponsible || 0) > 0 || (dashboard?.totals?.leadsWithoutNextAction || 0) > 0) && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="p-4 text-sm text-amber-900">
+            Atenção: {dashboard?.totals?.leadsWithoutResponsible || 0} lead(s) ativo(s) sem responsável e {dashboard?.totals?.leadsWithoutNextAction || 0} sem próxima ação/data. Corrija em Leads antes da rotina comercial.
+          </CardContent>
+        </Card>
+      )}
 
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -116,6 +140,7 @@ export default function CommercialSystem() {
             <Input type="datetime-local" value={followUp.dueDate} onChange={(event) => setFollowUp({ ...followUp, dueDate: event.target.value })} />
             <Textarea placeholder="Mensagem para copiar no WhatsApp" value={followUp.messageTemplate} onChange={(event) => setFollowUp({ ...followUp, messageTemplate: event.target.value })} />
             <Button className="w-full" onClick={() => createFollowUp.mutate()} disabled={createFollowUp.isPending}>Registrar</Button>
+            <Button className="w-full" variant="outline" onClick={() => createFollowUpSequence.mutate()} disabled={!followUp.leadId || createFollowUpSequence.isPending}>Gerar D+2/D+5/D+10</Button>
           </CardContent>
         </Card>
       </section>
@@ -125,9 +150,25 @@ export default function CommercialSystem() {
         <CardContent className="grid gap-3 md:grid-cols-4">
           <Input placeholder="Título" value={content.title} onChange={(event) => setContent({ ...content, title: event.target.value })} />
           <Input placeholder="Canal" value={content.channel} onChange={(event) => setContent({ ...content, channel: event.target.value })} />
+          <select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={content.category} onChange={(event) => setContent({ ...content, category: event.target.value })}>
+            <option value="prova">Prova</option>
+            <option value="autoridade">Autoridade</option>
+            <option value="conversao">Conversão</option>
+          </select>
+          <Input placeholder="Serviço" value={content.serviceName} onChange={(event) => setContent({ ...content, serviceName: event.target.value })} />
           <Input placeholder="Objetivo" value={content.objective} onChange={(event) => setContent({ ...content, objective: event.target.value })} />
+          <Input placeholder="CTA" value={content.cta} onChange={(event) => setContent({ ...content, cta: event.target.value })} />
+          <Button onClick={() => generatePost.mutate()} disabled={generatePost.isPending}>Gerar rascunho</Button>
           <Button onClick={() => createPlan.mutate()} disabled={!content.title.trim() || createPlan.isPending}>Salvar ideia</Button>
           <Textarea className="md:col-span-4" placeholder="Ideia, roteiro ou gancho do conteúdo" value={content.idea} onChange={(event) => setContent({ ...content, idea: event.target.value })} />
+          {generatedPost && (
+            <div className="md:col-span-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="font-semibold">Rascunho gerado para revisão humana</p>
+              <p className="mt-2">{generatedPost.caption}</p>
+              <p className="mt-2 text-slate-600">{generatedPost.shortScript}</p>
+              <p className="mt-2 text-amber-700">{generatedPost.warning}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
