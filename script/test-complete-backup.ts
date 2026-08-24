@@ -90,6 +90,12 @@ const syntheticData: Record<string, any[]> = {
   crmInteractions: [{ id: 1, leadId: 1, channel: "sistema", direction: "internal", summary: "Lead qualificado", status: "qualificado" }],
   marketingContentPlans: [{ id: 1, title: "Antes e depois sintético", channel: "Instagram", objective: "Prova social", status: "ideia", auditTrail: JSON.stringify([{ action: "created" }]) }],
   helpArticles: [{ id: 1, moduleKey: "materiais", title: "Como registrar retirada", audience: "Equipe", summary: "Guia sintético", routePath: "/controle-materiais", status: "ativo", version: 1 }],
+  visualBrandKits: [{ id: 1, name: "Kit Visual Sintético", brandName: "IMPP_EL", primaryColor: "#0f766e", secondaryColor: "#1d4ed8", typography: "Fonte do ERP", status: "aprovado", version: 1, auditTrail: JSON.stringify([{ action: "created" }]) }],
+  visualMediaStandards: [{ id: 1, mediaType: "foto", purpose: "Evidência técnica", phase: "antes", minQuantity: 1, orientation: "qualquer", instructions: JSON.stringify(["PENDENTE DE APROVAÇÃO DA IMPPEL"]), status: "rascunho" }],
+  visualMediaAuthorizations: [{ id: 1, clientName: "Cliente Sintetico", authorizationType: "imagem", allowedChannels: JSON.stringify(["whatsapp"]), purpose: "marketing", status: "autorizado", auditTrail: JSON.stringify([{ action: "created" }]) }],
+  visualAssets: [{ id: 1, name: "Foto visual sintética", assetType: "imagem", source: "upload", originalData: png, thumbnailData: png, derivedData: png, mimeType: "image/png", fileSize: 68, checksum: "checksum-visual", purpose: "marketing", phase: "antes", authorizationId: 1, authorizationStatus: "autorizado", processingStatus: "original_preservado", metadata: JSON.stringify({ synthetic: true }) }],
+  visualTemplates: [{ id: 1, name: "Story Antes Depois", templateType: "antes_depois", channel: "Instagram", format: "story", brandKitId: 1, config: JSON.stringify({ width: 1080, height: 1920 }), status: "rascunho", version: 1 }],
+  visualCompositions: [{ id: 1, title: "Antes e Depois Sintético", compositionType: "antes_depois", beforeAssetId: 1, afterAssetId: 1, templateId: 1, brandKitId: 1, format: "whatsapp", caption: "PENDENTE DE APROVAÇÃO DA IMPPEL", outputData: png, authorizationStatus: "autorizado", status: "rascunho" }],
   materialReturnPolicyAudits: [{ id: 1, inventoryId: 2, productName: "Furadeira Sintetica", previousType: "material", newType: "ferramenta", previousPolicy: "consumivel", newPolicy: "retornavel", reason: "Correção sintética" }],
   paymentMethods: [{ id: 1, name: "Pix", active: true }],
   paymentConditions: [{ id: 1, name: "À vista", active: true }],
@@ -124,7 +130,7 @@ const requiredFiles = [
   "ordensServico.json", "registrosObra.json", "materiais.json", "estoque.json", "movimentacoes.json",
   "produtos.json", "vendasMateriais.json", "servicos.json", "financeiro.json", "garantias.json", "importacoesRapidas.json",
   "posVenda.json", "configuracoes.json", "formasPagamento.json", "condicoesPagamento.json", "governancaComercial.json",
-  "qualidadeObras.json", "sistemaComercial.json", "marketingConteudo.json", "centralAjuda.json", "auditoriaMateriais.json",
+  "qualidadeObras.json", "sistemaComercial.json", "marketingConteudo.json", "centralAjuda.json", "identidadeVisual.json", "auditoriaMateriais.json",
   "attachments/index.json", "relatorios/relatorio-conferencia.pdf", "ERP-IMPPEL-backup-completo.json",
 ];
 requiredFiles.forEach(path => assert.ok(files[path], `arquivo ausente no ZIP: ${path}`));
@@ -175,6 +181,12 @@ assert.equal(restored.crmFollowUps[0].reason, "Follow-up D+2", "follow-up comerc
 assert.equal(restored.crmInteractions[0].summary, "Lead qualificado", "interação comercial não foi restaurada");
 assert.equal(restored.marketingContentPlans[0].objective, "Prova social", "planejamento de marketing não foi restaurado");
 assert.equal(restored.helpArticles[0].routePath, "/controle-materiais", "central Como Trabalhar não foi restaurada");
+assert.equal(restored.visualBrandKits[0].status, "aprovado", "kit visual aprovado não foi restaurado");
+assert.equal(restored.visualMediaStandards[0].purpose, "Evidência técnica", "padrão visual não foi restaurado");
+assert.equal(restored.visualMediaAuthorizations[0].status, "autorizado", "autorização visual não foi restaurada");
+assert.equal(restored.visualAssets[0].authorizationStatus, "autorizado", "asset visual não preservou autorização");
+assert.equal(restored.visualTemplates[0].templateType, "antes_depois", "template visual não foi restaurado");
+assert.equal(restored.visualCompositions[0].format, "whatsapp", "composição antes/depois não foi restaurada");
 assert.equal(restored.materialReturnPolicyAudits[0].newPolicy, "retornavel", "auditoria de política de retorno não foi restaurada");
 
 const partialTarget = createMemoryStorage();

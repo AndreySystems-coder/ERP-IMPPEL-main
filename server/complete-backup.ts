@@ -106,6 +106,7 @@ export const TECHNICAL_BACKUP_TYPES: Record<string, { module: CompleteBackupModu
   sistemaComercial: { module: "sistemaComercial", tables: ["crmPipelineStatuses", "crmFollowUps", "crmInteractions"], label: "Sistema Comercial" },
   marketingConteudo: { module: "marketingConteudo", tables: ["marketingContentPlans"], label: "Marketing e Conteúdo" },
   centralAjuda: { module: "centralAjuda", tables: ["helpArticles"], label: "Como Trabalhar" },
+  identidadeVisual: { module: "identidadeVisual", tables: ["visualBrandKits", "visualMediaStandards", "visualMediaAuthorizations", "visualAssets", "visualTemplates", "visualCompositions"], label: "Identidade Visual" },
   auditoriaMateriais: { module: "auditoriaMateriais", tables: ["materialReturnPolicyAudits"], label: "Auditoria de Materiais" },
 };
 
@@ -171,6 +172,9 @@ export async function buildCompleteBackupPackage(
     fotosDevolucao: (snapshot.materialWithdrawals || []).filter((row: any) => hasContent(row.returnPhoto)).length,
     assinaturasRetirada: (snapshot.materialWithdrawals || []).filter((row: any) => hasContent(row.withdrawalSignature)).length,
     assinaturasDevolucao: (snapshot.materialWithdrawals || []).filter((row: any) => hasContent(row.returnSignature)).length,
+    originaisVisuais: (snapshot.visualAssets || []).filter((row: any) => hasContent(row.originalData)).length,
+    derivadosVisuais: (snapshot.visualAssets || []).filter((row: any) => hasContent(row.derivedData)).length,
+    miniaturasVisuais: (snapshot.visualAssets || []).filter((row: any) => hasContent(row.thumbnailData)).length,
     contratosAssinados: (snapshot.contracts || []).filter((row: any) => hasContent(row.signedDocumentData)).length,
     anexosStatus: (snapshot.jobStatuses || []).filter((row: any) => hasContent(row.extraFileData)).length,
   };

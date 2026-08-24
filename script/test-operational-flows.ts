@@ -1060,4 +1060,26 @@ assert.equal(stage7Snapshot.marketingContentPlans[0].objective, "Prova social", 
 assert.equal(stage7Snapshot.helpArticles[0].routePath, "/sistema-comercial", "Como Trabalhar deve entrar no backup");
 assert.equal(stage7Snapshot.materialReturnPolicyAudits[0].reason, "Correção operacional", "alteração de política de retorno deve ser auditável");
 
-console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel, entrada por cargo, qualidade das obras, responsabilidade de materiais e Etapa 7 comercial/ajuda/marketing.");
+const visualViewer = { role: "funcionario", permissions: { viewVisualIdentity: true } };
+const visualEditor = { role: "funcionario", permissions: { viewVisualIdentity: true, editVisualIdentity: true, uploadVisualAssets: true, generateVisualMaterials: true } };
+assert.equal(canAccess(visualViewer, "viewVisualIdentity"), true, "usuário autorizado deve ver identidade visual");
+assert.equal(canAccess(visualViewer, "editVisualIdentity"), false, "visualização não pode conceder edição visual");
+assert.equal(canAccess(visualEditor, "viewVisualIdentity"), true, "edição visual deve herdar leitura");
+assert.equal(canAccess(visualEditor, "uploadVisualAssets"), true, "editor autorizado deve enviar assets");
+assert.equal(canAccess(visualEditor, "approveVisualIdentity"), false, "editor visual não deve aprovar sem permissão explícita");
+
+const stage8Storage = createMemoryStorage();
+const stage8Png = "data:image/png;base64,sintetico";
+await stage8Storage.createCompleteTableRow("visualBrandKits", { name: "Kit Etapa 8", brandName: "IMPP_EL", primaryColor: "#0f766e", secondaryColor: "#1d4ed8", typography: "Fonte do ERP", status: "aprovado", version: 1, auditTrail: "[]" });
+await stage8Storage.createCompleteTableRow("visualMediaStandards", { mediaType: "foto", purpose: "Antes", phase: "antes", minQuantity: 1, orientation: "horizontal", instructions: JSON.stringify(["PENDENTE DE APROVAÇÃO DA IMPPEL"]), requiresAuthorization: true, status: "rascunho" });
+await stage8Storage.createCompleteTableRow("visualMediaAuthorizations", { clientName: "Cliente Etapa 8", authorizationType: "imagem", allowedChannels: JSON.stringify(["WhatsApp"]), purpose: "marketing", status: "autorizado", auditTrail: "[]" });
+await stage8Storage.createCompleteTableRow("visualAssets", { name: "Foto Etapa 8", assetType: "imagem", source: "upload", originalData: stage8Png, thumbnailData: stage8Png, mimeType: "image/png", fileSize: 68, purpose: "marketing", authorizationStatus: "autorizado", processingStatus: "original_preservado", metadata: JSON.stringify({ originalPreserved: true }), auditTrail: "[]" });
+await stage8Storage.createCompleteTableRow("visualTemplates", { name: "WhatsApp pós-obra", templateType: "whatsapp", channel: "WhatsApp", textTemplate: "Mensagem sintética pendente de aprovação", status: "rascunho", version: 1 });
+await stage8Storage.createCompleteTableRow("visualCompositions", { title: "Antes Depois Etapa 8", compositionType: "antes_depois", beforeAssetId: 1, afterAssetId: 1, format: "whatsapp", authorizationStatus: "autorizado", status: "rascunho", outputData: stage8Png });
+const stage8Snapshot = await stage8Storage.getCompleteBackupData();
+assert.equal(stage8Snapshot.visualBrandKits[0].status, "aprovado", "kit visual deve entrar no backup operacional");
+assert.equal(stage8Snapshot.visualMediaStandards[0].requiresAuthorization, true, "padrão visual deve preservar exigência de autorização");
+assert.equal(stage8Snapshot.visualAssets[0].originalData, stage8Png, "asset visual deve preservar original");
+assert.equal(stage8Snapshot.visualCompositions[0].compositionType, "antes_depois", "antes/depois deve entrar no backup");
+
+console.log("Fluxos operacionais validados: Admin idempotente, aprovação idempotente, baixa de estoque, contrato PDF de materiais, restore histórico sem impacto de saldo, ferramentas retornaveis, regra consumivel/retornavel, entrada por cargo, qualidade das obras, responsabilidade de materiais, Etapa 7 comercial/ajuda/marketing e Etapa 8 identidade visual.");

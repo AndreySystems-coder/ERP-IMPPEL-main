@@ -96,6 +96,7 @@ export const MODULE_LABELS: Record<string, string> = {
   sistemaComercial: "Sistema comercial",
   marketingConteudo: "Marketing e conteúdo",
   centralAjuda: "Como Trabalhar",
+  identidadeVisual: "Identidade visual",
   auditoriaMateriais: "Auditoria de materiais",
 };
 
@@ -153,6 +154,12 @@ export const TABLE_LABELS: Record<string, string> = {
   crmInteractions: "Interações comerciais",
   marketingContentPlans: "Planejamento de marketing",
   helpArticles: "Como Trabalhar",
+  visualBrandKits: "Kits visuais",
+  visualMediaStandards: "Padrões de foto/vídeo",
+  visualMediaAuthorizations: "Autorizações de imagem",
+  visualAssets: "Biblioteca visual",
+  visualTemplates: "Templates visuais",
+  visualCompositions: "Composições antes/depois",
   materialReturnPolicyAudits: "Auditoria de política de retorno",
 };
 
@@ -203,6 +210,7 @@ export function buildTechnicalFiles(backup: CompleteBackupPackage): TechnicalFil
     ["sistemaComercial.json", "sistemaComercial", "sistemaComercial", ["crmPipelineStatuses", "crmFollowUps", "crmInteractions"], backup.data.sistemaComercial || {}],
     ["marketingConteudo.json", "marketingConteudo", "marketingConteudo", ["marketingContentPlans"], backup.data.marketingConteudo || {}],
     ["centralAjuda.json", "centralAjuda", "centralAjuda", ["helpArticles"], backup.data.centralAjuda || {}],
+    ["identidadeVisual.json", "identidadeVisual", "identidadeVisual", ["visualBrandKits", "visualMediaStandards", "visualMediaAuthorizations", "visualAssets", "visualTemplates", "visualCompositions"], backup.data.identidadeVisual || {}],
     ["auditoriaMateriais.json", "auditoriaMateriais", "auditoriaMateriais", ["materialReturnPolicyAudits"], backup.data.auditoriaMateriais || {}],
   ];
 

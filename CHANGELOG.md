@@ -3,6 +3,21 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-24] - Implementacao da Etapa 8 identidade visual
+
+### Adicionado
+
+- Nova tela `Identidade Visual` para kit visual, padroes de foto/video, autorizacoes, biblioteca visual, templates e composicoes antes/depois.
+- Novas APIs `/api/visual-*` com validacao de upload, autorizacao, checksum, preservacao de original e permissoes explicitas.
+- Novo modulo de backup `identidadeVisual` com tabelas de kits, padroes, autorizacoes, assets, templates e composicoes.
+- Central Como Trabalhar recebeu guia base para fotos, videos, autorizacoes e uso de identidade visual.
+- Testes de backup e operacionais passaram a cobrir dados visuais, permissoes e preservacao de originais.
+
+### Observacoes
+
+- Nenhuma marca oficial, slogan, foto real ou conteudo privado foi inventado.
+- Processamento real de video, IA real, Waseller e Meta/Instagram permanecem dependencias externas.
+
 ## [2026-08-24] - Implementacao da Etapa 7 comercial e experiencia operacional
 
 ### Adicionado

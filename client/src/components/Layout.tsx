@@ -27,6 +27,7 @@ import {
   Settings,
   Shield,
   ShoppingCart,
+  Palette,
   Tag,
   TrendingDown,
   Users,
@@ -76,6 +77,7 @@ const ALL_SECTIONS: NavSection[] = [
       { name: "Leads", path: "/leads", icon: Users, permission: "viewLeads" },
       { name: "Clientes", path: "/clients", icon: Building2, permission: "viewClients" },
       { name: "Marketing", path: "/marketing-conteudo", icon: MessageSquare, permission: "viewMarketingContent" },
+      { name: "Identidade Visual", path: "/identidade-visual", icon: Palette, permission: "viewVisualIdentity" },
     ],
   },
   {

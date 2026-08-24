@@ -1426,6 +1426,156 @@ export async function registerRoutes(
     }
   });
 
+  const VISUAL_READ_PERMISSIONS = ["viewVisualIdentity", "viewMarketingContent", "viewHelpCenter"] as const;
+  const VISUAL_EDIT_PERMISSIONS = ["editVisualIdentity", "approveVisualIdentity", "viewMarketingContent"] as const;
+  const VISUAL_PRIVATE_PERMISSIONS = ["viewVisualOriginals", "editVisualIdentity", "approveVisualIdentity"] as const;
+  const allowedVisualMime = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4", "video/webm"]);
+  const publicPurposes = new Set(["marketing", "instagram", "whatsapp", "site", "orcamento", "antes_depois"]);
+  const visualTableKeys = ["visualBrandKits", "visualMediaStandards", "visualMediaAuthorizations", "visualAssets", "visualTemplates", "visualCompositions"];
+
+  function parseDataUri(value: unknown) {
+    const text = String(value || "");
+    const match = /^data:([^;,]+);base64,([a-z0-9+/=\r\n]+)$/i.exec(text);
+    if (!match) return null;
+    const bytes = Math.floor(match[2].replace(/\s/g, "").length * 0.75);
+    return { mimeType: match[1].toLowerCase(), bytes };
+  }
+
+  function validateVisualAssetPayload(payload: any) {
+    const media = parseDataUri(payload.originalData);
+    if (!media) throw new Error("Envie um arquivo em data URI base64 gerado pelo ERP.");
+    if (!allowedVisualMime.has(media.mimeType)) throw new Error("Formato não permitido. Use PNG, JPG, WEBP, GIF, MP4 ou WEBM.");
+    const isVideo = media.mimeType.startsWith("video/");
+    const maxBytes = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (media.bytes > maxBytes) throw new Error(`Arquivo excede o limite de ${isVideo ? "25MB" : "5MB"}.`);
+    return media;
+  }
+
+  function ensureVisualPublicAuthorization(payload: any) {
+    const purpose = String(payload.purpose || payload.assetType || "").toLowerCase();
+    const status = String(payload.authorizationStatus || "nao_solicitado").toLowerCase();
+    if (publicPurposes.has(purpose) && ["negado", "revogado"].includes(status)) {
+      throw new Error("Imagem ou vídeo sem autorização válida não pode ser preparado para uso público.");
+    }
+  }
+
+  function visualActorPayload(req: Request, payload: any) {
+    const actor = sessionActor(req);
+    return {
+      ...payload,
+      createdByUserId: payload.createdByUserId || actor.userId,
+      createdByUsername: payload.createdByUsername || actor.username,
+      auditTrail: appendAuditTrail(payload.auditTrail, { action: "created", ...actor }),
+    };
+  }
+
+  app.get("/api/visual-identity/summary", requireAnyPermission([...VISUAL_READ_PERMISSIONS]), async (_req, res) => {
+    try {
+      const [brandKits, standards, authorizations, assets, templates, compositions] = await Promise.all(
+        visualTableKeys.map(key => storage.getCompleteTableRows(key)),
+      );
+      const approvedKit = brandKits.find((kit: any) => kit.status === "aprovado") || null;
+      res.json({
+        approvedKit,
+        totals: {
+          brandKits: brandKits.length,
+          standards: standards.length,
+          authorizations: authorizations.length,
+          assets: assets.length,
+          templates: templates.length,
+          compositions: compositions.length,
+          pendingApproval: [...brandKits, ...templates, ...compositions].filter((row: any) => ["rascunho", "em_revisao"].includes(String(row.status || ""))).length,
+          blockedPublicUse: assets.filter((row: any) => ["negado", "revogado"].includes(String(row.authorizationStatus || ""))).length,
+        },
+        externalDependencies: {
+          realAi: !process.env.MARKETING_AI_API_KEY,
+          waseller: true,
+          metaInstagram: true,
+          videoProcessing: true,
+        },
+      });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.get("/api/visual-brand-kits", requireAnyPermission([...VISUAL_READ_PERMISSIONS]), (req, res) => listCompleteRows("visualBrandKits", req, res));
+  app.post("/api/visual-brand-kits", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS]), (req, res) => createCompleteRow("visualBrandKits", req, res, payload => visualActorPayload(req, payload)));
+  app.patch("/api/visual-brand-kits/:id", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS]), (req, res) => patchCompleteRow("visualBrandKits", req, res));
+
+  app.get("/api/visual-media-standards", requireAnyPermission([...VISUAL_READ_PERMISSIONS, "registrarMaterials", "viewWorkOrders"]), (req, res) => listCompleteRows("visualMediaStandards", req, res));
+  app.post("/api/visual-media-standards", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS]), (req, res) => createCompleteRow("visualMediaStandards", req, res, payload => visualActorPayload(req, payload)));
+  app.patch("/api/visual-media-standards/:id", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS]), (req, res) => patchCompleteRow("visualMediaStandards", req, res));
+
+  app.get("/api/visual-media-authorizations", requireAnyPermission([...VISUAL_PRIVATE_PERMISSIONS, "viewMarketingContent"]), (req, res) => listCompleteRows("visualMediaAuthorizations", req, res));
+  app.post("/api/visual-media-authorizations", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS]), (req, res) => createCompleteRow("visualMediaAuthorizations", req, res, payload => visualActorPayload(req, payload)));
+  app.patch("/api/visual-media-authorizations/:id", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS]), (req, res) => patchCompleteRow("visualMediaAuthorizations", req, res));
+
+  app.get("/api/visual-assets", requireAnyPermission([...VISUAL_READ_PERMISSIONS, "registrarMaterials"]), async (req, res) => {
+    try {
+      const canViewOriginals = Boolean((req as any).user?.role === "admin" || VISUAL_PRIVATE_PERMISSIONS.some(permission => (req as any).user?.permissions?.[permission]));
+      const rows = await storage.getCompleteTableRows("visualAssets");
+      res.json(rows.map((row: any) => canViewOriginals ? row : { ...row, originalData: undefined }));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+  app.post("/api/visual-assets", requireAnyPermission(["uploadVisualAssets", "editVisualIdentity", "viewMarketingContent", "registrarMaterials"]), async (req, res) => {
+    try {
+      const payload = cleanPayload(req.body || {});
+      ensureVisualPublicAuthorization(payload);
+      const media = validateVisualAssetPayload(payload);
+      const created = await storage.createCompleteTableRow("visualAssets", visualActorPayload(req, {
+        ...payload,
+        mimeType: media.mimeType,
+        assetType: payload.assetType || (media.mimeType.startsWith("video/") ? "video" : "imagem"),
+        fileSize: media.bytes,
+        checksum: createHash("sha256").update(String(payload.originalData)).digest("hex"),
+        thumbnailData: media.mimeType.startsWith("image/") ? payload.originalData : payload.thumbnailData || null,
+        processingStatus: media.mimeType.startsWith("video/") ? "pendente_video_externo" : "original_preservado",
+        processingNotes: media.mimeType.startsWith("video/") ? "Processamento de vídeo exige FFmpeg ou serviço externo." : "Original preservado; derivados são gerados separadamente.",
+      }));
+      res.status(201).json(created);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+  app.patch("/api/visual-assets/:id", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS, "uploadVisualAssets"]), (req, res) => patchCompleteRow("visualAssets", req, res, (payload) => {
+    ensureVisualPublicAuthorization(payload);
+    if (payload.originalData) {
+      const media = validateVisualAssetPayload(payload);
+      payload.mimeType = media.mimeType;
+      payload.fileSize = media.bytes;
+      payload.checksum = createHash("sha256").update(String(payload.originalData)).digest("hex");
+    }
+    return payload;
+  }));
+
+  app.post("/api/visual-compositions/preview", requireAnyPermission(["generateVisualMaterials", "viewMarketingContent", "editVisualIdentity"]), async (req, res) => {
+    try {
+      const { beforeAssetId, afterAssetId, title = "Antes e Depois", caption = "", format = "whatsapp" } = req.body || {};
+      const assets = await storage.getCompleteTableRows("visualAssets");
+      const before = assets.find((row: any) => Number(row.id) === Number(beforeAssetId));
+      const after = assets.find((row: any) => Number(row.id) === Number(afterAssetId));
+      if (!before || !after) return res.status(404).json({ message: "Selecione imagens de antes e depois válidas." });
+      for (const asset of [before, after]) ensureVisualPublicAuthorization({ purpose: "antes_depois", authorizationStatus: asset.authorizationStatus });
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080"><rect width="1080" height="1080" fill="#f8fafc"/><text x="54" y="90" font-family="Arial" font-size="44" font-weight="700" fill="#0f172a">${String(title).replace(/[<>&]/g, "")}</text><rect x="54" y="140" width="470" height="700" fill="#e2e8f0"/><rect x="556" y="140" width="470" height="700" fill="#dbeafe"/><text x="230" y="500" font-family="Arial" font-size="52" fill="#334155">ANTES</text><text x="730" y="500" font-family="Arial" font-size="52" fill="#1e3a8a">DEPOIS</text><text x="54" y="910" font-family="Arial" font-size="30" fill="#475569">${String(caption).replace(/[<>&]/g, "").slice(0, 120)}</text><text x="54" y="1000" font-family="Arial" font-size="24" fill="#0f766e">PENDENTE DE APROVAÇÃO DA IMPPEL</text></svg>`;
+      res.json({ format, mimeType: "image/svg+xml", outputData: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` });
+    } catch (err: any) {
+      res.status(400).json({ message: err.message });
+    }
+  });
+  app.get("/api/visual-compositions", requireAnyPermission([...VISUAL_READ_PERMISSIONS, "viewMarketingContent"]), (req, res) => listCompleteRows("visualCompositions", req, res));
+  app.post("/api/visual-compositions", requireAnyPermission(["generateVisualMaterials", "viewMarketingContent", "editVisualIdentity"]), (req, res) => createCompleteRow("visualCompositions", req, res, payload => {
+    ensureVisualPublicAuthorization(payload);
+    return visualActorPayload(req, payload);
+  }));
+  app.patch("/api/visual-compositions/:id", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS, "generateVisualMaterials"]), (req, res) => patchCompleteRow("visualCompositions", req, res));
+
+  app.get("/api/visual-templates", requireAnyPermission([...VISUAL_READ_PERMISSIONS, "viewMarketingContent"]), (req, res) => listCompleteRows("visualTemplates", req, res));
+  app.post("/api/visual-templates", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS]), (req, res) => createCompleteRow("visualTemplates", req, res, payload => visualActorPayload(req, payload)));
+  app.patch("/api/visual-templates/:id", requireAnyPermission([...VISUAL_EDIT_PERMISSIONS]), (req, res) => patchCompleteRow("visualTemplates", req, res));
+
   app.get("/api/help-articles", requireAnyPermission(["viewHelpCenter", "viewTeam", "viewWorks", "viewInventory", "viewCrm"]), (req, res) => listCompleteRows("helpArticles", req, res));
   app.post("/api/help-articles", requireAdmin, (req, res) => createCompleteRow("helpArticles", req, res, (payload) => {
     const actor = sessionActor(req);

@@ -12,6 +12,22 @@ Este arquivo registra riscos, problemas conhecidos, limitacoes e pendencias que 
 
 ## Problemas conhecidos atuais
 
+### KI-012 - Identidade visual oficial depende de aprovacao da IMPPEL
+
+- Severidade: Medio.
+- Causa raiz: a Etapa 8 criou a estrutura tecnica, mas logo, cores, slogan, tom de voz e regras oficiais nao devem ser inventados no codigo.
+- Impacto: kits e templates podem ser usados como rascunho, mas somente versoes aprovadas devem representar a marca em uso real.
+- Arquivos envolvidos: `client/src/pages/VisualIdentity.tsx`, `server/routes.ts`, `shared/schema.ts`.
+- Workaround: manter status `rascunho` ou `em_revisao` ate a IMPPEL aprovar a versao oficial.
+
+### KI-013 - Processamento real de video depende de ferramenta externa
+
+- Severidade: Melhoria.
+- Causa raiz: o ambiente atual nao possui pipeline FFmpeg ou servico dedicado de processamento de video.
+- Impacto: videos podem ser catalogados, validados e vinculados, mas marca d'agua/renderizacao automatica fica pendente.
+- Arquivos envolvidos: `client/src/pages/VisualIdentity.tsx`, `server/routes.ts`.
+- Workaround: usar registro, autorizacao e download; editar video externamente ate a integracao ser definida.
+
 ### KI-009 - Integracao Waseller depende de credenciais/API real
 
 - Severidade: Medio.

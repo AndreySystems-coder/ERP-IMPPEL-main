@@ -47,6 +47,9 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Configurar provedor de IA via variavel de ambiente para transformar o mock de geracao de posts em geracao real.
 - Configurar Meta/Instagram com conta de teste antes de qualquer publicacao automatica.
 - Preencher a Central Como Trabalhar com conteudo operacional real aprovado.
+- Aprovar kit visual oficial da IMPPEL: logos, cores, tipografia, tom de voz, slogan e contatos.
+- Homologar a Etapa 8 com fotos reais autorizadas em obra piloto antes de usar materiais em marketing.
+- Definir regras oficiais de autorizacao de imagem por cliente, canal e finalidade.
 
 ### Melhoria
 
@@ -59,6 +62,8 @@ O Prompt Mestre nao deve crescer com backlog funcional; novas demandas devem ser
 - Evoluir relatorios de materiais com filtros por obra, funcionario, periodo, categoria, severidade e tempo medio de resolucao apos coleta de dados reais.
 - Avaliar se Governanca Comercial deve permanecer somente Admin ou se cargos comercial/financeiro devem receber consultas especificas sem expor margens, com permissao explicita e teste de regressao.
 - Evoluir o Sistema Comercial com filtros por responsavel, periodo, origem, campanha, motivo de perda e SLA.
+- Evoluir processamento visual com biblioteca dedicada de imagem e FFmpeg/servico externo para videos, mantendo originais preservados.
+- Integrar futuramente publicacao Meta/Instagram e Waseller apenas apos credenciais e conta de teste aprovadas.
 
 ## Migrado de docs/task_plan.md
 

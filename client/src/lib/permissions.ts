@@ -47,7 +47,14 @@ export type PermissionKey =
   | "viewRestore"
   | "viewExports"
   | "viewMarketingContent"
-  | "viewHelpCenter";
+  | "viewHelpCenter"
+  | "viewVisualIdentity"
+  | "editVisualIdentity"
+  | "approveVisualIdentity"
+  | "uploadVisualAssets"
+  | "viewVisualOriginals"
+  | "generateVisualMaterials"
+  | "publishVisualMaterials";
 
 const COMPATIBILITY: Partial<Record<PermissionKey, PermissionKey[]>> = {
   viewCrm: ["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp", "viewClients", "viewMarketingContent"],
@@ -91,6 +98,7 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/crm", permissions: ["viewCrm", "viewLeads", "viewCrmWhatsapp", "viewClients"] },
   { path: "/sistema-comercial", permissions: ["viewCommercialSystem", "viewCrm", "viewLeads"] },
   { path: "/marketing-conteudo", permissions: ["viewMarketingContent", "viewCrm"] },
+  { path: "/identidade-visual", permissions: ["viewVisualIdentity", "viewMarketingContent"] },
   { path: "/como-trabalhar", permissions: ["viewHelpCenter", "viewTeam", "viewWorks", "viewInventory", "viewCrm"] },
   { path: "/leads", permissions: ["viewLeads"] },
   { path: "/crm-whatsapp", permissions: ["viewCrmWhatsapp"] },
@@ -149,6 +157,7 @@ const LANDING_OPTIONS: Array<{ path: string; permissions: PermissionKey[] }> = [
   { path: "/obras", permissions: ["viewWorks", "viewWorkOrders", "viewObraRegistro", "viewCalendar"] },
   { path: "/estoque", permissions: ["viewInventory", "viewInventoryCurrent", "viewInventoryCount", "viewInventoryMovements"] },
   { path: "/crm", permissions: ["viewCrm", "viewLeads", "viewCrmWhatsapp", "viewClients"] },
+  { path: "/identidade-visual", permissions: ["viewVisualIdentity", "viewMarketingContent"] },
   { path: "/como-trabalhar", permissions: ["viewHelpCenter"] },
   { path: "/financeiro", permissions: ["viewFinancials", "viewPayments", "viewCashFlow", "viewFinancialSettings"] },
   { path: "/backups-hub", permissions: ["viewBackups", "viewBackupGeneration", "viewRestore", "viewExports"] },

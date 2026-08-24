@@ -13,6 +13,7 @@ const baseGuides = [
   { moduleKey: "orcamentos", title: "Orçamento com margem", summary: "Criar proposta, validar margem e solicitar aprovação quando necessário.", routePath: "/jobs", audience: "Comercial" },
   { moduleKey: "obras", title: "Execução da OS", summary: "Acompanhar OS, checklist, procedimento aprovado e registro de obra.", routePath: "/work-orders", audience: "Obras" },
   { moduleKey: "materiais", title: "Controle de materiais", summary: "Registrar retirada, transferência, consumo e devolução com foto/assinatura.", routePath: "/controle-materiais", audience: "Equipe" },
+  { moduleKey: "visual", title: "Fotos, vídeos e identidade visual", summary: "Preservar originais, seguir padrões, solicitar autorização e gerar antes/depois sem publicar automaticamente.", routePath: "/identidade-visual", audience: "Equipe e Marketing" },
   { moduleKey: "estoque", title: "Estoque e ferramentas", summary: "Consultar saldo físico, ferramentas em campo, danos, perdas e manutenção.", routePath: "/estoque", audience: "Estoque" },
   { moduleKey: "backup", title: "Backup e restauração", summary: "Gerar backup completo e usar preview antes de qualquer restauração.", routePath: "/backups", audience: "Admin" },
 ];

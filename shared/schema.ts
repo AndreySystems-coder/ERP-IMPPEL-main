@@ -1129,6 +1129,157 @@ export const helpArticles = pgTable("help_articles", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const visualBrandKits = pgTable("visual_brand_kits", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().default("IMPP_EL Visual Kit"),
+  brandName: text("brand_name").notNull().default("IMPP_EL"),
+  primaryLogo: text("primary_logo"),
+  alternateLogo: text("alternate_logo"),
+  lightLogo: text("light_logo"),
+  darkLogo: text("dark_logo"),
+  symbol: text("symbol"),
+  watermark: text("watermark"),
+  primaryColor: text("primary_color").notNull().default("#0f766e"),
+  secondaryColor: text("secondary_color").notNull().default("#1d4ed8"),
+  backgroundColor: text("background_color").notNull().default("#ffffff"),
+  typography: text("typography").notNull().default("Fonte do ERP"),
+  toneOfVoice: text("tone_of_voice").default("Profissional, direto e tecnico"),
+  slogan: text("slogan"),
+  institutionalData: text("institutional_data").default("{}"),
+  contacts: text("contacts").default("{}"),
+  rules: text("rules").default("[]"),
+  version: integer("version").notNull().default(1),
+  status: text("status").notNull().default("rascunho"),
+  approvedByUsername: text("approved_by_username"),
+  validFrom: timestamp("valid_from"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const visualMediaStandards = pgTable("visual_media_standards", {
+  id: serial("id").primaryKey(),
+  mediaType: text("media_type").notNull().default("foto"),
+  purpose: text("purpose").notNull(),
+  phase: text("phase"),
+  minQuantity: integer("min_quantity").notNull().default(0),
+  orientation: text("orientation").notNull().default("qualquer"),
+  aspectRatio: text("aspect_ratio"),
+  recommendedWidth: integer("recommended_width"),
+  recommendedHeight: integer("recommended_height"),
+  minResolution: text("min_resolution"),
+  quality: text("quality"),
+  durationSeconds: integer("duration_seconds"),
+  instructions: text("instructions").default("[]"),
+  requiredPoints: text("required_points").default("[]"),
+  correctExample: text("correct_example"),
+  incorrectExample: text("incorrect_example"),
+  needsWatermark: boolean("needs_watermark").notNull().default(false),
+  requiresAuthorization: boolean("requires_authorization").notNull().default(false),
+  destination: text("destination"),
+  captionTemplate: text("caption_template"),
+  status: text("status").notNull().default("rascunho"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const visualMediaAuthorizations = pgTable("visual_media_authorizations", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id"),
+  clientName: text("client_name").notNull(),
+  workOrderId: integer("work_order_id"),
+  authorizationType: text("authorization_type").notNull().default("imagem"),
+  allowedImages: text("allowed_images").default("[]"),
+  allowedChannels: text("allowed_channels").default("[]"),
+  purpose: text("purpose"),
+  documentData: text("document_data"),
+  restrictions: text("restrictions"),
+  status: text("status").notNull().default("nao_solicitado"),
+  revokedAt: timestamp("revoked_at"),
+  responsibleUsername: text("responsible_username"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const visualAssets = pgTable("visual_assets", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  assetType: text("asset_type").notNull().default("imagem"),
+  source: text("source").notNull().default("upload"),
+  originalData: text("original_data"),
+  thumbnailData: text("thumbnail_data"),
+  derivedData: text("derived_data"),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size").notNull().default(0),
+  checksum: text("checksum"),
+  clientId: integer("client_id"),
+  workOrderId: integer("work_order_id"),
+  serviceName: text("service_name"),
+  phase: text("phase"),
+  purpose: text("purpose"),
+  authorizationId: integer("authorization_id"),
+  authorizationStatus: text("authorization_status").notNull().default("nao_solicitado"),
+  tags: text("tags").default("[]"),
+  status: text("status").notNull().default("rascunho"),
+  processingStatus: text("processing_status").notNull().default("pendente"),
+  processingNotes: text("processing_notes"),
+  metadata: text("metadata").default("{}"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const visualTemplates = pgTable("visual_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  templateType: text("template_type").notNull(),
+  channel: text("channel"),
+  format: text("format"),
+  brandKitId: integer("brand_kit_id"),
+  config: text("config").notNull().default("{}"),
+  textTemplate: text("text_template"),
+  status: text("status").notNull().default("rascunho"),
+  version: integer("version").notNull().default(1),
+  approvedByUsername: text("approved_by_username"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const visualCompositions = pgTable("visual_compositions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  compositionType: text("composition_type").notNull().default("antes_depois"),
+  beforeAssetId: integer("before_asset_id"),
+  afterAssetId: integer("after_asset_id"),
+  templateId: integer("template_id"),
+  brandKitId: integer("brand_kit_id"),
+  workOrderId: integer("work_order_id"),
+  clientId: integer("client_id"),
+  serviceName: text("service_name"),
+  format: text("format").notNull().default("whatsapp"),
+  caption: text("caption"),
+  outputData: text("output_data"),
+  authorizationStatus: text("authorization_status").notNull().default("nao_solicitado"),
+  status: text("status").notNull().default("rascunho"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdByUserId: integer("created_by_user_id"),
+  createdByUsername: text("created_by_username"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const materialReturnPolicyAudits = pgTable("material_return_policy_audits", {
   id: serial("id").primaryKey(),
   inventoryId: integer("inventory_id").notNull(),
@@ -1152,6 +1303,12 @@ export const insertCrmFollowUpSchema = createInsertSchema(crmFollowUps).omit({ i
 export const insertCrmInteractionSchema = createInsertSchema(crmInteractions).omit({ id: true, createdAt: true });
 export const insertMarketingContentPlanSchema = createInsertSchema(marketingContentPlans).omit({ id: true, createdAt: true, updatedAt: true, publishedAt: true });
 export const insertHelpArticleSchema = createInsertSchema(helpArticles).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
+export const insertVisualBrandKitSchema = createInsertSchema(visualBrandKits).omit({ id: true, createdAt: true, updatedAt: true, validFrom: true });
+export const insertVisualMediaStandardSchema = createInsertSchema(visualMediaStandards).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertVisualMediaAuthorizationSchema = createInsertSchema(visualMediaAuthorizations).omit({ id: true, createdAt: true, updatedAt: true, revokedAt: true });
+export const insertVisualAssetSchema = createInsertSchema(visualAssets).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertVisualTemplateSchema = createInsertSchema(visualTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertVisualCompositionSchema = createInsertSchema(visualCompositions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMaterialReturnPolicyAuditSchema = createInsertSchema(materialReturnPolicyAudits).omit({ id: true, createdAt: true });
 export const insertMaterialCustodyTransferSchema = createInsertSchema(materialCustodyTransfers).omit({ id: true, createdAt: true, updatedAt: true, acceptedAt: true });
 export const insertMaterialResponsibilityCaseSchema = createInsertSchema(materialResponsibilityCases).omit({ id: true, createdAt: true, updatedAt: true, approvedAt: true });
@@ -1185,6 +1342,18 @@ export type MarketingContentPlan = typeof marketingContentPlans.$inferSelect;
 export type InsertMarketingContentPlan = typeof insertMarketingContentPlanSchema._type;
 export type HelpArticle = typeof helpArticles.$inferSelect;
 export type InsertHelpArticle = typeof insertHelpArticleSchema._type;
+export type VisualBrandKit = typeof visualBrandKits.$inferSelect;
+export type InsertVisualBrandKit = typeof insertVisualBrandKitSchema._type;
+export type VisualMediaStandard = typeof visualMediaStandards.$inferSelect;
+export type InsertVisualMediaStandard = typeof insertVisualMediaStandardSchema._type;
+export type VisualMediaAuthorization = typeof visualMediaAuthorizations.$inferSelect;
+export type InsertVisualMediaAuthorization = typeof insertVisualMediaAuthorizationSchema._type;
+export type VisualAsset = typeof visualAssets.$inferSelect;
+export type InsertVisualAsset = typeof insertVisualAssetSchema._type;
+export type VisualTemplate = typeof visualTemplates.$inferSelect;
+export type InsertVisualTemplate = typeof insertVisualTemplateSchema._type;
+export type VisualComposition = typeof visualCompositions.$inferSelect;
+export type InsertVisualComposition = typeof insertVisualCompositionSchema._type;
 export type MaterialReturnPolicyAudit = typeof materialReturnPolicyAudits.$inferSelect;
 export type InsertMaterialReturnPolicyAudit = typeof insertMaterialReturnPolicyAuditSchema._type;
 export type CommercialPolicy = typeof commercialPolicies.$inferSelect;

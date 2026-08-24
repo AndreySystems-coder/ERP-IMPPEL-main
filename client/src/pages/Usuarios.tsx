@@ -131,6 +131,18 @@ const PERMISSION_GROUPS = [
       { key: "viewExports", label: "Exportação" },
     ],
   },
+  {
+    group: "Identidade Visual",
+    items: [
+      { key: "viewVisualIdentity", label: "Ver identidade visual" },
+      { key: "editVisualIdentity", label: "Editar kit, padrões e templates" },
+      { key: "approveVisualIdentity", label: "Aprovar identidade e materiais" },
+      { key: "uploadVisualAssets", label: "Enviar fotos e vídeos" },
+      { key: "viewVisualOriginals", label: "Ver originais privados" },
+      { key: "generateVisualMaterials", label: "Gerar derivados e antes/depois" },
+      { key: "publishVisualMaterials", label: "Registrar publicação" },
+    ],
+  },
 ];
 
 function parsePermissions(raw: string): Record<string, boolean> {

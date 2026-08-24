@@ -7,6 +7,7 @@ import {
   materialCustodyTransfers, materialResponsibilityCases, materialKits, materialKitItems, toolMaintenanceRecords, materialCountAudits, materialTrainingGuides,
   salaryDiscountRules, salaryDiscounts,
   crmPipelineStatuses, crmFollowUps, crmInteractions, marketingContentPlans, helpArticles, materialReturnPolicyAudits,
+  visualBrandKits, visualMediaStandards, visualMediaAuthorizations, visualAssets, visualTemplates, visualCompositions,
   commercialPolicies, discountRequests, commissionRecords, logisticsRecords, quoteVersions, scopeChangeRequests,
   technicalProcedures, checklistTemplates, workOrderQualityRuns, qualityEvents,
   roles,
@@ -62,6 +63,7 @@ export const COMPLETE_BACKUP_MODULE_TABLES = {
   sistemaComercial: ["crmPipelineStatuses", "crmFollowUps", "crmInteractions"],
   marketingConteudo: ["marketingContentPlans"],
   centralAjuda: ["helpArticles"],
+  identidadeVisual: ["visualBrandKits", "visualMediaStandards", "visualMediaAuthorizations", "visualAssets", "visualTemplates", "visualCompositions"],
   auditoriaMateriais: ["materialReturnPolicyAudits"],
 } as const;
 
@@ -130,6 +132,12 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   crmInteractions: { table: crmInteractions, dbName: "crm_interactions" },
   marketingContentPlans: { table: marketingContentPlans, dbName: "marketing_content_plans" },
   helpArticles: { table: helpArticles, dbName: "help_articles" },
+  visualBrandKits: { table: visualBrandKits, dbName: "visual_brand_kits" },
+  visualMediaStandards: { table: visualMediaStandards, dbName: "visual_media_standards" },
+  visualMediaAuthorizations: { table: visualMediaAuthorizations, dbName: "visual_media_authorizations" },
+  visualAssets: { table: visualAssets, dbName: "visual_assets" },
+  visualTemplates: { table: visualTemplates, dbName: "visual_templates" },
+  visualCompositions: { table: visualCompositions, dbName: "visual_compositions" },
   materialReturnPolicyAudits: { table: materialReturnPolicyAudits, dbName: "material_return_policy_audits" },
 };
 
@@ -1386,6 +1394,12 @@ export function createMemoryStorage(): IStorage {
     crmInteractions: [],
     marketingContentPlans: [],
     helpArticles: [],
+    visualBrandKits: [],
+    visualMediaStandards: [],
+    visualMediaAuthorizations: [],
+    visualAssets: [],
+    visualTemplates: [],
+    visualCompositions: [],
     materialReturnPolicyAudits: [],
   };
 
@@ -1523,6 +1537,18 @@ export function createMemoryStorage(): IStorage {
     MarketingContentPlans: "marketingContentPlans",
     HelpArticle: "helpArticles",
     HelpArticles: "helpArticles",
+    VisualBrandKit: "visualBrandKits",
+    VisualBrandKits: "visualBrandKits",
+    VisualMediaStandard: "visualMediaStandards",
+    VisualMediaStandards: "visualMediaStandards",
+    VisualMediaAuthorization: "visualMediaAuthorizations",
+    VisualMediaAuthorizations: "visualMediaAuthorizations",
+    VisualAsset: "visualAssets",
+    VisualAssets: "visualAssets",
+    VisualTemplate: "visualTemplates",
+    VisualTemplates: "visualTemplates",
+    VisualComposition: "visualCompositions",
+    VisualCompositions: "visualCompositions",
     MaterialReturnPolicyAudit: "materialReturnPolicyAudits",
     MaterialReturnPolicyAudits: "materialReturnPolicyAudits",
   };
