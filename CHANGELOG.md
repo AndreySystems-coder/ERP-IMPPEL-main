@@ -3,6 +3,28 @@
 Todas as alteracoes relevantes do ERP devem ser registradas neste arquivo.
 Usar entradas cronologicas, com impacto funcional, arquivos principais e validacoes executadas.
 
+## [2026-08-24] - Refinamento da sequencia operacional e guia por funcao
+
+### Alterado
+
+- Sidebar passou a usar nomes curtos: Inicio, Marketing, Atendimento, Orcamentos, Planejamento, Execucao, Materiais, Financeiro, Equipe, Pos-venda, Gestao e Backups.
+- Clique no grupo abre o hub da funcao; o chevron fica como atalho para abrir/recolher subitens.
+- Hubs passaram a mostrar `Quem utiliza`, `O que fazer`, ferramentas numeradas, proxima funcao e botao grande para `Como Trabalhar`.
+- `Visao da funcao` foi substituido por `Todos` nos atalhos da sidebar.
+- `Sistema Comercial` passou a exibir `Todos` como primeira aba e textos de follow-up como `proximo contato`.
+- `Identidade e Conteudo` manteve o stepper e passou a usar a ordem Marca, Fotos, Biblioteca, Antes/Depois, Template, Conteudo, Revisao e Exportacao.
+- Ordem de Servico recebeu secao `Qualidade e conclusao` dentro do Registro de Obra, preservando bloqueios e a pagina administrativa de qualidade como atalho secundario.
+- `Gestao` deixou de listar Backups, mantendo Backups como funcao propria.
+- Central `Como Trabalhar` foi alinhada com a nova sidebar e aceita abertura direta por funcao.
+
+### Documentacao
+
+- Atualizado `docs/erp_role_based_navigation.md` com nomes finais, ordem, ferramentas, responsabilidades, handoffs, qualidade integrada e backup separado.
+
+### Observacoes
+
+- Nenhum schema, migration, dado real, regra de negocio, regra financeira, regra de estoque ou permissao de backend foi alterado.
+
 ## [2026-08-24] - Reorganizacao final da navegacao por funcoes
 
 ### Alterado

@@ -7,6 +7,7 @@ import {
   Building2,
   Calendar as CalendarIcon,
   ChevronDown,
+  ChevronLeft,
   Clipboard,
   ClipboardList,
   CreditCard,
@@ -70,25 +71,25 @@ const ALL_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Marketing & Captação",
+    label: "Marketing",
     path: "/marketing",
     icon: Palette,
     adminOnly: true,
     permission: "viewMarketingContent",
     items: [
-      { name: "Visão da função", path: "/marketing", icon: Palette, permission: "viewMarketingContent" },
+      { name: "Todos", path: "/marketing", icon: Palette, permission: "viewMarketingContent" },
       { name: "Planejamento de Conteúdo", path: "/marketing-conteudo", icon: MessageSquare, permission: "viewMarketingContent" },
       { name: "Identidade e Conteúdo", path: "/identidade-visual", icon: Palette, permission: "viewVisualIdentity" },
     ],
   },
   {
-    label: "Atendimento Comercial",
+    label: "Atendimento",
     path: "/crm",
     icon: PhoneCall,
     adminOnly: true,
     permission: "viewCrm",
     items: [
-      { name: "Visão da função", path: "/crm", icon: PhoneCall, permission: "viewCrm" },
+      { name: "Todos", path: "/crm", icon: PhoneCall, permission: "viewCrm" },
       { name: "Sistema Comercial", path: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem" },
       { name: "Leads", path: "/leads", icon: Users, permission: "viewLeads" },
       { name: "Clientes", path: "/clients", icon: Building2, permission: "viewClients" },
@@ -96,108 +97,106 @@ const ALL_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Orçamentos & Negociação",
+    label: "Orçamentos",
     path: "/orcamentos",
     icon: Briefcase,
     adminOnly: true,
     permission: "viewQuotes",
     items: [
-      { name: "Visão da função", path: "/orcamentos", icon: Briefcase, permission: "viewQuotes" },
+      { name: "Todos", path: "/orcamentos", icon: Briefcase, permission: "viewQuotes" },
       { name: "Orçamentos", path: "/jobs", icon: Briefcase, permission: "viewQuotes" },
-      { name: "Calculadora de Preço", path: "/calculator", icon: TrendingDown, permission: "viewQuotes" },
-      { name: "Catálogo de Serviços", path: "/services", icon: Layers, permission: "viewQuoteRules" },
       { name: "Catálogo de Materiais", path: "/catalog", icon: Package, permission: "viewQuoteRules" },
+      { name: "Catálogo de Serviços", path: "/services", icon: Layers, permission: "viewQuoteRules" },
+      { name: "Cálculo de Preço", path: "/calculator", icon: TrendingDown, permission: "viewQuotes" },
       { name: "Governança Comercial", path: "/governanca-comercial", icon: Scale, permission: "viewSettings" },
       { name: "Templates de Orçamento", path: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates" },
     ],
   },
   {
-    label: "Planejamento da Obra",
+    label: "Planejamento",
     path: "/planejamento-obras",
     icon: ClipboardList,
     permission: "viewWorks",
     items: [
-      { name: "Visão da função", path: "/planejamento-obras", icon: ClipboardList, permission: "viewWorkOrders" },
-      { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders" },
+      { name: "Todos", path: "/planejamento-obras", icon: ClipboardList, permission: "viewWorkOrders" },
+      { name: "Ordem de Serviço", path: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders" },
       { name: "Agenda", path: "/calendar", icon: CalendarIcon, permission: "viewCalendar" },
     ],
   },
   {
-    label: "Execução & Qualidade",
+    label: "Execução",
     path: "/execucao-qualidade",
     icon: Clipboard,
     permission: "viewWorks",
     items: [
-      { name: "Visão da função", path: "/execucao-qualidade", icon: Clipboard, permission: "viewWorkOrders" },
+      { name: "Todos", path: "/execucao-qualidade", icon: Clipboard, permission: "viewWorkOrders" },
       { name: "Ordens de Serviço", path: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders" },
       { name: "Registro de Obra", path: "/registro-obra", icon: Clipboard, permission: "viewWorks" },
-      { name: "Qualidade das Obras", path: "/qualidade-obras", icon: ListChecks, permission: "viewWorkOrders" },
     ],
   },
   {
-    label: "Materiais & Equipamentos",
+    label: "Materiais",
     path: "/materiais-equipamentos",
     icon: Package,
     adminOnly: true,
     permission: "viewInventory",
     items: [
-      { name: "Visão da função", path: "/materiais-equipamentos", icon: Package, permission: "viewInventory" },
-      { name: "Estoque Atual", path: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent" },
-      { name: "Movimentações", path: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements" },
+      { name: "Todos", path: "/materiais-equipamentos", icon: Package, permission: "viewInventory" },
       { name: "Controle de Materiais", path: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials" },
+      { name: "Estoque Atual", path: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent" },
       { name: "Ferramentas", path: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent" },
-      { name: "Contagem Rápida", path: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount" },
       { name: "Venda de Materiais", path: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales" },
+      { name: "Contagem Rápida", path: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount" },
     ],
   },
   {
-    label: "Financeiro & Administrativo",
+    label: "Financeiro",
     path: "/financeiro",
     icon: DollarSign,
     adminOnly: true,
     permission: "viewFinancials",
     items: [
-      { name: "Visão da função", path: "/financeiro", icon: DollarSign, permission: "viewFinancials" },
+      { name: "Todos", path: "/financeiro", icon: DollarSign, permission: "viewFinancials" },
       { name: "Fluxo de Caixa", path: "/financials", icon: DollarSign, permission: "viewCashFlow" },
       { name: "Pagamentos", path: "/payments", icon: CreditCard, permission: "viewPayments" },
-      { name: "Config. Pagamentos", path: "/pagamentos-config", icon: Tag, permission: "viewFinancialSettings" },
-      { name: "Contratos", path: "/contratos", icon: FileText, permission: "viewSettings" },
       { name: "Relatórios Financeiros", path: "/relatorios", icon: BarChart3, permission: "viewFinancials" },
+      { name: "Contratos", path: "/contratos", icon: FileText, permission: "viewSettings" },
+      { name: "Config. Pagamentos", path: "/pagamentos-config", icon: Tag, permission: "viewFinancialSettings" },
     ],
   },
   {
-    label: "Equipe & Treinamento",
+    label: "Equipe",
     path: "/equipe",
     icon: Users,
     adminOnly: true,
     permission: "viewTeam",
     items: [
-      { name: "Visão da função", path: "/equipe", icon: Users, permission: "viewTeam" },
+      { name: "Todos", path: "/equipe", icon: Users, permission: "viewTeam" },
       { name: "Usuários e Cargos", path: "/usuarios", icon: UserCog, permission: "viewUsers" },
       { name: "Produtividade", path: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity" },
       { name: "Como Trabalhar", path: "/como-trabalhar", icon: BookOpen, permission: "viewHelpCenter" },
     ],
   },
   {
-    label: "Pós-venda & Relacionamento",
+    label: "Pós-venda",
     path: "/pos-venda-hub",
     icon: Heart,
     adminOnly: true,
     permission: "viewPostSale",
     items: [
-      { name: "Visão da função", path: "/pos-venda-hub", icon: Heart, permission: "viewPostSale" },
+      { name: "Todos", path: "/pos-venda-hub", icon: Heart, permission: "viewPostSale" },
       { name: "Garantias", path: "/garantias", icon: Shield, permission: "viewWarranties" },
       { name: "Pós-venda & NPS", path: "/pos-venda", icon: Heart, permission: "viewPostSale" },
     ],
   },
   {
-    label: "Gestão & Configurações",
+    label: "Gestão",
     path: "/gestao",
     icon: Settings,
     adminOnly: true,
     permission: "viewSettings",
     items: [
-      { name: "Visão da função", path: "/gestao", icon: Settings, permission: "viewSettings" },
+      { name: "Todos", path: "/gestao", icon: Settings, permission: "viewSettings" },
       { name: "Configurações Gerais", path: "/settings", icon: Settings, permission: "viewSettings" },
       { name: "Status Personalizados", path: "/status-personalizados", icon: Hash, permission: "viewStatusSettings" },
       { name: "Regras de Prioridade", path: "/priority-rules", icon: Scale, permission: "viewPriorityRules" },
@@ -207,14 +206,15 @@ const ALL_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "Backups & Restauração",
+    label: "Backups",
     path: "/backups-hub",
     icon: FileText,
     adminOnly: true,
     permission: "viewBackups",
     items: [
-      { name: "Exportação", path: "/backups/exportacao", icon: FileText, permission: "viewExports" },
-      { name: "Restauração", path: "/backups/restauracao", icon: Shield, permission: "viewRestore" },
+      { name: "Todos", path: "/backups-hub", icon: FileText, permission: "viewBackups" },
+      { name: "Exportar", path: "/backups/exportacao", icon: FileText, permission: "viewExports" },
+      { name: "Restaurar", path: "/backups/restauracao", icon: Shield, permission: "viewRestore" },
     ],
   },
 ];
@@ -229,13 +229,18 @@ function NavSectionGroup({
   location,
   user,
   onNavClick,
+  collapsed,
+  isOpen,
+  onToggle,
 }: {
   section: NavSection;
   location: string;
   user: any;
   onNavClick: () => void;
+  collapsed: boolean;
+  isOpen: boolean;
+  onToggle: () => void;
 }) {
-  const [isOpen, setIsOpen] = React.useState(false);
   const visibleItems = section.items.filter((item) => canAccess(user, item.permission));
   const sectionPermissions = [section.permission, ...section.items.map((item) => item.permission)].filter(Boolean) as PermissionKey[];
   if (!canAccessAny(user, sectionPermissions)) return null;
@@ -244,22 +249,25 @@ function NavSectionGroup({
   const hasActive =
     location === section.path ||
     visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
-  const open = isOpen || hasActive;
-
   return (
     <div className="mb-1">
-      <button
-        type="button"
-        onClick={() => setIsOpen(value => !value)}
+      <div
         className={`flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
           hasActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
         }`}
+        title={section.label}
       >
-        <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
-        <span className="truncate">{section.label}</span>
-        <ChevronDown className={`ml-auto h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
+        <Link href={section.path} onClick={onNavClick} className="flex min-w-0 flex-1 items-center gap-2.5">
+          <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
+          {!collapsed && <span className="truncate">{section.label}</span>}
+        </Link>
+        {!collapsed && visibleItems.length > 1 && (
+          <button type="button" onClick={onToggle} aria-label={`Abrir atalhos de ${section.label}`}>
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+          </button>
+        )}
+      </div>
+      {!collapsed && isOpen && (
         <div className="mt-1 space-y-1 pl-4">
           {visibleItems.map((item) => {
             const active = location === item.path || (item.path !== "/" && location.startsWith(item.path));
@@ -288,6 +296,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useUser();
   const logout = useLogout();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
+  const [openSection, setOpenSection] = React.useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = React.useState("");
 
   if (isLoading) {
@@ -330,6 +340,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
             aria-label="Abrir menu"
           >
             <Menu className="h-5 w-5" />
+          </button>
+          <button
+            className="hidden rounded-md p-1.5 text-primary-foreground/80 transition-colors hover:text-white lg:inline-flex"
+            onClick={() => setIsSidebarCollapsed(value => !value)}
+            type="button"
+            aria-label={isSidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          >
+            <ChevronLeft className={`h-5 w-5 transition-transform ${isSidebarCollapsed ? "rotate-180" : ""}`} />
           </button>
 
           <div className="font-display flex items-center gap-1 text-lg font-bold tracking-tight">
@@ -390,9 +408,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <aside
           className={`
-            fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white
+            fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white
             shadow-[2px_0_15px_-3px_rgba(0,0,0,0.05)] transition-transform duration-300 ease-in-out
             lg:static lg:h-full lg:transform-none lg:shadow-none
+            ${isSidebarCollapsed ? "w-64 lg:w-16" : "w-64"}
             ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           `}
         >
@@ -404,6 +423,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 location={location}
                 user={user}
                 onNavClick={() => setIsMobileMenuOpen(false)}
+                collapsed={isSidebarCollapsed}
+                isOpen={openSection === section.label}
+                onToggle={() => setOpenSection(current => current === section.label ? null : section.label)}
               />
             ))}
           </nav>
@@ -415,7 +437,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
             >
               <LogOut className="h-4 w-4" />
-              <span>Sair do sistema</span>
+              {!isSidebarCollapsed && <span>Sair do sistema</span>}
             </button>
           </div>
         </aside>

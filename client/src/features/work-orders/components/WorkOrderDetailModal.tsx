@@ -1,7 +1,7 @@
 import type { ChangeEvent } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ClipboardList, FileDown, Package, X } from "lucide-react";
+import { ClipboardList, FileDown, ListChecks, Package, ShieldAlert, X } from "lucide-react";
 
 import { Button } from "@/components/Button";
 import type { ServiceProgress, WorkOrderMaterial, WorkOrderMaterialReconciliationResponse } from "@/features/work-orders/types";
@@ -220,6 +220,26 @@ export function WorkOrderDetailModal({
                   </div>
                 </section>
               )}
+
+              <section className="rounded-xl border border-blue-200 bg-blue-50/70 p-4">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-blue-950">
+                  <ListChecks className="h-4 w-4" /> Qualidade e conclusão
+                </h3>
+                <p className="mt-2 text-sm text-blue-900">
+                  Checklist, evidências, ocorrências, não conformidades, inspeção e bloqueios ficam conferidos no contexto da própria OS antes da finalização.
+                </p>
+                <div className="mt-3 grid gap-2 text-xs font-semibold text-blue-950 sm:grid-cols-3">
+                  <span className="rounded-lg bg-white/80 p-2">Checklist: {Object.values(checklistDone).filter(Boolean).length}/{checklistItems.length}</span>
+                  <span className="rounded-lg bg-white/80 p-2">Evidências: {allPhotos.length}</span>
+                  <span className="rounded-lg bg-white/80 p-2">Pendências materiais: {pendingMaterials.length}</span>
+                </div>
+                {(pendingMaterials.length > 0 || Object.values(checklistDone).filter(Boolean).length < checklistItems.length) && (
+                  <p className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    A conclusão pode ser bloqueada se checklist obrigatório, evidências ou materiais ainda estiverem pendentes.
+                  </p>
+                )}
+              </section>
 
               <WorkOrderProgressSection
               detailWO={workOrder}

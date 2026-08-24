@@ -12,13 +12,13 @@ Este arquivo registra riscos, problemas conhecidos, limitacoes e pendencias que 
 
 ## Problemas conhecidos atuais
 
-### KI-017 - Nova navegacao por funcoes precisa de homologacao operacional
+### KI-017 - Navegacao por funcoes precisa de homologacao operacional real
 
 - Severidade: Melhoria.
-- Causa raiz: a reorganizacao foi feita com base no fluxo aprovado, mas nomes, atalhos e prioridade de grupos precisam ser confirmados por usuarios reais da IMPPEL.
-- Impacto: a navegacao esta mais alinhada por papel, porem pode exigir pequenos ajustes de vocabulario apos uso diario.
+- Causa raiz: a navegacao foi refinada com nomes curtos, hubs numerados e handoff por funcao, mas precisa ser confirmada por usuarios reais da IMPPEL no uso diario.
+- Impacto: a navegacao esta mais alinhada por papel, porem pode exigir pequenos ajustes de vocabulario apos piloto no Replit.
 - Arquivos envolvidos: `client/src/components/Layout.tsx`, `client/src/pages/SectionHub.tsx`, `client/src/pages/HowToWork.tsx`, `docs/erp_role_based_navigation.md`.
-- Workaround: rotas antigas continuam preservadas e a Central Como Trabalhar orienta a sequencia recomendada.
+- Workaround: rotas antigas continuam preservadas, a sidebar usa nomes curtos e a Central Como Trabalhar orienta a sequencia por funcao.
 
 ### KI-015 - Central Como Trabalhar ainda precisa de homologacao com funcionario novo
 

@@ -68,7 +68,7 @@ export default function CommercialSystem() {
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
-          <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+          <TabsTrigger value="overview">Todos</TabsTrigger>
           <TabsTrigger value="new">Novos Contatos</TabsTrigger>
           <TabsTrigger value="qualification">Qualificação</TabsTrigger>
           <TabsTrigger value="funnel">Funil</TabsTrigger>
@@ -103,7 +103,7 @@ export default function CommercialSystem() {
             <CardHeader><CardTitle className="text-base">O que devo fazer agora?</CardTitle></CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-3">
               <ActionHint title="Atender novos contatos" description="Cadastre ou complete leads que chegaram por WhatsApp, indicação ou prospecção." />
-              <ActionHint title="Resolver follow-ups vencidos" description="Priorize retornos pendentes antes de criar novas oportunidades." />
+              <ActionHint title="Resolver próximos contatos" description="Follow-up é o próximo contato planejado com o cliente. Priorize retornos pendentes antes de criar novas oportunidades." />
               <ActionHint title="Revisar orçamentos enviados" description="Confira propostas sem resposta e mova o lead para negociação, fechado ou perdido." />
             </CardContent>
           </Card>
@@ -156,9 +156,9 @@ export default function CommercialSystem() {
         </TabsContent>
 
         <TabsContent value="followups" className="space-y-4">
-          <Card className="border-emerald-100 bg-emerald-50/50"><CardContent className="p-4 text-sm text-emerald-900">Follow-up é o retorno programado ao cliente. D+2, D+5 e D+10 significam dois, cinco e dez dias após o evento de referência, mas aqui você sempre pode escolher uma data real.</CardContent></Card>
+          <Card className="border-emerald-100 bg-emerald-50/50"><CardContent className="p-4 text-sm text-emerald-900">Follow-up é o próximo contato planejado com o cliente. Use data, responsável, motivo e mensagem para não deixar atendimento parado.</CardContent></Card>
           <Card>
-          <CardHeader><CardTitle>Novo follow-up</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Novo próximo contato</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <Input placeholder="ID do lead" value={followUp.leadId} onChange={(event) => setFollowUp({ ...followUp, leadId: event.target.value })} />
             <Input placeholder="Motivo" value={followUp.reason} onChange={(event) => setFollowUp({ ...followUp, reason: event.target.value })} />

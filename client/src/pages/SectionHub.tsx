@@ -48,8 +48,9 @@ interface HubConfig {
   title: string;
   description: string;
   owner: string;
-  firstStep: string;
-  sequence: string[];
+  actions: string[];
+  next: string;
+  helpKey: string;
   warning?: string;
   items: HubItem[];
 }
@@ -78,33 +79,23 @@ function HubPage({ config }: { config: HubConfig }) {
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-[0.9fr_1.4fr]">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <p className="text-xs font-bold uppercase text-slate-400">Quem utiliza</p>
           <p className="mt-1 text-sm font-semibold text-slate-900">{config.owner}</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-bold uppercase text-slate-400">O que fazer primeiro</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{config.firstStep}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-bold uppercase text-slate-400">Como trabalhar nesta função</p>
-          <Link href="/como-trabalhar" className="mt-1 inline-flex text-sm font-semibold text-primary hover:underline">Abrir guia</Link>
+          <p className="text-xs font-bold uppercase text-slate-400">O que fazer</p>
+          <ol className="mt-2 space-y-1 text-sm font-medium text-slate-700">
+            {config.actions.map((step, index) => <li key={step}>{index + 1}. {step}</li>)}
+          </ol>
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-xs font-bold uppercase text-slate-400">Fluxo recomendado</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {config.sequence.map((step, index) => (
-            <span key={step} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{index + 1}. {step}</span>
-          ))}
-        </div>
-        {config.warning && <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">{config.warning}</p>}
-      </div>
+      {config.warning && <p className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">{config.warning}</p>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {visibleItems.map((item) => (
+        {visibleItems.map((item, index) => (
           <Link
             key={`${item.href}-${item.title}`}
             href={item.href}
@@ -117,6 +108,7 @@ function HubPage({ config }: { config: HubConfig }) {
                   <item.icon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
+                  <span className="mb-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">Passo {String(index + 1).padStart(2, "0")}</span>
                   <h2 className="text-base font-bold text-slate-900 group-hover:text-primary">{item.title}</h2>
                   <p className="mt-1 text-sm leading-5 text-slate-500">{item.description}</p>
                 </div>
@@ -134,6 +126,17 @@ function HubPage({ config }: { config: HubConfig }) {
           </div>
         )}
       </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-xs font-bold uppercase text-emerald-700">Próxima função</p>
+          <p className="mt-2 text-sm font-semibold text-emerald-950">{config.next}</p>
+        </div>
+        <Link href={`/como-trabalhar?funcao=${config.helpKey}`} className="rounded-xl border border-primary/20 bg-white p-5 text-center shadow-sm transition hover:border-primary/40 hover:shadow-md">
+          <p className="text-xs font-bold uppercase text-primary">Como trabalhar nesta função</p>
+          <p className="mt-2 text-lg font-bold text-slate-950">Abrir orientação completa</p>
+        </Link>
+      </div>
     </div>
   );
 }
@@ -144,13 +147,14 @@ export function CrmHub() {
       config={{
         title: "Atendimento Comercial",
         description: "Receba contatos, qualifique oportunidades e acompanhe cada lead até orçamento, negociação, fechamento ou perda.",
-        owner: "Comercial / Atendimento",
-        firstStep: "Abrir Sistema Comercial e revisar novos contatos e follow-ups vencidos.",
-        sequence: ["Novo contato", "Lead", "Qualificação", "Follow-up", "Negociação", "Fechado ou perdido"],
+        owner: "Atendente comercial, vendedor ou responsável pelo CRM.",
+        actions: ["Receber o contato vindo do Marketing ou indicação.", "Cadastrar ou atualizar cliente e lead.", "Qualificar necessidade, urgência e próximo passo.", "Registrar follow-up e conversas.", "Entregar lead qualificado para Orçamentos."],
+        next: "Atendimento concluído → encaminhar lead qualificado para Orçamentos.",
+        helpKey: "atendimento",
         items: [
-          { title: "Sistema Comercial", description: "Visão geral, funil, leads, follow-ups, WhatsApp, marketing, indicadores e ajuda.", href: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem", accent: accents.violet },
-          { title: "Clientes", description: "Cadastro e histórico básico dos clientes que já existem ou vieram do funil.", href: "/clients", icon: Building2, permission: "viewClients", accent: accents.blue },
-          { title: "Leads", description: "Entrada e acompanhamento de oportunidades.", href: "/leads", icon: Users, permission: "viewLeads", accent: accents.orange },
+          { title: "Sistema Comercial", description: "Todos, novos contatos, qualificação, funil, follow-ups e negociação.", href: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem", accent: accents.violet },
+          { title: "Novos Leads", description: "Entrada e acompanhamento de oportunidades.", href: "/leads", icon: Users, permission: "viewLeads", accent: accents.orange },
+          { title: "Clientes", description: "Cadastro e histórico básico dos clientes.", href: "/clients", icon: Building2, permission: "viewClients", accent: accents.blue },
           { title: "CRM e WhatsApp", description: "Conversas, templates e apoio ao atendimento.", href: "/crm-whatsapp", icon: MessageSquare, permission: "viewCrmWhatsapp", accent: accents.emerald },
         ],
       }}
@@ -162,16 +166,17 @@ export function MarketingHub() {
   return (
     <HubPage
       config={{
-        title: "Marketing & Captação",
+        title: "Marketing e Captação",
         description: "Organize conteúdo, identidade visual, biblioteca de mídia e origem de oportunidades sem misturar com negociação.",
-        owner: "Marketing / Redes Sociais",
-        firstStep: "Definir objetivo do conteúdo e conferir se a mídia possui autorização.",
-        sequence: ["Ideia", "Canal", "Objetivo", "Mídia autorizada", "Rascunho", "Revisão", "Publicação manual"],
+        owner: "Marketing, responsável por conteúdo ou responsável pela divulgação.",
+        actions: ["Definir objetivo da campanha.", "Preparar conteúdo e mídias autorizadas.", "Revisar identidade, fotos, antes/depois e templates.", "Publicar ou programar divulgação fora do ERP.", "Registrar a origem dos contatos recebidos.", "Entregar contatos ao Atendimento."],
+        next: "Marketing concluído → enviar contatos captados para Atendimento/CRM.",
+        helpKey: "marketing",
         warning: "IA, Waseller e Meta/Instagram dependem de credenciais reais; o ERP não afirma automação externa sem integração configurada.",
         items: [
           { title: "Planejamento de Conteúdo", description: "Rascunhos, calendário e ideias de conteúdo.", href: "/marketing-conteudo", icon: MessageSquare, permission: "viewMarketingContent", accent: accents.cyan },
           { title: "Identidade e Conteúdo", description: "Marca, fotos, autorizações, biblioteca visual, templates e antes/depois.", href: "/identidade-visual", icon: Palette, permission: "viewVisualIdentity", accent: accents.slate },
-          { title: "Sistema Comercial", description: "Indicadores de origem e impacto dos leads.", href: "/sistema-comercial", icon: BarChart3, permission: "viewCommercialSystem", accent: accents.violet },
+          { title: "Entregar Contatos", description: "Registrar ou encaminhar o contato captado para Atendimento Comercial.", href: "/leads", icon: Users, permission: "viewLeads", accent: accents.violet },
         ],
       }}
     />
@@ -185,13 +190,14 @@ export function QuotesHub() {
         title: "Orçamentos",
         description: "Transforme uma oportunidade qualificada em proposta comercial segura, com preço, margem, condições e aprovação.",
         owner: "Orçamentista / Administrativo Comercial",
-        firstStep: "Confirmar cliente, necessidade e se o orçamento é preliminar ou após visita técnica.",
-        sequence: ["Diagnóstico remoto ou visita", "Cliente", "Serviços", "Precificação", "Governança", "Proposta", "Aprovação"],
+        actions: ["Entender a necessidade recebida do Atendimento.", "Criar orçamento.", "Consultar materiais e serviços.", "Conferir cálculo, margem e condições.", "Solicitar aprovação quando necessário.", "Enviar proposta e registrar resultado.", "Entregar aprovado para Planejamento."],
+        next: "Orçamento aprovado → encaminhar para Planejamento de Obras.",
+        helpKey: "orcamentos",
         items: [
           { title: "Orçamentos", description: "Lista, criação, edição, PDF e envio por WhatsApp.", href: "/jobs", icon: Briefcase, permission: "viewQuotes", accent: accents.blue },
-          { title: "Calculadora de Preço", description: "Simule preço, margem e custos antes de fechar proposta.", href: "/calculator", icon: TrendingDown, permission: "viewQuotes", accent: accents.orange },
-          { title: "Catálogo de Serviços", description: "Serviços, custos por m² e materiais usados na proposta.", href: "/services", icon: Layers, permission: "viewQuoteRules", accent: accents.emerald },
           { title: "Catálogo de Materiais", description: "Produtos/materiais com preço, comissão e desconto máximo.", href: "/catalog", icon: Package, permission: "viewQuoteRules", accent: accents.orange },
+          { title: "Catálogo de Serviços", description: "Serviços, custos por m² e materiais usados na proposta.", href: "/services", icon: Layers, permission: "viewQuoteRules", accent: accents.emerald },
+          { title: "Cálculo de Preço", description: "Simule preço, margem e custos antes de fechar proposta.", href: "/calculator", icon: TrendingDown, permission: "viewQuotes", accent: accents.orange },
           { title: "Governança Comercial", description: "Alçadas, descontos, comissões, logística e aditivos.", href: "/governanca-comercial", icon: Scale, permission: "viewSettings", accent: accents.violet },
           { title: "Templates", description: "Layout, cores, seções e preview dos PDFs.", href: "/quote-templates", icon: FileText, permission: "viewQuoteTemplates", accent: accents.violet },
         ],
@@ -204,14 +210,15 @@ export function WorksHub() {
   return (
     <HubPage
       config={{
-        title: "Obras",
+        title: "Planejamento de Obras",
         description: "Planeje a execução depois que o orçamento foi aprovado: OS, agenda, equipe e preparação da obra.",
-        owner: "Gestor de Obras / Operações",
-        firstStep: "Abrir Ordens de Serviço e conferir agenda, equipe, escopo e materiais previstos.",
-        sequence: ["Orçamento aprovado", "OS", "Agenda", "Equipe", "Materiais previstos", "Preparação", "Execução"],
+        owner: "Gestor, encarregado ou responsável pelo agendamento.",
+        actions: ["Receber orçamento aprovado.", "Criar ou preparar a Ordem de Serviço.", "Agendar data e equipe.", "Conferir materiais previstos.", "Liberar a obra para Execução."],
+        next: "Planejamento liberado → equipe inicia Execução da Obra.",
+        helpKey: "planejamento",
         items: [
-          { title: "Ordens de Serviço", description: "Criação, progresso, consumo, fotos e finalização.", href: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders", accent: accents.blue },
-          { title: "Calendário", description: "Programação semanal e diária das equipes.", href: "/calendar", icon: Calendar, permission: "viewCalendar", accent: accents.violet },
+          { title: "Ordem de Serviço", description: "Criação, escopo, equipe, materiais previstos e preparação.", href: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders", accent: accents.blue },
+          { title: "Agenda", description: "Programação semanal e diária das equipes.", href: "/calendar", icon: Calendar, permission: "viewCalendar", accent: accents.violet },
         ],
       }}
     />
@@ -222,15 +229,16 @@ export function ExecutionQualityHub() {
   return (
     <HubPage
       config={{
-        title: "Execução & Qualidade",
-        description: "Registre a obra em campo e comprove que foi executada conforme padrão técnico.",
-        owner: "Gestor de Obras / Equipe Técnica",
-        firstStep: "Abrir a OS ou o Registro de Obra e conferir tarefas, evidências e pendências.",
-        sequence: ["OS", "Registro diário", "Fotos/evidências", "Consumo real", "Ocorrências", "Checklist", "Inspeção", "Conclusão"],
+        title: "Execução de Obras",
+        description: "Registre a obra em campo, evidências, consumo real, ocorrências e conclusão dentro do contexto da OS.",
+        owner: "Gestor de obra, encarregado, aplicador e equipe técnica.",
+        actions: ["Abrir a OS liberada.", "Registrar andamento da obra.", "Anexar fotos e evidências.", "Registrar ocorrências e consumo real.", "Conferir qualidade e bloqueios na OS.", "Finalizar quando não houver pendência."],
+        next: "Obra concluída → enviar relatório e garantia para Pós-venda.",
+        helpKey: "execucao",
         items: [
-          { title: "Ordens de Serviço", description: "Execução, progresso, materiais, fotos e finalização.", href: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders", accent: accents.blue },
           { title: "Registro de Obra", description: "Registro diário, observações, fotos e consumo real.", href: "/registro-obra", icon: Clipboard, permission: "viewWorks", accent: accents.orange },
-          { title: "Qualidade das Obras", description: "Checklists, ocorrências, inspeções e bloqueios.", href: "/qualidade-obras", icon: ListChecks, permission: "viewWorkOrders", accent: accents.emerald },
+          { title: "Ordem de Serviço", description: "Execução, progresso, materiais, qualidade e finalização.", href: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders", accent: accents.blue },
+          { title: "Configurar Qualidade", description: "Atalho administrativo para procedimentos, checklists e padrões.", href: "/qualidade-obras", icon: ListChecks, permission: "viewSettings", accent: accents.slate },
         ],
       }}
     />
@@ -243,16 +251,16 @@ export function InventoryHub() {
       config={{
         title: "Materiais & Equipamentos",
         description: "Controle tudo que entra, sai, volta, fica em campo, é consumido, perdido, danificado ou enviado para manutenção.",
-        owner: "Materiais e Equipamentos / Equipe Técnica",
-        firstStep: "Conferir Estoque Atual e registrar qualquer alteração por movimentação ou controle de materiais.",
-        sequence: ["Estoque atual", "Retirada", "Em campo", "Consumo ou devolução", "Dano/perda/manutenção", "Contagem", "Auditoria"],
+        owner: "Estoquista ou responsável por materiais, ferramentas e equipamentos.",
+        actions: ["Registrar retirada ou uso.", "Conferir estoque atual.", "Controlar ferramentas em campo.", "Registrar venda quando houver.", "Fazer contagem periódica.", "Resolver pendências e devoluções."],
+        next: "Materiais atualizados → Financeiro e Gestão usam dados confiáveis para cobrança e auditoria.",
+        helpKey: "materiais",
         items: [
-          { title: "Estoque Atual", description: "Saldos, mínimos, status e resumo de entradas e saídas.", href: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent", accent: accents.blue },
-          { title: "Ferramentas e Equipamentos", description: "Visualize retornáveis, responsáveis, danos, perdas e manutenção.", href: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent", accent: accents.slate },
-          { title: "Movimentações de Estoque", description: "Audite entradas, saídas, ajustes, datas e origens.", href: "/estoque/movimentacoes", icon: ShoppingCart, permission: "viewInventoryMovements", accent: accents.orange },
           { title: "Controle de Materiais", description: "Retirada, uso, devolução, fotos e assinatura.", href: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials", accent: accents.amber },
-          { title: "Contagem Rápida", description: "Auditoria física com processamento de lista e ajustes automáticos.", href: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
+          { title: "Estoque Atual", description: "Saldos, mínimos, status e resumo de entradas e saídas.", href: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent", accent: accents.blue },
+          { title: "Ferramentas", description: "Retornáveis, responsáveis, danos, perdas e manutenção.", href: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent", accent: accents.slate },
           { title: "Venda de Materiais", description: "Carrinho, descontos autorizados e aprovação administrativa.", href: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales", accent: accents.blue },
+          { title: "Contagem Rápida", description: "Auditoria física com processamento de lista e ajustes automáticos.", href: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
         ],
       }}
     />
@@ -263,17 +271,18 @@ export function FinancialHub() {
   return (
     <HubPage
       config={{
-        title: "Financeiro",
+        title: "Financeiro e Administrativo",
         description: "Acompanhe dinheiro, obrigações, contratos, pagamentos, recebimentos e relatórios financeiros autorizados.",
         owner: "Administrativo / Financeiro",
-        firstStep: "Abrir Fluxo de Caixa e conferir vencimentos, entradas, saídas e pendências.",
-        sequence: ["Previsão", "Vencimento", "Pagamento/recebimento", "Baixa", "Relatório", "Conferência"],
+        actions: ["Conferir fluxo de caixa.", "Registrar e acompanhar pagamentos.", "Emitir relatórios.", "Acompanhar contratos.", "Ajustar configurações financeiras quando autorizado."],
+        next: "Financeiro conferido → Gestão acompanha indicadores e decide ajustes administrativos.",
+        helpKey: "financeiro",
         items: [
           { title: "Fluxo de Caixa", description: "Entradas, saídas e visão financeira geral.", href: "/financials", icon: DollarSign, permission: "viewCashFlow", accent: accents.blue },
           { title: "Pagamentos", description: "Parcelas, status e vínculos com orçamentos.", href: "/payments", icon: CreditCard, permission: "viewPayments", accent: accents.emerald },
-          { title: "Configurações", description: "Formas, condições e regras de cobrança.", href: "/pagamentos-config", icon: Tag, permission: "viewFinancialSettings", accent: accents.orange },
-          { title: "Contratos", description: "Modelos e documentos administrativos.", href: "/contratos", icon: FileText, permission: "viewSettings", accent: accents.rose },
           { title: "Relatórios", description: "DRE, conversão, obras por período e indicadores.", href: "/relatorios", icon: BarChart3, permission: "viewFinancials", accent: accents.violet },
+          { title: "Contratos", description: "Modelos e documentos administrativos.", href: "/contratos", icon: FileText, permission: "viewSettings", accent: accents.rose },
+          { title: "Configurações Financeiras", description: "Formas, condições e regras de cobrança.", href: "/pagamentos-config", icon: Tag, permission: "viewFinancialSettings", accent: accents.orange },
         ],
       }}
     />
@@ -284,13 +293,14 @@ export function TeamHub() {
   return (
     <HubPage
       config={{
-        title: "Equipe",
+        title: "Equipe e Treinamento",
         description: "Organize pessoas, acessos, permissões, produtividade e treinamento para execução correta do ERP.",
         owner: "Admin / Gestão de Pessoas",
-        firstStep: "Conferir usuários, cargos, permissões e orientar a equipe pelo Como Trabalhar.",
-        sequence: ["Usuários", "Cargos", "Permissões", "Treinamento", "Produtividade", "Responsabilidades"],
+        actions: ["Cadastrar ou conferir funcionários.", "Acompanhar produtividade.", "Orientar pela Central Como Trabalhar.", "Encaminhar dúvidas para gestor ou Admin."],
+        next: "Equipe treinada → cada pessoa executa sua função no fluxo operacional.",
+        helpKey: "equipe",
         items: [
-          { title: "Usuários e Cargos", description: "Acessos, cargos e permissões internas.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
+          { title: "Funcionários", description: "Atalho autorizado para cadastro de usuários e cargos.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
           { title: "Produtividade", description: "Horas, área executada e desempenho por técnico.", href: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity", accent: accents.blue },
           { title: "Como Trabalhar", description: "Guias rápidos e procedimentos aprovados.", href: "/como-trabalhar", icon: BookOpen, permission: "viewHelpCenter", accent: accents.slate },
         ],
@@ -306,8 +316,9 @@ export function PostSaleHub() {
         title: "Pós-venda & Relacionamento",
         description: "Acompanhe o cliente depois da entrega, garantias, manutenções, retorno e satisfação.",
         owner: "Pós-venda / Administrativo",
-        firstStep: "Abrir garantias e pós-venda para conferir pendências depois da conclusão da obra.",
-        sequence: ["Entrega", "Garantia", "Pesquisa", "Manutenção", "Histórico do cliente", "Indicadores"],
+        actions: ["Conferir obras concluídas.", "Emitir ou acompanhar garantias.", "Registrar contato pós-venda.", "Coletar satisfação.", "Acompanhar manutenção e histórico do cliente."],
+        next: "Pós-venda concluído → histórico volta para Atendimento e Gestão em futuras oportunidades.",
+        helpKey: "pos-venda",
         items: [
           { title: "Garantias", description: "Certificados, prazos e incidentes de garantia.", href: "/garantias", icon: Shield, permission: "viewWarranties", accent: accents.emerald },
           { title: "Pós-venda & NPS", description: "Acompanhamento após obra e pesquisa de satisfação.", href: "/pos-venda", icon: Heart, permission: "viewPostSale", accent: accents.rose },
@@ -322,21 +333,21 @@ export function SettingsHub() {
     <HubPage
       config={{
         title: "Gestão & Configurações",
-        description: "Parâmetros estruturais do ERP: empresa, status, regras, pagamentos, custos, backups e integrações futuras.",
+        description: "Parâmetros estruturais do ERP: empresa, status, regras, pagamentos, custos e integrações futuras.",
         owner: "Administrador",
-        firstStep: "Alterar configurações somente depois de entender impacto em orçamento, financeiro, backup e permissões.",
-        sequence: ["Configuração", "Permissão", "Validação", "Backup", "Uso controlado"],
+        actions: ["Controlar usuários e cargos.", "Ajustar custos, margens, regras e status.", "Configurar pagamentos e parâmetros gerais.", "Validar impacto antes de liberar uso."],
+        next: "Gestão ajustada → Backups protege os dados antes de mudanças críticas.",
+        helpKey: "gestao",
         items: [
-          { title: "Status", description: "Etapas e status usados nos fluxos.", href: "/status-personalizados", icon: Hash, permission: "viewStatusSettings", accent: accents.blue },
-          { title: "Usuários", description: "Acessos, cargos e permissões internas.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
-          { title: "Custos", description: "Margens, custos, Zona A/B/C e acréscimos regionais.", href: "/custos-margens", icon: TrendingDown, permission: "viewCostSettings", accent: accents.orange },
-          { title: "Governança Comercial", description: "Alçadas, descontos, comissões, logística e aditivos.", href: "/governanca-comercial", icon: Scale, permission: "viewSettings", accent: accents.violet },
+          { title: "Usuários e Cargos", description: "Acessos, cargos e permissões internas.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
+          { title: "Custos e Margens", description: "Margens, custos, Zona A/B/C e acréscimos regionais.", href: "/custos-margens", icon: TrendingDown, permission: "viewCostSettings", accent: accents.orange },
           { title: "Regras", description: "Critérios para score e recomendação de serviços.", href: "/priority-rules", icon: Scale, permission: "viewPriorityRules", accent: accents.violet },
+          { title: "Status", description: "Etapas e status usados nos fluxos.", href: "/status-personalizados", icon: Hash, permission: "viewStatusSettings", accent: accents.blue },
+          { title: "Governança Comercial", description: "Alçadas, descontos, comissões, logística e aditivos.", href: "/governanca-comercial", icon: Scale, permission: "viewSettings", accent: accents.violet },
           { title: "Configurações Gerais", description: "Parâmetros gerais do ERP.", href: "/settings", icon: Settings, permission: "viewSettings", accent: accents.blue },
           { title: "Formas de Pagamento", description: "Meios de pagamento e ajustes.", href: "/formas-pagamento", icon: CreditCard, permission: "viewFinancialSettings", accent: accents.emerald },
           { title: "Condições de Pagamento", description: "Textos e condições exibidas nos PDFs.", href: "/condicoes-pagamento", icon: Clipboard, permission: "viewFinancialSettings", accent: accents.amber },
           { title: "Contratos", description: "Modelos, contratos e documentos comerciais.", href: "/contratos", icon: FileText, permission: "viewSettings", accent: accents.rose },
-          { title: "Backups", description: "Backup completo, exportação e restauração com preview.", href: "/backups-hub", icon: FileText, permission: "viewBackups", accent: accents.amber },
         ],
       }}
     />
@@ -347,15 +358,16 @@ export function BackupsHub() {
   return (
     <HubPage
       config={{
-        title: "Backups",
+        title: "Backups e Restauração",
         description: "Crie cópias seguras, exporte módulos e restaure somente após validação, preview e confirmação.",
         owner: "Administrador",
-        firstStep: "Criar backup completo antes de qualquer restauração ou limpeza operacional.",
-        sequence: ["Backup completo", "Exportação modular", "Preview de restauração", "Conferência", "Confirmação", "Relatório"],
+        actions: ["Gerar backup completo antes de operações críticas.", "Exportar módulos para conferência.", "Restaurar apenas com preview e confirmação.", "Conferir histórico e resultado."],
+        next: "Backup concluído → operação protegida para continuar ou migrar ambiente.",
+        helpKey: "backup",
         items: [
-          { title: "Criar Backup Completo", description: "Arquivo técnico restaurável com módulos suportados.", href: "/backups/backup", icon: FileText, permission: "viewBackups", accent: accents.blue },
-          { title: "Exportação", description: "Baixar relatórios em PDF para conferência humana.", href: "/backups/exportacao", icon: FileText, permission: "viewExports", accent: accents.emerald },
-          { title: "Restauração", description: "Importar PDFs gerados pelo ERP com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
+          { title: "Backup Completo", description: "Arquivo técnico restaurável com módulos suportados.", href: "/backups/backup", icon: FileText, permission: "viewBackups", accent: accents.blue },
+          { title: "Exportar Módulos", description: "Baixar relatórios em PDF para conferência humana.", href: "/backups/exportacao", icon: FileText, permission: "viewExports", accent: accents.emerald },
+          { title: "Restaurar", description: "Importar backups com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
         ],
       }}
     />

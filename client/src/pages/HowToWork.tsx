@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { BookOpen, ExternalLink, Search, Route, Users, ShieldCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -10,17 +10,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 const baseGuides = [
-  { moduleKey: "marketing", title: "Marketing & Captação", summary: "Atrair oportunidades com conteúdo, identidade visual e mídias autorizadas.", routePath: "/marketing", audience: "Marketing", order: ["Definir ideia", "Escolher canal", "Separar mídia autorizada", "Gerar rascunho", "Revisar", "Publicar manualmente"] },
-  { moduleKey: "atendimento", title: "Atendimento Comercial", summary: "Receber contatos, criar leads, qualificar necessidade e programar follow-up.", routePath: "/crm", audience: "Comercial", order: ["Novo contato", "Cadastrar lead", "Qualificar", "Definir próxima ação", "Encaminhar para orçamento"] },
-  { moduleKey: "orcamentos", title: "Orçamentos & Negociação", summary: "Transformar oportunidade qualificada em proposta segura com preço, margem e aprovação.", routePath: "/orcamentos", audience: "Orçamentista", order: ["Diagnóstico ou visita", "Cliente", "Serviços", "Preço/margem", "Proposta", "Aprovação"] },
-  { moduleKey: "planejamento", title: "Planejamento da Obra", summary: "Preparar OS, agenda, equipe e materiais antes da execução.", routePath: "/planejamento-obras", audience: "Gestor de obras", order: ["Orçamento aprovado", "Criar OS", "Agendar", "Definir equipe", "Conferir materiais", "Liberar execução"] },
-  { moduleKey: "execucao", title: "Execução & Qualidade", summary: "Registrar execução, evidências, ocorrências, checklists e inspeção final.", routePath: "/execucao-qualidade", audience: "Equipe técnica", order: ["Abrir OS", "Registrar obra", "Adicionar fotos", "Informar consumo", "Resolver ocorrências", "Concluir checklist"] },
-  { moduleKey: "materiais", title: "Materiais & Equipamentos", summary: "Controlar estoque, ferramentas, retiradas, devoluções, perdas e manutenção.", routePath: "/materiais-equipamentos", audience: "Materiais", order: ["Conferir saldo", "Registrar retirada", "Acompanhar em campo", "Devolver/consumir", "Tratar dano/perda", "Contar fisicamente"] },
-  { moduleKey: "financeiro", title: "Financeiro & Administrativo", summary: "Acompanhar caixa, pagamentos, recebimentos, contratos e relatórios autorizados.", routePath: "/financeiro", audience: "Financeiro", order: ["Conferir vencimentos", "Registrar previsão", "Baixar pagamento", "Analisar fluxo", "Emitir relatório"] },
-  { moduleKey: "equipe", title: "Equipe & Treinamento", summary: "Gerenciar pessoas, acessos, permissões, produtividade e capacitação.", routePath: "/equipe", audience: "Gestão de pessoas", order: ["Cadastrar usuário", "Definir cargo", "Revisar permissões", "Orientar pelo manual", "Acompanhar produtividade"] },
-  { moduleKey: "pos-venda", title: "Pós-venda & Relacionamento", summary: "Acompanhar garantias, manutenção, satisfação e histórico depois da entrega.", routePath: "/pos-venda-hub", audience: "Pós-venda", order: ["Entrega", "Garantia", "Pesquisa", "Manutenção", "Histórico", "Indicadores"] },
-  { moduleKey: "gestao", title: "Gestão & Configurações", summary: "Administrar parâmetros, status, pagamentos, custos, permissões e backups.", routePath: "/gestao", audience: "Admin", order: ["Configurar", "Validar permissão", "Testar impacto", "Gerar backup", "Liberar uso"] },
-  { moduleKey: "backup", title: "Backups & Restauração", summary: "Criar cópia segura e restaurar somente com preview, confirmação e banco correto.", routePath: "/backups-hub", audience: "Admin", order: ["Backup completo", "Exportar módulo", "Enviar arquivo", "Conferir preview", "Confirmar", "Registrar relatório"] },
+  { moduleKey: "marketing", title: "Marketing e Captação", summary: "Atrair oportunidades e manter a presença digital com conteúdo e mídias autorizadas.", routePath: "/marketing", audience: "Marketing / Comunicação", order: ["Planejar campanha", "Criar conteúdo", "Revisar identidade e autorização", "Publicar", "Registrar origem", "Entregar contato ao Atendimento"] },
+  { moduleKey: "atendimento", title: "Atendimento Comercial", summary: "Receber, identificar, qualificar e acompanhar oportunidades.", routePath: "/crm", audience: "Comercial / Atendimento", order: ["Registrar lead", "Identificar cliente", "Entender necessidade", "Qualificar", "Agendar próximo contato", "Encaminhar para Orçamentos"] },
+  { moduleKey: "orcamentos", title: "Orçamentos", summary: "Transformar oportunidade qualificada em proposta segura com preço, margem e aprovação.", routePath: "/orcamentos", audience: "Orçamentista", order: ["Entender necessidade", "Criar orçamento", "Consultar materiais e serviços", "Conferir margem", "Solicitar aprovação", "Enviar proposta", "Encaminhar aprovado para Planejamento"] },
+  { moduleKey: "planejamento", title: "Planejamento de Obras", summary: "Transformar orçamento aprovado em trabalho planejado.", routePath: "/planejamento-obras", audience: "Gestor de obras", order: ["Criar OS", "Agendar", "Definir equipe", "Conferir materiais previstos", "Liberar execução"] },
+  { moduleKey: "execucao", title: "Execução de Obras", summary: "Registrar execução, evidências, consumo, ocorrências e conclusão dentro da OS.", routePath: "/execucao-qualidade", audience: "Equipe técnica", order: ["Abrir OS", "Registrar obra", "Adicionar fotos", "Informar consumo real", "Resolver ocorrências", "Conferir qualidade", "Finalizar"] },
+  { moduleKey: "materiais", title: "Materiais e Equipamentos", summary: "Controlar estoque, ferramentas, retiradas, devoluções, perdas e manutenção.", routePath: "/materiais-equipamentos", audience: "Materiais / Estoque", order: ["Registrar retirada", "Conferir estoque", "Controlar ferramentas", "Registrar venda", "Fazer contagem", "Resolver pendências"] },
+  { moduleKey: "financeiro", title: "Financeiro e Administrativo", summary: "Acompanhar caixa, pagamentos, recebimentos, contratos e relatórios autorizados.", routePath: "/financeiro", audience: "Financeiro", order: ["Conferir caixa", "Acompanhar pagamentos", "Emitir relatórios", "Conferir contratos", "Ajustar configurações financeiras"] },
+  { moduleKey: "equipe", title: "Equipe e Treinamento", summary: "Gerenciar funcionários, produtividade e orientação de uso.", routePath: "/equipe", audience: "Gestão de pessoas", order: ["Conferir funcionários", "Acompanhar produtividade", "Treinar pelo manual", "Revisar dúvidas recorrentes"] },
+  { moduleKey: "pos-venda", title: "Pós-venda e Relacionamento", summary: "Acompanhar garantias, manutenção, satisfação e histórico depois da entrega.", routePath: "/pos-venda-hub", audience: "Pós-venda", order: ["Obras concluídas", "Relatório final", "Garantia", "Contato pós-venda", "Satisfação", "Manutenção", "Histórico do cliente"] },
+  { moduleKey: "gestao", title: "Gestão e Configurações", summary: "Administrar parâmetros gerais, custos, regras, status e pagamentos.", routePath: "/gestao", audience: "Admin / Gestores", order: ["Usuários e cargos", "Custos e margens", "Regras", "Status", "Configurações gerais", "Formas e condições de pagamento"] },
+  { moduleKey: "backup", title: "Backups e Restauração", summary: "Criar cópia segura e restaurar somente com preview, confirmação e banco correto.", routePath: "/backups-hub", audience: "Admin", order: ["Backup completo", "Exportar módulos", "Restaurar com preview", "Conferir histórico"] },
 ];
 
 const startFlow = [
@@ -67,6 +67,7 @@ const glossary = [
 
 export default function HowToWork() {
   const [search, setSearch] = useState("");
+  const [location] = useLocation();
   const { data: articles = [] } = useQuery<any[]>({ queryKey: ["/api/help-articles"] });
   const { data: procedures = [] } = useQuery<any[]>({ queryKey: ["/api/quality/procedures"] });
   const guides = [...baseGuides, ...articles.filter((article) => article.status !== "inativo")];
@@ -75,6 +76,8 @@ export default function HowToWork() {
     if (!term) return guides;
     return guides.filter((guide) => [guide.title, guide.summary, guide.moduleKey, guide.audience, guide.roleName].some((value) => String(value || "").toLowerCase().includes(term)));
   }, [guides, search]);
+  const selectedKey = new URLSearchParams(location.split("?")[1] || "").get("funcao");
+  const selectedGuide = baseGuides.find(guide => guide.moduleKey === selectedKey);
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
@@ -89,6 +92,34 @@ export default function HowToWork() {
             {startFlow.map((step, index) => <Badge key={step} variant="secondary">{index + 1}. {step}</Badge>)}
           </div>
           <p className="text-sm text-slate-600">Use este caminho para entender como uma oportunidade vira obra executada, faturada, acompanhada e protegida por backup.</p>
+        </CardContent>
+      </Card>
+      {selectedGuide && (
+        <Card className="border-primary/30 bg-white">
+          <CardHeader><CardTitle className="text-lg">{selectedGuide.title}</CardTitle></CardHeader>
+          <CardContent className="grid gap-4 text-sm md:grid-cols-[0.8fr_1.2fr]">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-400">Quem utiliza</p>
+              <p className="mt-1 font-semibold text-slate-900">{selectedGuide.audience}</p>
+              <p className="mt-3 text-slate-600">{selectedGuide.summary}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-400">O que fazer em sequência</p>
+              <ol className="mt-2 space-y-1 text-slate-700">
+                {selectedGuide.order.map((step, index) => <li key={step}>{index + 1}. {step}</li>)}
+              </ol>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      <Card>
+        <CardHeader><CardTitle className="text-lg">Escolha sua função</CardTitle></CardHeader>
+        <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {baseGuides.map(guide => (
+            <Link key={guide.moduleKey} href={`/como-trabalhar?funcao=${guide.moduleKey}`} className="rounded-lg border bg-white p-3 text-sm font-semibold text-slate-700 hover:border-primary/40 hover:text-primary">
+              {guide.title}
+            </Link>
+          ))}
         </CardContent>
       </Card>
       <div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input className="pl-9" placeholder="Buscar guia, módulo ou cargo" value={search} onChange={(event) => setSearch(event.target.value)} /></div>

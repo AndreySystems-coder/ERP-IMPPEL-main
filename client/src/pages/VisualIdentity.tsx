@@ -14,13 +14,13 @@ import { apiRequest } from "@/lib/queryClient";
 const emptyPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 const STEPS = [
   { id: "marca", label: "Marca" },
-  { id: "padroes", label: "Padrões" },
-  { id: "autorizacoes", label: "Autorizações" },
-  { id: "midias", label: "Mídias" },
+  { id: "padroes", label: "Fotos" },
+  { id: "midias", label: "Biblioteca" },
   { id: "composicoes", label: "Antes/Depois" },
-  { id: "templates", label: "Templates" },
-  { id: "publicacao", label: "Gerar material" },
-  { id: "resumo", label: "Revisar" },
+  { id: "templates", label: "Template" },
+  { id: "publicacao", label: "Conteúdo" },
+  { id: "autorizacoes", label: "Revisão" },
+  { id: "resumo", label: "Exportação" },
 ] as const;
 
 type StepId = typeof STEPS[number]["id"];
@@ -129,8 +129,9 @@ export default function VisualIdentity() {
             ))}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
+            <span className="mr-auto self-center text-xs font-bold uppercase text-blue-800">Passo {activeIndex + 1} de {STEPS.length}</span>
             <Button type="button" variant="outline" onClick={goBack} disabled={activeIndex === 0}>Voltar</Button>
-            <Button type="button" onClick={goNext} disabled={activeIndex === STEPS.length - 1}>Próximo</Button>
+            <Button type="button" onClick={goNext} disabled={activeIndex === STEPS.length - 1}>Salvar e continuar</Button>
           </div>
         </CardContent>
       </Card>
