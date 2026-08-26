@@ -2,7 +2,22 @@ import { Briefcase, Edit2, FileText, Map, Tag, Trash2 } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 
 import { Button } from "@/components/Button";
+import { StatusPillSelect } from "@/components/ui/status-pill-select";
+import type { StatusPillVariant } from "@/components/ui/status-pill";
 import { evaluateMargin, calculateTotalCost, getCombinedRecommendation } from "@shared/marginEngine";
+
+const QUOTE_STATUS_VARIANTS: Record<string, StatusPillVariant> = {
+  Lead: "neutral",
+  Estimando: "info",
+  Agendada: "warning",
+  "Em Progresso": "primary",
+  Concluída: "success",
+  Faturada: "purple",
+};
+
+function quoteStatusVariant(status: string): StatusPillVariant {
+  return QUOTE_STATUS_VARIANTS[status] || "neutral";
+}
 
 interface QuotesListProps {
   jobs: any[];
@@ -271,16 +286,14 @@ export function QuotesList({
             </div>
 
             <div className="mt-4 space-y-3">
-              <select
+              <StatusPillSelect
                 value={job.status}
-                onChange={(event) => onStatusChange(job, event.target.value)}
-                className={`w-full min-w-0 rounded-lg border-0 px-3 py-2.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/30 ${statusColors[job.status] || "bg-slate-100"}`}
+                options={statusOptions}
+                variantForStatus={quoteStatusVariant}
+                onChange={(status) => onStatusChange(job, status)}
+                className="w-full justify-center py-2.5 text-sm"
                 data-testid={`select-status-${job.id}`}
-              >
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
+              />
               <QuoteActions job={job} onSendWhatsApp={onSendWhatsApp} onGeneratePdf={onGeneratePdf} onEdit={onEdit} onDelete={onDelete} compact={false} />
             </div>
           </article>
@@ -331,17 +344,13 @@ export function QuotesList({
                     <RecommendationBadge job={job} jobsWithScores={jobsWithScores} services={services} costConfig={costConfig} />
                   </td>
                   <td className="p-4">
-                    <select
+                    <StatusPillSelect
                       value={job.status}
-                      onChange={(event) => onStatusChange(job, event.target.value)}
-                      className={`cursor-pointer rounded-full border-0 px-2 py-1 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/30 ${statusColors[job.status] || "bg-slate-100"}`}
+                      options={statusOptions}
+                      variantForStatus={quoteStatusVariant}
+                      onChange={(status) => onStatusChange(job, status)}
                       data-testid={`select-status-${job.id}`}
-                      title="Alterar status do orçamento"
-                    >
-                      {statusOptions.map((status) => (
-                        <option key={status} value={status}>{status}</option>
-                      ))}
-                    </select>
+                    />
                   </td>
                   <td className="p-4 pr-6 text-right">
                     <QuoteActions job={job} onSendWhatsApp={onSendWhatsApp} onGeneratePdf={onGeneratePdf} onEdit={onEdit} onDelete={onDelete} />

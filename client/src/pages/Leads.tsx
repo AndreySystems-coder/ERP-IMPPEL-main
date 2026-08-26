@@ -7,6 +7,7 @@ import { Modal } from "@/components/Modal";
 import { Plus, Search, Trash2, Edit2, Phone, Mail, Clock, Users } from "lucide-react";
 import { format } from "date-fns";
 import { asArray } from "@/lib/safeData";
+import { StatusPill, type StatusPillVariant } from "@/components/ui/status-pill";
 
 export default function Leads() {
   const { data: leads = [], isLoading } = useLeads();
@@ -55,12 +56,12 @@ export default function Leads() {
     setIsModalOpen(false);
   };
 
-  const statusColors: Record<string, string> = {
-    "New Lead": "bg-blue-100 text-blue-700",
-    "Contacted": "bg-amber-100 text-amber-700",
-    "Qualified": "bg-emerald-100 text-emerald-700",
-    "Proposal": "bg-purple-100 text-purple-700",
-    "Lost": "bg-red-100 text-red-700",
+  const statusVariants: Record<string, StatusPillVariant> = {
+    "New Lead": "info",
+    "Contacted": "warning",
+    "Qualified": "success",
+    "Proposal": "purple",
+    "Lost": "error",
   };
 
   return (
@@ -103,9 +104,7 @@ export default function Leads() {
               <div className="p-6 flex-1">
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="text-lg font-bold font-display text-slate-900 truncate pr-2">{lead.name}</h3>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 ${statusColors[lead.status] || "bg-slate-100 text-slate-700"}`}>
-                    {lead.status}
-                  </span>
+                  <StatusPill label={lead.status} variant={statusVariants[lead.status] || "neutral"} className="shrink-0" />
                 </div>
                 
                 <div className="space-y-3 mt-4">

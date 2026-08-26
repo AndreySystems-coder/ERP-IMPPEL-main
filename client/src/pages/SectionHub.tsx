@@ -79,19 +79,6 @@ function HubPage({ config }: { config: HubConfig }) {
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[0.9fr_1.4fr]">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-bold uppercase text-slate-400">Quem utiliza</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{config.owner}</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-bold uppercase text-slate-400">O que fazer</p>
-          <ol className="mt-2 space-y-1 text-sm font-medium text-slate-700">
-            {config.actions.map((step, index) => <li key={step}>{index + 1}. {step}</li>)}
-          </ol>
-        </div>
-      </div>
-
       {config.warning && <p className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">{config.warning}</p>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -127,14 +114,12 @@ function HubPage({ config }: { config: HubConfig }) {
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-xs font-bold uppercase text-emerald-700">Próxima função</p>
-          <p className="mt-2 text-sm font-semibold text-emerald-950">{config.next}</p>
-        </div>
-        <Link href={`/como-trabalhar?funcao=${config.helpKey}`} className="rounded-xl border border-primary/20 bg-white p-5 text-center shadow-sm transition hover:border-primary/40 hover:shadow-md">
-          <p className="text-xs font-bold uppercase text-primary">Como trabalhar nesta função</p>
-          <p className="mt-2 text-lg font-bold text-slate-950">Abrir orientação completa</p>
+      <div className="flex justify-center pt-1">
+        <Link
+          href={`/como-trabalhar?funcao=${config.helpKey}`}
+          className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white px-6 py-3 text-sm font-bold text-primary shadow-sm transition hover:border-primary/40 hover:shadow-md"
+        >
+          Como trabalhar nesta função
         </Link>
       </div>
     </div>

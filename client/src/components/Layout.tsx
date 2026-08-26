@@ -41,6 +41,7 @@ import { motion } from "framer-motion";
 
 import { useLogout, useUser } from "@/hooks/use-auth";
 import { canAccess, canAccessAny, type PermissionKey } from "@/lib/permissions";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface NavItem {
   name: string;
@@ -249,24 +250,50 @@ function NavSectionGroup({
   const hasActive =
     location === section.path ||
     visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
+
+  const rowClassName = `flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
+    hasActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+  } ${collapsed ? "justify-center px-0" : ""}`;
+
+  const row = (
+    <div className={rowClassName}>
+      <Link href={section.path} onClick={onNavClick} className={`flex min-w-0 items-center gap-2.5 ${collapsed ? "justify-center" : "flex-1"}`}>
+        <motion.span
+          whileHover={{ scale: 1.15 }}
+          transition={{ type: "spring", stiffness: 400, damping: 15 }}
+          className="flex shrink-0"
+        >
+          <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
+        </motion.span>
+        {!collapsed && <span className="truncate">{section.label}</span>}
+      </Link>
+      {!collapsed && visibleItems.length > 1 && (
+        <button type="button" onClick={onToggle} aria-label={`Abrir atalhos de ${section.label}`}>
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="mb-1">
-      <div
-        className={`flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
-          hasActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-        }`}
-        title={section.label}
-      >
-        <Link href={section.path} onClick={onNavClick} className="flex min-w-0 flex-1 items-center gap-2.5">
-          <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
-          {!collapsed && <span className="truncate">{section.label}</span>}
-        </Link>
-        {!collapsed && visibleItems.length > 1 && (
-          <button type="button" onClick={onToggle} aria-label={`Abrir atalhos de ${section.label}`}>
-            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-          </button>
-        )}
-      </div>
+      {collapsed ? (
+        <Tooltip delayDuration={150}>
+          <TooltipTrigger asChild>{row}</TooltipTrigger>
+          <TooltipContent side="right" className="max-w-[200px]">
+            <p className="font-semibold">{section.label}</p>
+            {visibleItems.length > 1 && (
+              <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                {visibleItems.map((item) => (
+                  <li key={`${item.name}-${item.path}`}>{item.name}</li>
+                ))}
+              </ul>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        row
+      )}
       {!collapsed && isOpen && (
         <div className="mt-1 space-y-1 pl-4">
           {visibleItems.map((item) => {

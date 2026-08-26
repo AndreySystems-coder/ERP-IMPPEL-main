@@ -6,8 +6,10 @@ import { Briefcase, ChevronDown, ChevronRight, ClipboardList, Edit2, Package, Se
 
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { StatusPill } from "@/components/ui/status-pill";
 import type { ServiceProgress, WorkOrderMaterial } from "@/features/work-orders/types";
 import { getDisplayUnit, parseMaterialsNeeded } from "@/features/work-orders/utils";
+import { workOrderStatusVariant } from "@/features/work-orders/constants";
 
 type WorkOrderListProps = {
   workOrders: any[];
@@ -126,7 +128,7 @@ export function WorkOrderList({ workOrders, isLoading = false, search, statusCol
                   <h3 className="truncate text-base font-bold text-slate-900">{workOrder.clientName}</h3>
                   <p className="mt-0.5 line-clamp-2 text-sm text-slate-500">{workOrder.serviceType}</p>
                 </div>
-                <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${statusColors[workOrder.status] || "bg-slate-100 text-slate-600"}`}>{workOrder.status}</span>
+                <StatusPill label={workOrder.status} variant={workOrderStatusVariant(workOrder.status)} className="shrink-0" />
               </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -195,7 +197,7 @@ export function WorkOrderList({ workOrders, isLoading = false, search, statusCol
                     <td className="whitespace-nowrap p-4 text-sm">{workOrder.scheduledDate ? format(new Date(workOrder.scheduledDate), "dd/MM/yyyy", { locale: ptBR }) : "-"}</td>
                     <td className="p-4"><MaterialsPanel materialsNeeded={workOrder.materialsNeeded} /></td>
                     <td className="p-4">
-                      <span className={`rounded-md px-2.5 py-1 text-sm font-medium ${statusColors[workOrder.status] || "bg-slate-100 text-slate-600"}`}>{workOrder.status}</span>
+                      <StatusPill label={workOrder.status} variant={workOrderStatusVariant(workOrder.status)} />
                       {progress && progress.done > 0 && <span className="ml-2 text-xs text-slate-400">{progress.done}/{progress.total} concl.</span>}
                     </td>
                     <td className="p-4 pr-6 text-right">

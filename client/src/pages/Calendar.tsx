@@ -2,10 +2,13 @@ import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, MapPin, Users as UsersIcon, ExternalLink } from "lucide-react";
+import { Link } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, eachDayOfInterval, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { asArray } from "@/lib/safeData";
+import { StatusPill } from "@/components/ui/status-pill";
+import { workOrderStatusVariant } from "@/features/work-orders/constants";
 
 const apiRequest = async (method: string, path: string) => {
   const res = await fetch(path, { method });
@@ -23,6 +26,7 @@ export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<"daily" | "weekly">("weekly");
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [detailDay, setDetailDay] = useState<Date | null>(null);
 
   const statusColors: Record<string, { bg: string; text: string; border: string }> = {
     Planejada: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
@@ -151,9 +155,7 @@ export default function Calendar() {
                             <p className="text-sm text-slate-600 mt-1">{wo.serviceType}</p>
                             {wo.address && <p className="text-xs text-slate-500 mt-1">{wo.address}</p>}
                           </div>
-                          <span className={`px-2.5 py-1 rounded text-xs font-semibold ${colors.text}`}>
-                            {wo.status}
-                          </span>
+                          <StatusPill label={wo.status} variant={workOrderStatusVariant(wo.status)} />
                         </div>
                         {wo.teamAssigned && (
                           <p className="text-xs text-slate-600 mt-3 pt-2 border-t border-current/10">
@@ -172,63 +174,126 @@ export default function Calendar() {
 
       {/* Weekly View */}
       {viewMode === "weekly" && (
-        <div className="grid grid-cols-7 gap-2">
-          {weekDays.map((day) => {
-            const dayKey = day.toISOString().split("T")[0];
-            const orders = weeklyOrdersByDay[dayKey] || [];
-            const isToday = isSameDay(day, new Date());
-            const isSelected = isSameDay(day, selectedDate);
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
+          <div className={`grid grid-cols-7 gap-3 transition-all duration-300 ${detailDay ? "lg:flex-[1.6]" : "flex-1"} w-full`}>
+            {weekDays.map((day) => {
+              const dayKey = day.toISOString().split("T")[0];
+              const orders = weeklyOrdersByDay[dayKey] || [];
+              const isToday = isSameDay(day, new Date());
+              const isSelected = detailDay ? isSameDay(day, detailDay) : false;
 
-            return (
-              <Card
-                key={dayKey}
-                className={`overflow-hidden cursor-pointer transition-all ${
-                  isSelected ? "ring-2 ring-primary" : ""
-                } ${isToday ? "border-primary border-2" : ""}`}
-                onClick={() => {
-                  setSelectedDate(day);
-                  setViewMode("daily");
-                }}
-              >
-                <CardContent className="p-3">
-                  <p
-                    className={`text-sm font-bold ${
-                      isToday ? "text-primary" : "text-slate-600"
-                    }`}
-                  >
-                    {format(day, "EEE", { locale: ptBR })}
-                  </p>
-                  <p className="text-lg font-display font-bold text-slate-900">
-                    {format(day, "dd")}
-                  </p>
-                  <div className="mt-3 space-y-1 max-h-32 overflow-y-auto">
-                    {orders.length === 0 ? (
-                      <p className="text-xs text-slate-400">-</p>
-                    ) : (
-                      orders.map((wo: any) => {
-                        const colors = statusColors[wo.status] || statusColors["Planejada"];
-                        return (
-                          <div
-                            key={wo.id}
-                            className={`text-xs p-1.5 rounded border ${colors.bg} ${colors.text} ${colors.border} border-1 truncate`}
-                            title={wo.clientName}
-                            data-testid={`weekly-order-${wo.id}`}
-                          >
-                            {wo.clientName}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                  {orders.length > 0 && (
-                    <p className="text-xs text-slate-500 mt-2 font-semibold">
-                      {orders.length} ordem{orders.length !== 1 ? "s" : ""}
+              return (
+                <Card
+                  key={dayKey}
+                  className={`overflow-hidden cursor-pointer transition-all ${
+                    isSelected ? "ring-2 ring-primary" : ""
+                  } ${isToday ? "border-primary border-2" : ""}`}
+                  onClick={() => setDetailDay(day)}
+                  data-testid={`weekly-day-${dayKey}`}
+                >
+                  <CardContent className="p-4">
+                    <p
+                      className={`text-sm font-bold ${
+                        isToday ? "text-primary" : "text-slate-600"
+                      }`}
+                    >
+                      {format(day, "EEE", { locale: ptBR })}
                     </p>
+                    <p className="text-xl font-display font-bold text-slate-900">
+                      {format(day, "dd")}
+                    </p>
+                    <div className="mt-3 space-y-1 max-h-32 overflow-y-auto">
+                      {orders.length === 0 ? (
+                        <p className="text-xs text-slate-400">-</p>
+                      ) : (
+                        orders.map((wo: any) => {
+                          const colors = statusColors[wo.status] || statusColors["Planejada"];
+                          return (
+                            <div
+                              key={wo.id}
+                              className={`text-xs p-1.5 rounded border ${colors.bg} ${colors.text} ${colors.border} border-1 truncate`}
+                              title={wo.clientName}
+                              data-testid={`weekly-order-${wo.id}`}
+                            >
+                              {wo.clientName}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    {orders.length > 0 && (
+                      <p className="text-xs text-slate-500 mt-2 font-semibold">
+                        {orders.length} ordem{orders.length !== 1 ? "s" : ""}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {detailDay && (
+            <Card className="w-full lg:w-80 shrink-0 lg:sticky lg:top-4">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-slate-400">
+                      {format(detailDay, "EEEE", { locale: ptBR })}
+                    </p>
+                    <p className="text-lg font-display font-bold text-slate-900">
+                      {format(detailDay, "dd 'de' MMMM", { locale: ptBR })}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDetailDay(null)}
+                    className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    aria-label="Fechar painel do dia"
+                    data-testid="button-close-day-detail"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {getOrdersForDate(detailDay).length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-3 text-sm text-slate-500">
+                      Nenhuma ordem de serviço registrada para este dia.
+                    </p>
+                  ) : (
+                    getOrdersForDate(detailDay).map((wo: any) => {
+                      const colors = statusColors[wo.status] || statusColors["Planejada"];
+                      return (
+                        <div key={wo.id} className={`rounded-lg border p-3 ${colors.bg} ${colors.border}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className={`font-bold ${colors.text}`}>{wo.clientName}</p>
+                            <StatusPill label={wo.status} variant={workOrderStatusVariant(wo.status)} className="shrink-0" />
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">{wo.serviceType}</p>
+                          {wo.address && (
+                            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                              <MapPin className="h-3 w-3 shrink-0" /> {wo.address}
+                            </p>
+                          )}
+                          {wo.teamAssigned && (
+                            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                              <UsersIcon className="h-3 w-3 shrink-0" /> {wo.teamAssigned}
+                            </p>
+                          )}
+                          <Link
+                            href="/work-orders"
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                          >
+                            Abrir Ordem de Serviço <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        </div>
+                      );
+                    })
                   )}
-                </CardContent>
-              </Card>
-            );
-          })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useSearch } from "wouter";
 import { BookOpen, ExternalLink, Search, Route, Users, ShieldCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const baseGuides = [
   { moduleKey: "marketing", title: "Marketing e Captação", summary: "Atrair oportunidades e manter a presença digital com conteúdo e mídias autorizadas.", routePath: "/marketing", audience: "Marketing / Comunicação", order: ["Planejar campanha", "Criar conteúdo", "Revisar identidade e autorização", "Publicar", "Registrar origem", "Entregar contato ao Atendimento"] },
@@ -40,34 +41,64 @@ const startFlow = [
   "Financeiro e indicadores",
 ];
 
-const glossary = [
-  ["Lead", "Pessoa ou empresa interessada que ainda está em negociação."],
-  ["Funil", "Caminho do contato desde o primeiro atendimento até venda fechada ou perdida."],
-  ["CRM", "Área de relacionamento com clientes, leads, contatos e histórico comercial."],
-  ["Follow-up", "Retorno programado para não deixar cliente sem atendimento depois de orçamento ou contato."],
-  ["D+2, D+5 e D+10", "Lembretes para contato dois, cinco ou dez dias após o evento de referência."],
-  ["Conversão", "Quando uma oportunidade avança para orçamento aprovado, venda ou outro objetivo definido."],
-  ["Duplicidade", "Possível cadastro repetido do mesmo contato, cliente ou oportunidade."],
-  ["Política comercial", "Regra administrativa para margem, desconto, comissão, pagamento ou logística."],
-  ["Alçada", "Limite de decisão que define quem pode aprovar uma exceção."],
-  ["Margem", "Percentual que sobra depois de custos diretos, ocultos e impostos configurados."],
-  ["Markup", "Multiplicador usado para formar preço a partir de custo e margem desejada."],
-  ["Checklist", "Lista de conferência obrigatória para confirmar execução correta."],
-  ["Ocorrência", "Registro de problema ou evento observado durante a obra."],
-  ["Não conformidade", "Algo fora do padrão técnico esperado, podendo bloquear conclusão."],
-  ["Evidência", "Foto, vídeo ou documento que comprova etapa executada."],
-  ["Custódia", "Responsabilidade temporária de uma ferramenta/material com funcionário."],
-  ["Consumível", "Material que sai do estoque e normalmente não volta."],
-  ["Retornável", "Ferramenta/equipamento que deve voltar em bom estado, danificado, perdido ou manutenção."],
-  ["Kit visual", "Conjunto de marca, cores, padrões, marca d'água e regras de uso."],
-  ["Template", "Modelo reutilizável para orçamento, WhatsApp, antes/depois, relatório ou postagem."],
-  ["Backup", "Cópia segura dos dados para conferência ou recuperação."],
-  ["Restauração", "Importação validada com preview e confirmação para recuperar dados."],
+const glossaryCategories = [
+  {
+    category: "Comercial",
+    terms: [
+      ["Lead", "Pessoa ou empresa interessada que ainda está em negociação."],
+      ["Funil", "Caminho do contato desde o primeiro atendimento até venda fechada ou perdida."],
+      ["CRM", "Área de relacionamento com clientes, leads, contatos e histórico comercial."],
+      ["Follow-up", "Retorno programado para não deixar cliente sem atendimento depois de orçamento ou contato."],
+      ["D+2, D+5 e D+10", "Lembretes para contato dois, cinco ou dez dias após o evento de referência."],
+      ["Conversão", "Quando uma oportunidade avança para orçamento aprovado, venda ou outro objetivo definido."],
+      ["Duplicidade", "Possível cadastro repetido do mesmo contato, cliente ou oportunidade."],
+    ],
+  },
+  {
+    category: "Governança comercial",
+    terms: [
+      ["Política comercial", "Regra administrativa para margem, desconto, comissão, pagamento ou logística."],
+      ["Alçada", "Limite de decisão que define quem pode aprovar uma exceção."],
+      ["Margem", "Percentual que sobra depois de custos diretos, ocultos e impostos configurados."],
+      ["Markup", "Multiplicador usado para formar preço a partir de custo e margem desejada."],
+    ],
+  },
+  {
+    category: "Obra e qualidade",
+    terms: [
+      ["Checklist", "Lista de conferência obrigatória para confirmar execução correta."],
+      ["Ocorrência", "Registro de problema ou evento observado durante a obra."],
+      ["Não conformidade", "Algo fora do padrão técnico esperado, podendo bloquear conclusão."],
+      ["Evidência", "Foto, vídeo ou documento que comprova etapa executada."],
+    ],
+  },
+  {
+    category: "Materiais",
+    terms: [
+      ["Custódia", "Responsabilidade temporária de uma ferramenta/material com funcionário."],
+      ["Consumível", "Material que sai do estoque e normalmente não volta."],
+      ["Retornável", "Ferramenta/equipamento que deve voltar em bom estado, danificado, perdido ou manutenção."],
+    ],
+  },
+  {
+    category: "Marketing e identidade",
+    terms: [
+      ["Kit visual", "Conjunto de marca, cores, padrões, marca d'água e regras de uso."],
+      ["Template", "Modelo reutilizável para orçamento, WhatsApp, antes/depois, relatório ou postagem."],
+    ],
+  },
+  {
+    category: "Backup",
+    terms: [
+      ["Backup", "Cópia segura dos dados para conferência ou recuperação."],
+      ["Restauração", "Importação validada com preview e confirmação para recuperar dados."],
+    ],
+  },
 ];
 
 export default function HowToWork() {
   const [search, setSearch] = useState("");
-  const [location] = useLocation();
+  const queryString = useSearch();
   const { data: articles = [] } = useQuery<any[]>({ queryKey: ["/api/help-articles"] });
   const { data: procedures = [] } = useQuery<any[]>({ queryKey: ["/api/quality/procedures"] });
   const guides = [...baseGuides, ...articles.filter((article) => article.status !== "inativo")];
@@ -76,8 +107,41 @@ export default function HowToWork() {
     if (!term) return guides;
     return guides.filter((guide) => [guide.title, guide.summary, guide.moduleKey, guide.audience, guide.roleName].some((value) => String(value || "").toLowerCase().includes(term)));
   }, [guides, search]);
-  const selectedKey = new URLSearchParams(location.split("?")[1] || "").get("funcao");
+  const selectedKey = new URLSearchParams(queryString).get("funcao");
   const selectedGuide = baseGuides.find(guide => guide.moduleKey === selectedKey);
+
+  if (selectedGuide) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
+        <Link href="/como-trabalhar" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+          ← Ver todas as funções
+        </Link>
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900"><BookOpen className="h-6 w-6 text-primary" />{selectedGuide.title}</h1>
+          <p className="mt-1 text-sm text-slate-500">{selectedGuide.summary}</p>
+        </div>
+        <Card className="border-primary/30 bg-white">
+          <CardContent className="grid gap-4 pt-6 text-sm md:grid-cols-[0.8fr_1.2fr]">
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-400">Quem utiliza</p>
+              <p className="mt-1 font-semibold text-slate-900">{selectedGuide.audience}</p>
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase text-slate-400">O que fazer em sequência</p>
+              <ol className="mt-2 space-y-1 text-slate-700">
+                {selectedGuide.order.map((step, index) => <li key={step}>{index + 1}. {step}</li>)}
+              </ol>
+            </div>
+          </CardContent>
+        </Card>
+        {selectedGuide.routePath && (
+          <Button asChild variant="outline" className="w-full justify-between">
+            <Link href={selectedGuide.routePath}>Abrir módulo <ExternalLink className="h-4 w-4" /></Link>
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
@@ -94,24 +158,6 @@ export default function HowToWork() {
           <p className="text-sm text-slate-600">Use este caminho para entender como uma oportunidade vira obra executada, faturada, acompanhada e protegida por backup.</p>
         </CardContent>
       </Card>
-      {selectedGuide && (
-        <Card className="border-primary/30 bg-white">
-          <CardHeader><CardTitle className="text-lg">{selectedGuide.title}</CardTitle></CardHeader>
-          <CardContent className="grid gap-4 text-sm md:grid-cols-[0.8fr_1.2fr]">
-            <div>
-              <p className="text-xs font-bold uppercase text-slate-400">Quem utiliza</p>
-              <p className="mt-1 font-semibold text-slate-900">{selectedGuide.audience}</p>
-              <p className="mt-3 text-slate-600">{selectedGuide.summary}</p>
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase text-slate-400">O que fazer em sequência</p>
-              <ol className="mt-2 space-y-1 text-slate-700">
-                {selectedGuide.order.map((step, index) => <li key={step}>{index + 1}. {step}</li>)}
-              </ol>
-            </div>
-          </CardContent>
-        </Card>
-      )}
       <Card>
         <CardHeader><CardTitle className="text-lg">Escolha sua função</CardTitle></CardHeader>
         <CardContent className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -169,14 +215,31 @@ export default function HowToWork() {
       <Card>
         <CardHeader><CardTitle>Glossário rápido</CardTitle></CardHeader>
         <CardContent>
-          <Accordion type="single" collapsible className="grid gap-x-4 md:grid-cols-2">
-            {glossary.map(([term, explanation]) => (
-              <AccordionItem key={term} value={term}>
-                <AccordionTrigger className="text-left text-sm">{term}</AccordionTrigger>
-                <AccordionContent className="text-slate-600">{explanation}</AccordionContent>
-              </AccordionItem>
+          <Tabs defaultValue={glossaryCategories[0].category}>
+            <TabsList className="flex h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
+              {glossaryCategories.map(({ category }) => (
+                <TabsTrigger
+                  key={category}
+                  value={category}
+                  className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold data-[state=active]:border-primary data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-none"
+                >
+                  {category}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {glossaryCategories.map(({ category, terms }) => (
+              <TabsContent key={category} value={category} className="mt-4">
+                <Accordion type="single" collapsible className="grid gap-x-4 md:grid-cols-2">
+                  {terms.map(([term, explanation]) => (
+                    <AccordionItem key={term} value={term}>
+                      <AccordionTrigger className="text-left text-sm hover:text-primary">{term}</AccordionTrigger>
+                      <AccordionContent className="text-slate-600">{explanation}</AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </TabsContent>
             ))}
-          </Accordion>
+          </Tabs>
         </CardContent>
       </Card>
       <Card>
