@@ -99,40 +99,41 @@ Para desenvolvimento assistido no Replit, `npm run dev` continua valido.
 
 ## Vercel
 
-### Observacao tecnica
+### Arquitetura implementada
 
-A ausencia de `vercel.json` nao e, isoladamente, um erro. A Vercel consegue detectar muitos frameworks e permite configurar Build Command, Output Directory e variaveis pelo painel.
+O ERP roda na Vercel como **duas partes separadas**, definidas em `vercel.json`:
 
-Porem, este ERP nao e apenas um frontend Vite estatico. Ele depende de:
+- **Frontend estatico**: `dist/public` (gerado pelo `npm run build`, mesmo build de sempre) e servido diretamente pela Vercel, sem passar pelo backend.
+- **API serverless**: `api/index.ts` e o entrypoint que a Vercel reconhece automaticamente. Ele importa `createApp()` de `server/index.ts` (a mesma configuracao de sempre — sessao, rotas, etc.) e delega a requisicao para o Express, sem chamar `.listen()`.
 
-- servidor Express;
-- sessoes HTTP-only;
-- PostgreSQL;
-- rotas `/api/*`;
-- build do backend em `dist/index.cjs`.
+`vercel.json` faz o roteamento: `/api/*` vai para a funcao serverless; qualquer outra rota cai no `index.html` do build estatico (necessario para o roteamento client-side do React).
 
-Portanto, antes de considerar o deploy Vercel concluido, e obrigatorio validar que o backend esta rodando, nao apenas que o frontend foi publicado.
+`server/index.ts` usa `process.env.VERCEL` (definida automaticamente pela propria Vercel em toda funcao) para decidir o que pular:
+- no Replit/local, `httpServer.listen(...)` continua rodando normalmente;
+- na Vercel, esse `.listen()` e o `serveStatic(app)` (que le arquivos do disco relativo a `__dirname`) sao pulados — o frontend ja e servido fora da funcao.
+
+Isso resolveu dois problemas reais encontrados durante a migracao, que quebrariam em serverless:
+1. O token de confirmacao de "Limpar Dados Operacionais" (`server/routes.ts`) era guardado num `Map` em memoria — nao sobrevive entre invocacoes serverless. Agora persiste na tabela `settings` (via `storage.updateSetting`), com expiracao de 15 minutos e consumo de uso unico, igual ao comportamento anterior.
+2. O `Pool` do Postgres (`server/db.ts`) nao tinha limite de conexoes — cada instancia serverless fria abriria seu proprio pool. Agora usa `max: 3`.
 
 ### Configuracao recomendada no projeto Vercel
 
-No painel da Vercel, configurar:
+No painel da Vercel:
 
-- Install Command: `npm install`
-- Build Command: `npm run build`
-- Start Command ou modo Node server equivalente: `npm start`
-- Output/Runtime: deve preservar o servidor Node/Express e servir `dist/public` pelo backend.
-
-Se o projeto Vercel detectar apenas Vite estatico, o frontend pode publicar sem APIs. Esse estado nao e valido para producao do ERP.
+- Install Command: `npm install` (padrao, detectado automaticamente).
+- Build Command e Output Directory: ja vem de `vercel.json` (`npm run build` / `dist/public`) — nao precisa repetir no painel.
+- `DATABASE_URL` deve ser a **connection string com pooling** (PgBouncer/Neon "pooled") do provedor, nao a direta — cada instancia serverless abre sua propria conexao.
 
 ### Variaveis obrigatorias no Vercel
 
 Configurar Environment Variables para Production e Preview conforme a politica do projeto:
 
-- `DATABASE_URL`
+- `DATABASE_URL` (connection string **pooled**)
 - `SESSION_SECRET`
 - `DEFAULT_ADMIN_USERNAME`
 - `DEFAULT_ADMIN_PASSWORD`
-- `PORT`, se exigido pelo runtime
+
+`PORT` nao se aplica a funcoes serverless (a Vercel gerencia isso).
 
 Nao colocar valores reais neste documento.
 

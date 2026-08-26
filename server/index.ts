@@ -14,19 +14,18 @@ try {
 
 const PgSession = connectPgSimple(session);
 
-const app = express();
-const httpServer = createServer(app);
 const isProduction = process.env.NODE_ENV === "production";
+// Vercel sets this automatically on every deployed function; used to keep the
+// same server code working unmodified on Replit/local while adapting the
+// parts that don't apply to a serverless invocation (listen(), static files
+// served from disk relative to __dirname).
+const isVercel = !!process.env.VERCEL;
 const sessionSecret =
   process.env.SESSION_SECRET ||
   (isProduction ? "" : "imppel-dev-session-secret");
 
 if (!sessionSecret) {
   throw new Error("SESSION_SECRET must be set in production.");
-}
-
-if (isProduction) {
-  app.set("trust proxy", 1);
 }
 
 declare module "http" {
@@ -42,35 +41,6 @@ declare module "express-session" {
   }
 }
 
-app.use(
-  express.json({
-    limit: "20mb",
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
-app.use(express.urlencoded({ extended: false, limit: "20mb" }));
-
-app.use(session({
-  store: process.env.DATABASE_URL
-    ? new PgSession({
-        conString: process.env.DATABASE_URL,
-        tableName: "session",
-        createTableIfMissing: true,
-      })
-    : undefined,
-  secret: sessionSecret,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: isProduction,
-    sameSite: "lax",
-    httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  },
-}));
-
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -82,23 +52,61 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
+let appPromise: ReturnType<typeof buildApp> | null = null;
 
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      // API responses can contain clients, financial data, photos, signatures,
-      // password hashes, and complete backups. Never mirror payloads into logs.
-      log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
-    }
+async function buildApp() {
+  const app = express();
+  const httpServer = createServer(app);
+
+  if (isProduction) {
+    app.set("trust proxy", 1);
+  }
+
+  app.use(
+    express.json({
+      limit: "20mb",
+      verify: (req, _res, buf) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
+  app.use(express.urlencoded({ extended: false, limit: "20mb" }));
+
+  app.use(session({
+    store: process.env.DATABASE_URL
+      ? new PgSession({
+          conString: process.env.DATABASE_URL,
+          tableName: "session",
+          createTableIfMissing: true,
+        })
+      : undefined,
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: isProduction,
+      sameSite: "lax",
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    },
+  }));
+
+  app.use((req, res, next) => {
+    const start = Date.now();
+    const path = req.path;
+
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      if (path.startsWith("/api")) {
+        // API responses can contain clients, financial data, photos, signatures,
+        // password hashes, and complete backups. Never mirror payloads into logs.
+        log(`${req.method} ${path} ${res.statusCode} in ${duration}ms`);
+      }
+    });
+
+    next();
   });
 
-  next();
-});
-
-(async () => {
   await registerRoutes(httpServer, app);
 
   app.use("/api", (_req, res) => {
@@ -120,26 +128,43 @@ app.use((req, res, next) => {
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (isProduction) {
+  // doesn't interfere with the other routes.
+  // On Vercel the static frontend is served directly from the build output
+  // (see vercel.json), not from this function, so skip it here — the
+  // dist/public directory isn't guaranteed to exist relative to this
+  // function's own bundle location.
+  if (isProduction && !isVercel) {
     serveStatic(app);
-  } else {
+  } else if (!isProduction) {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(
-    {
-      port,
-      host: "0.0.0.0",
-    },
-    () => {
-      log(`serving on port ${port}`);
-    },
-  );
-})();
+  return { app, httpServer };
+}
+
+export function createApp() {
+  if (!appPromise) {
+    appPromise = buildApp();
+  }
+  return appPromise;
+}
+
+if (!isVercel) {
+  createApp().then(({ httpServer }) => {
+    // ALWAYS serve the app on the port specified in the environment variable PORT
+    // Other ports are firewalled. Default to 5000 if not specified.
+    // this serves both the API and the client.
+    // It is the only port that is not firewalled.
+    const port = parseInt(process.env.PORT || "5000", 10);
+    httpServer.listen(
+      {
+        port,
+        host: "0.0.0.0",
+      },
+      () => {
+        log(`serving on port ${port}`);
+      },
+    );
+  });
+}

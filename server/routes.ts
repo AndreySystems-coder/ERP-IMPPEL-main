@@ -47,7 +47,7 @@ import { DEFAULT_ROLE_PERMISSIONS, normalizeRoleName } from "@shared/rolePermiss
 import { restoreUsersAndRolesFromBackup } from "./user-restore-service";
 
 const BCRYPT_ROUNDS = 10;
-const operationalResetTokens = new Map<string, number>();
+const OPERATIONAL_RESET_SETTING_PREFIX = "operational_reset_token:";
 const MONTHS_PT_BR = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 function assertMaterialStockAvailability(
@@ -4667,7 +4667,7 @@ export async function registerRoutes(
         erpVersion: process.env.npm_package_version || "1.0.0",
       });
       const resetToken = randomUUID();
-      operationalResetTokens.set(resetToken, Date.now() + 15 * 60 * 1000);
+      await storage.updateSetting(`${OPERATIONAL_RESET_SETTING_PREFIX}${resetToken}`, Date.now() + 15 * 60 * 1000);
       res.json({ ...backup, resetToken });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
@@ -5052,9 +5052,11 @@ export async function registerRoutes(
     try {
       if (req.body?.confirmation !== "LIMPAR DADOS OPERACIONAIS") return res.status(400).json({ message: "Digite exatamente LIMPAR DADOS OPERACIONAIS." });
       const token = String(req.body?.resetToken || "");
-      const expiresAt = operationalResetTokens.get(token);
+      const settingKey = `${OPERATIONAL_RESET_SETTING_PREFIX}${token}`;
+      const tokenSetting = (await storage.getSettings()).find(setting => setting.key === settingKey);
+      const expiresAt = tokenSetting?.value;
       if (!expiresAt || expiresAt < Date.now()) return res.status(400).json({ message: "Gere e baixe um Backup Completo Técnico antes da limpeza." });
-      operationalResetTokens.delete(token);
+      await storage.updateSetting(settingKey, 0);
       const result = await storage.clearOperationalData();
       res.json({ ...result, message: "Dados operacionais removidos. Usuários, cargos e configurações foram preservados." });
     } catch (err: any) { res.status(500).json({ message: err.message }); }

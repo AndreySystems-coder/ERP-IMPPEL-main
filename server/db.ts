@@ -20,7 +20,14 @@ if (!process.env.DATABASE_URL && !useMemoryPreview) {
 }
 
 export const pool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL })
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      // Kept small on purpose: in serverless (Vercel), each function instance
+      // opens its own pool, so a high per-instance max can exhaust the
+      // database's total connection limit under concurrency. Use the
+      // provider's pooled (PgBouncer/Neon) connection string in production.
+      max: 3,
+    })
   : (undefined as unknown as pg.Pool);
 
 export const db = process.env.DATABASE_URL
