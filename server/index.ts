@@ -24,24 +24,6 @@ const sessionSecret =
   process.env.SESSION_SECRET ||
   (isProduction ? "" : "imppel-dev-session-secret");
 
-// TEMPORARY diagnostic (no secret values logged, only presence/length) to
-// investigate why SESSION_SECRET reads as falsy on Vercel despite being set
-// in the dashboard. Remove once resolved.
-console.log(
-  "[diag] SESSION_SECRET present:",
-  process.env.SESSION_SECRET !== undefined,
-  "length:",
-  (process.env.SESSION_SECRET ?? "").length,
-  "isVercel:",
-  isVercel,
-  "VERCEL_ENV:",
-  process.env.VERCEL_ENV,
-  "NODE_ENV:",
-  process.env.NODE_ENV,
-  "envKeysWithSecretOrSession:",
-  Object.keys(process.env).filter((k) => /SECRET|SESSION/i.test(k)),
-);
-
 if (!sessionSecret) {
   throw new Error("SESSION_SECRET must be set in production.");
 }
