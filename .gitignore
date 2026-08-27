@@ -54,3 +54,5 @@ ERP-DADOS/
 ERP-IMPPEL-backup-*.zip
 ERP-IMPPEL-backup-*.json
 Relatorio_*.pdf
+.vercel
+.env*
