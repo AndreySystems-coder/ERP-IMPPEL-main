@@ -665,17 +665,17 @@ export default function Usuarios() {
             </Button>
           </div>
 
-          {/* Role form */}
-          {showRoleForm && (
+          {/* Role form (criação apenas — edição abre inline no card do cargo) */}
+          {showRoleForm && !editingRole && (
             <Card className="border-blue-200">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">{editingRole ? `Editando: ${editingRole.label}` : "Criar Novo Cargo"}</CardTitle>
+                <CardTitle className="text-base">Criar Novo Cargo</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label>Nome interno (sem espaços)</Label>
-                    <Input value={roleName} onChange={e => setRoleName(e.target.value.toLowerCase().replace(/\s/g, "_"))} placeholder="ex: encarregado" disabled={!!editingRole} data-testid="input-role-name" />
+                    <Input value={roleName} onChange={e => setRoleName(e.target.value.toLowerCase().replace(/\s/g, "_"))} placeholder="ex: encarregado" data-testid="input-role-name" />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Título de exibição</Label>
@@ -766,6 +766,45 @@ export default function Usuarios() {
                           </Button>
                         </div>
                       </div>
+
+                      {editingRole?.id === role.id && (
+                        <div className="mt-3 space-y-4 rounded-lg border border-blue-100 bg-blue-50/40 p-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <Label>Nome interno (sem espaços)</Label>
+                              <Input value={roleName} disabled data-testid="input-role-name" />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label>Título de exibição</Label>
+                              <Input value={roleLabel} onChange={e => setRoleLabel(e.target.value)} placeholder="Ex: Encarregado de Obra" data-testid="input-role-label" />
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            <Label className="text-sm font-semibold text-gray-700">Permissões</Label>
+                            {PERMISSION_GROUPS.map(group => (
+                              <div key={group.group} className="space-y-2">
+                                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">{group.group}</p>
+                                <div className="space-y-2 pl-2">
+                                  {group.items.map(item => (
+                                    <div key={item.key} className="flex items-center justify-between p-2 rounded-lg bg-white hover:bg-gray-100 transition-colors" data-testid={`permission-row-${item.key}`}>
+                                      <Label className="cursor-pointer text-sm font-normal text-gray-700">{item.label}</Label>
+                                      <Switch checked={!!rolePermissions[item.key]} onCheckedChange={() => togglePermission(item.key)} data-testid={`switch-permission-${item.key}`} />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex gap-2 pt-2 border-t">
+                            <Button onClick={handleSaveRole} className="bg-blue-900 text-white" disabled={createRoleMutation.isPending || updateRoleMutation.isPending} data-testid="button-save-role">
+                              <Save className="w-4 h-4 mr-2" /> Salvar Cargo
+                            </Button>
+                            <Button variant="outline" onClick={resetRoleForm}><X className="w-4 h-4 mr-2" /> Cancelar</Button>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
