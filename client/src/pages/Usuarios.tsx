@@ -14,9 +14,8 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   UserCog, Plus, Trash2, Shield, User, Key, Check, X, Eye, EyeOff,
-  Briefcase, Settings2, Edit3, Save, ChevronDown, ChevronRight, Users, Upload,
+  Briefcase, Settings2, Edit3, Save, ChevronDown, ChevronRight, Users,
 } from "lucide-react";
-import OperationalUsersPanel from "@/components/OperationalUsersPanel";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface UserItem {
@@ -351,10 +350,9 @@ export default function Usuarios() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="usuarios" data-testid="tab-usuarios"><Users className="w-4 h-4 mr-2" />Usuários ({users.length})</TabsTrigger>
           <TabsTrigger value="cargos" data-testid="tab-cargos"><Settings2 className="w-4 h-4 mr-2" />Cargos e Permissões ({roles.length})</TabsTrigger>
-          <TabsTrigger value="importacao" data-testid="tab-importacao"><Upload className="w-4 h-4 mr-2" />Importação e relatórios</TabsTrigger>
         </TabsList>
 
         {/* ── ABA USUÁRIOS ─────────────────────────────────────────────────────── */}
@@ -653,10 +651,6 @@ export default function Usuarios() {
               ))}
             </div>
           )}
-        </TabsContent>
-
-        <TabsContent value="importacao" className="mt-4">
-          <OperationalUsersPanel />
         </TabsContent>
 
         {/* ── ABA CARGOS ───────────────────────────────────────────────────────── */}

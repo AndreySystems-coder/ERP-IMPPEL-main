@@ -1,7 +1,6 @@
 import { Link } from "wouter";
 import {
   BarChart3,
-  BookOpen,
   Briefcase,
   Building2,
   Calendar,
@@ -287,7 +286,6 @@ export function TeamHub() {
         items: [
           { title: "Funcionários", description: "Atalho autorizado para cadastro de usuários e cargos.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
           { title: "Produtividade", description: "Horas, área executada e desempenho por técnico.", href: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity", accent: accents.blue },
-          { title: "Como Trabalhar", description: "Guias rápidos e procedimentos aprovados.", href: "/como-trabalhar", icon: BookOpen, permission: "viewHelpCenter", accent: accents.slate },
         ],
       }}
     />
