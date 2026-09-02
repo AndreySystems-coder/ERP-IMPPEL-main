@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { AlertTriangle, ArrowUpCircle, Camera, CheckCircle2, Package } from "lucide-react";
+import { AlertTriangle, ArrowUpCircle, Calendar, Camera, CheckCircle2, ChevronDown, ChevronRight, Package, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,10 @@ function withdrawalOptionLabel(withdrawal: Withdrawal) {
   return `${date} — ${withdrawal.username} — ${items.length} item(ns) — ${itemNames}${suffix}`;
 }
 
+function dayKey(withdrawal: Withdrawal) {
+  return new Date(`${withdrawal.withdrawalDate || withdrawal.createdAt}`).toISOString().slice(0, 10);
+}
+
 export function ReturnForm({
   pendingWithdrawals,
   currentUser,
@@ -37,18 +41,25 @@ export function ReturnForm({
 }) {
   const { toast } = useToast();
   const [retornoWithdrawalId, setRetornoWithdrawalId] = useState("");
-  const [retornoItems, setRetornoItems] = useState<{ id: number; returnedQuantity: number; condition: string }[]>([]);
+  const [retornoItems, setRetornoItems] = useState<{ id: number; returnedQuantity: number; condition: string; included: boolean }[]>([]);
   const [retornoPhoto, setRetornoPhoto] = useState<string | null>(null);
   const [retornoSignature, setRetornoSignature] = useState<string | null>(null);
   const [retornoNotes, setRetornoNotes] = useState("");
   const [showNotes, setShowNotes] = useState(false);
+  const [openDay, setOpenDay] = useState<string | null>(null);
 
   const myPending = isAdmin ? pendingWithdrawals : pendingWithdrawals.filter(w => w.userId === currentUser?.id);
   const selectedWithdrawal = pendingWithdrawals.find(w => w.id === Number(retornoWithdrawalId));
 
+  const pendingByDay = useMemo(() => {
+    const groups = new Map<string, Withdrawal[]>();
+    myPending.forEach(w => groups.set(dayKey(w), [...(groups.get(dayKey(w)) || []), w]));
+    return Array.from(groups.entries()).sort(([left], [right]) => right.localeCompare(left));
+  }, [myPending]);
+
   useEffect(() => {
     if (!selectedWithdrawal) { setRetornoItems([]); return; }
-    setRetornoItems(selectedWithdrawal.items.filter(isReturnableMaterialItem).map(i => ({ id: i.id!, returnedQuantity: i.quantity, condition: "bom" })));
+    setRetornoItems(selectedWithdrawal.items.filter(isReturnableMaterialItem).map(i => ({ id: i.id!, returnedQuantity: i.quantity, condition: "bom", included: true })));
   }, [retornoWithdrawalId]);
 
   const retornoMutation = useMutation({
@@ -59,17 +70,20 @@ export function ReturnForm({
       queryClient.invalidateQueries({ queryKey: ["/api/inventory-movements"] });
       queryClient.invalidateQueries({ queryKey: ["/api/salary-discounts"] });
       toast({ title: "Devolução registrada", description: "Estoque e condição dos materiais foram atualizados." });
-      setRetornoWithdrawalId(""); setRetornoPhoto(null); setRetornoSignature(null); setRetornoNotes(""); setShowNotes(false);
+      setRetornoWithdrawalId(""); setRetornoPhoto(null); setRetornoSignature(null); setRetornoNotes(""); setShowNotes(false); setOpenDay(null);
       onSuccess?.();
     },
     onError: (err: any) => toast({ title: "Erro", description: err.message, variant: "destructive" }),
   });
 
+  const includedItems = retornoItems.filter(item => item.included);
+
   const handleSubmit = () => {
     if (!retornoWithdrawalId) return toast({ title: "Selecione uma saída", description: "Escolha qual retirada está sendo devolvida.", variant: "destructive" });
+    if (includedItems.length === 0) return toast({ title: "Selecione ao menos um item", description: "Marque quais itens estão voltando nesta devolução.", variant: "destructive" });
     if (!retornoPhoto) return toast({ title: "Falta a foto do retorno", description: "Registre uma foto dos materiais devolvidos.", variant: "destructive" });
     if (!retornoSignature) return toast({ title: "Falta a assinatura", description: "Confirme a devolução assinando no quadro.", variant: "destructive" });
-    retornoMutation.mutate({ id: Number(retornoWithdrawalId), data: { returnPhoto: retornoPhoto, returnSignature: retornoSignature, returnNotes: retornoNotes, items: retornoItems } });
+    retornoMutation.mutate({ id: Number(retornoWithdrawalId), data: { returnPhoto: retornoPhoto, returnSignature: retornoSignature, returnNotes: retornoNotes, items: includedItems } });
   };
 
   if (myPending.length === 0) {
@@ -87,20 +101,72 @@ export function ReturnForm({
       <Card>
         <CardHeader><CardTitle className="text-base">1. Escolher saída pendente</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <Select value={retornoWithdrawalId} onValueChange={setRetornoWithdrawalId}>
-            <SelectTrigger data-testid="select-trigger-withdrawal"><SelectValue placeholder="Escolher material em uso..." /></SelectTrigger>
-            <SelectContent>
-              {myPending.map(w => {
-                const withdrawalDate = w.withdrawalDate || w.createdAt;
-                const dias = daysSince(withdrawalDate);
+          {isAdmin ? (
+            <div className="space-y-2">
+              {pendingByDay.map(([key, dayWithdrawals]) => {
+                const expanded = openDay === key;
+                const employees = new Set(dayWithdrawals.map(w => w.username));
                 return (
-                  <SelectItem key={w.id} value={String(w.id)} data-testid={`option-withdrawal-${w.id}`}>
-                    {withdrawalOptionLabel(w)} {dias > 3 ? `— ${dias}d` : ""}
-                  </SelectItem>
+                  <div key={key} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setOpenDay(expanded ? null : key)}
+                      className="flex w-full items-center gap-3 p-3 text-left hover:bg-slate-50"
+                      data-testid={`button-open-return-day-${key}`}
+                    >
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-700"><Calendar className="h-4 w-4" /></div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold capitalize text-slate-900">{new Date(`${key}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</p>
+                        <div className="mt-0.5 flex flex-wrap gap-3 text-xs text-slate-500">
+                          <span>{dayWithdrawals.length} saída(s) pendente(s)</span>
+                          <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {employees.size} funcionário(s)</span>
+                        </div>
+                      </div>
+                      {expanded ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+                    </button>
+                    {expanded && (
+                      <div className="space-y-2 border-t border-slate-100 bg-slate-50 p-2">
+                        {dayWithdrawals.map(w => {
+                          const dias = daysSince(w.withdrawalDate || w.createdAt);
+                          const active = retornoWithdrawalId === String(w.id);
+                          return (
+                            <button
+                              key={w.id}
+                              type="button"
+                              onClick={() => setRetornoWithdrawalId(String(w.id))}
+                              className={`flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors ${active ? "border-orange-400 bg-orange-50" : "border-slate-200 bg-white hover:border-orange-200"}`}
+                              data-testid={`option-withdrawal-${w.id}`}
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-800">{w.username}{w.clientName ? ` · ${w.clientName}` : ""}</p>
+                                <p className="mt-0.5 truncate text-xs text-slate-500">{withdrawalOptionLabel(w)}</p>
+                              </div>
+                              {dias > 3 && <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">{dias}d</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
-            </SelectContent>
-          </Select>
+            </div>
+          ) : (
+            <Select value={retornoWithdrawalId} onValueChange={setRetornoWithdrawalId}>
+              <SelectTrigger data-testid="select-trigger-withdrawal"><SelectValue placeholder="Escolher material em uso..." /></SelectTrigger>
+              <SelectContent>
+                {myPending.map(w => {
+                  const withdrawalDate = w.withdrawalDate || w.createdAt;
+                  const dias = daysSince(withdrawalDate);
+                  return (
+                    <SelectItem key={w.id} value={String(w.id)} data-testid={`option-withdrawal-${w.id}`}>
+                      {withdrawalOptionLabel(w)} {dias > 3 ? `— ${dias}d` : ""}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          )}
 
           {selectedWithdrawal && (
             <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl text-sm space-y-1">
@@ -119,22 +185,26 @@ export function ReturnForm({
       {selectedWithdrawal && (
         <>
           <Card>
-            <CardHeader><CardTitle className="text-base">2. Conferir itens devolvidos</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">2. Escolher o que voltou</CardTitle>
+              <p className="text-xs font-normal text-gray-500">Desmarque o que ainda ficou com o funcionário — só o marcado entra nesta devolução.</p>
+            </CardHeader>
             <CardContent className="space-y-3">
               {selectedWithdrawal.items.filter(isReturnableMaterialItem).map((item, idx) => {
-                const retItem = retornoItems.find(r => r.id === item.id) || { id: item.id!, returnedQuantity: item.quantity, condition: "bom" };
+                const retItem = retornoItems.find(r => r.id === item.id) || { id: item.id!, returnedQuantity: item.quantity, condition: "bom", included: true };
                 const updateRetItem = (field: string, value: any) => setRetornoItems(prev => {
                   const ex = prev.find(r => r.id === item.id!);
                   if (ex) return prev.map(r => r.id === item.id! ? { ...r, [field]: value } : r);
-                  return [...prev, { id: item.id!, returnedQuantity: item.quantity, condition: "bom", [field]: value }];
+                  return [...prev, { id: item.id!, returnedQuantity: item.quantity, condition: "bom", included: true, [field]: value }];
                 });
                 return (
-                  <div key={item.id} className="p-4 border-2 border-gray-100 rounded-xl space-y-3" data-testid={`card-return-item-${idx}`}>
-                    <div className="flex items-center gap-2">
+                  <div key={item.id} className={`p-4 border-2 rounded-xl space-y-3 transition-colors ${retItem.included ? "border-gray-100" : "border-gray-100 bg-gray-50 opacity-60"}`} data-testid={`card-return-item-${idx}`}>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={retItem.included} onChange={e => updateRetItem("included", e.target.checked)} className="h-4 w-4 accent-green-600" data-testid={`checkbox-include-${idx}`} />
                       <Package className="w-4 h-4 text-gray-500" />
                       <div><p className="font-semibold">{item.productName}</p><p className="text-xs text-gray-500">Saiu: {item.quantity} {item.unit}</p></div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    </label>
+                    <fieldset disabled={!retItem.included} className="grid grid-cols-1 gap-3 sm:grid-cols-2 disabled:opacity-50">
                       <div className="space-y-1">
                         <Label className="text-xs text-gray-500">Qtd. devolvida</Label>
                         <Input type="number" min="0" max={item.quantity} value={retItem.returnedQuantity}
@@ -152,8 +222,8 @@ export function ReturnForm({
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
-                    {(retItem.condition === "perdido" || retItem.condition === "danificado" || retItem.condition === "manutencao") && (
+                    </fieldset>
+                    {retItem.included && (retItem.condition === "perdido" || retItem.condition === "danificado" || retItem.condition === "manutencao") && (
                       <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3 shrink-0" /> Este item não volta ao disponível. Perdidos, danificados e manutenção seguem para avaliação do gestor.
                       </p>
@@ -199,6 +269,7 @@ export function ReturnForm({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {[
               { ok: !!retornoWithdrawalId, label: "Saída selecionada" },
+              { ok: includedItems.length > 0, label: "Item(ns) marcado(s)" },
               { ok: !!retornoPhoto, label: "Foto" },
               { ok: !!retornoSignature, label: "Assinatura" },
             ].map(({ ok, label }) => (
