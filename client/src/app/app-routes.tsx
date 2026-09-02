@@ -37,6 +37,7 @@ import Settings from "@/pages/Settings";
 import { BackupsHub, CrmHub, ExecutionQualityHub, FinancialHub, InventoryHub, MarketingHub, PostSaleHub, QuotesHub, SettingsHub, TeamHub, WorksHub } from "@/pages/SectionHub";
 import StatusPersonalizados from "@/pages/StatusPersonalizados";
 import TeamProductivity from "@/pages/TeamProductivity";
+import TeamGovernance from "@/pages/TeamGovernance";
 import ToolsAndEquipment from "@/pages/ToolsAndEquipment";
 import Usuarios from "@/pages/Usuarios";
 import VisualIdentity from "@/pages/VisualIdentity";
@@ -125,6 +126,7 @@ export const adminRoutes: AppRoute[] = [
   { path: "/garantias", component: Warranties, access: "admin", withLayout: true },
   { path: "/relatorios", component: Reports, access: "admin", withLayout: true },
   { path: "/equipe-produtividade", component: TeamProductivity, access: "admin", withLayout: true },
+  { path: "/equipe/governanca", component: TeamGovernance, access: "admin", withLayout: true },
   { path: "/pos-venda", component: PostSale, access: "admin", withLayout: true },
   { path: "/contagem-fisica", component: ContageEmFisica, access: "admin", withLayout: true },
   { path: "/quote-templates", component: QuoteTemplates, access: "admin", withLayout: true },

@@ -21,6 +21,7 @@ import {
   Scale,
   Settings,
   Shield,
+  ShieldAlert,
   ShoppingCart,
   Sparkles,
   Tag,
@@ -287,6 +288,7 @@ export function TeamHub() {
         items: [
           { title: "Funcionários", description: "Atalho autorizado para cadastro de usuários e cargos.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
           { title: "Produtividade", description: "Horas, área executada e desempenho por técnico.", href: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity", accent: accents.blue },
+          { title: "Governança e Apuração", description: "Responsabilidade sobre ferramentas/equipamentos e apuração de descontos salariais.", href: "/equipe/governanca", icon: ShieldAlert, permission: "viewUsers", accent: accents.rose },
         ],
       }}
     />
