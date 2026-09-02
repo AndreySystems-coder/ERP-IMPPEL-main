@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CalendarClock, CheckCircle2, MessageSquare, Search, Users, XCircle } from "lucide-react";
+import { ArrowRight, CalendarClock, CheckCircle2, MessageSquare, Search, Users, XCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,38 @@ type Dashboard = {
 };
 type SummaryCard = { label: string; value: number; Icon: typeof Users };
 
+const STEP_ORDER = ["overview", "new", "qualification", "funnel", "followups", "whatsapp", "closed", "help"];
+const WIZARD_PROGRESS_KEY = "imppel_commercial_wizard_step";
+
+function loadUnlockedIndex(): number {
+  try {
+    const stored = Number(localStorage.getItem(WIZARD_PROGRESS_KEY) || 0);
+    return Number.isFinite(stored) ? Math.min(Math.max(stored, 0), STEP_ORDER.length - 1) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default function CommercialSystem() {
   const { toast } = useToast();
   const [leadFilter, setLeadFilter] = useState("");
   const [followUp, setFollowUp] = useState({ leadId: "", reason: "Próximo contato", dueDate: "", messageTemplate: "" });
+  const [highestUnlockedIndex, setHighestUnlockedIndex] = useState(loadUnlockedIndex);
+  const [activeStep, setActiveStep] = useState(STEP_ORDER[loadUnlockedIndex()]);
+
+  const goToStep = (step: string) => {
+    const index = STEP_ORDER.indexOf(step);
+    if (index <= highestUnlockedIndex) setActiveStep(step);
+  };
+
+  const advanceToNextStep = () => {
+    const currentIndex = STEP_ORDER.indexOf(activeStep);
+    const nextIndex = Math.min(currentIndex + 1, STEP_ORDER.length - 1);
+    const unlocked = Math.max(highestUnlockedIndex, nextIndex);
+    setHighestUnlockedIndex(unlocked);
+    setActiveStep(STEP_ORDER[nextIndex]);
+    try { localStorage.setItem(WIZARD_PROGRESS_KEY, String(unlocked)); } catch { /* localStorage indisponível */ }
+  };
 
   const { data: dashboard } = useQuery<Dashboard>({ queryKey: ["/api/stage7/commercial-dashboard"] });
   const { data: leads = [] } = useQuery<any[]>({ queryKey: ["/api/leads"] });
@@ -66,16 +94,14 @@ export default function CommercialSystem() {
         <p className="mt-1 text-sm text-slate-500">Fluxo único para transformar contato em lead, orçamento, follow-up, venda ou oportunidade perdida.</p>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs value={activeStep} onValueChange={goToStep} className="space-y-4">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
-          <TabsTrigger value="overview">Todos</TabsTrigger>
-          <TabsTrigger value="new">Novos Contatos</TabsTrigger>
-          <TabsTrigger value="qualification">Qualificação</TabsTrigger>
-          <TabsTrigger value="funnel">Funil</TabsTrigger>
-          <TabsTrigger value="followups">Follow-ups</TabsTrigger>
-          <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-          <TabsTrigger value="closed">Fechados/Perdidos</TabsTrigger>
-          <TabsTrigger value="help">Ajuda</TabsTrigger>
+          {[
+            ["overview", "Todos"], ["new", "Novos Contatos"], ["qualification", "Qualificação"], ["funnel", "Funil"],
+            ["followups", "Follow-ups"], ["whatsapp", "WhatsApp"], ["closed", "Fechados/Perdidos"], ["help", "Ajuda"],
+          ].map(([value, label]) => (
+            <TabsTrigger key={value} value={value} disabled={STEP_ORDER.indexOf(value) > highestUnlockedIndex}>{label}</TabsTrigger>
+          ))}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -107,16 +133,19 @@ export default function CommercialSystem() {
               <ActionHint title="Revisar orçamentos enviados" description="Confira propostas sem resposta e mova o lead para negociação, fechado ou perdido." />
             </CardContent>
           </Card>
+          <NextStepButton onClick={advanceToNextStep} />
         </TabsContent>
 
         <TabsContent value="new" className="space-y-4">
           <Card className="border-slate-200 bg-white"><CardContent className="p-4 text-sm text-slate-600">Novos contatos são oportunidades recém-chegadas por indicação, WhatsApp, site ou prospecção. O primeiro trabalho é identificar cliente, necessidade, urgência e responsável.</CardContent></Card>
           <LeadList title="Novos contatos" leads={filteredLeads} empty="Nenhum contato novo encontrado neste filtro." />
+          <NextStepButton onClick={advanceToNextStep} />
         </TabsContent>
 
         <TabsContent value="qualification" className="space-y-4">
           <Card className="border-amber-100 bg-amber-50/60"><CardContent className="p-4 text-sm text-amber-900">Qualificação serve para entender problema, local, metragem aproximada, urgência e se precisa visita técnica ou orçamento preliminar.</CardContent></Card>
           <LeadList title="Leads para qualificar" leads={filteredLeads} empty="Nenhum lead pendente de qualificação neste filtro." />
+          <NextStepButton onClick={advanceToNextStep} />
         </TabsContent>
 
         <TabsContent value="funnel" className="space-y-4">
@@ -141,6 +170,7 @@ export default function CommercialSystem() {
               </CardContent>
             </Card>
           </section>
+          <NextStepButton onClick={advanceToNextStep} />
         </TabsContent>
 
         <TabsContent value="closed" className="space-y-4">
@@ -153,6 +183,7 @@ export default function CommercialSystem() {
             {(dashboard?.duplicates?.length || 0) > 0 ? <p className="text-sm text-amber-700">Possíveis duplicidades são contatos que podem ter sido cadastrados mais de uma vez. Há {dashboard?.duplicates.length} grupo(s) por telefone, e-mail ou documento. Abra os registros antes de decidir mesclar.</p> : <p className="text-sm text-slate-500">Nenhuma duplicidade encontrada.</p>}
           </CardContent>
         </Card>
+          <NextStepButton onClick={advanceToNextStep} />
         </TabsContent>
 
         <TabsContent value="followups" className="space-y-4">
@@ -171,16 +202,26 @@ export default function CommercialSystem() {
           <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {followUps.slice(0, 6).map((item) => <Card key={item.id}><CardContent className="p-4 text-sm"><div className="font-semibold">{item.reason || "Follow-up"}</div><div className="text-slate-500">{new Date(item.dueDate).toLocaleString("pt-BR")}</div><Badge className="mt-2" variant={item.status === "pendente" ? "secondary" : "outline"}>{item.status}</Badge></CardContent></Card>)}
           </section>
+          <NextStepButton onClick={advanceToNextStep} />
         </TabsContent>
 
         <TabsContent value="whatsapp">
           <Card><CardContent className="space-y-3 p-4 text-sm text-slate-600"><p>WhatsApp reúne roteiros de atendimento, diagnóstico, envio de orçamento, follow-up, confirmação de obra, pós-venda, manutenção e garantia.</p><p>Enquanto não houver API/credenciais reais da Waseller, o ERP prepara mensagens para cópia e envio manual. Isso não é automação externa.</p></CardContent></Card>
+          <NextStepButton onClick={advanceToNextStep} />
         </TabsContent>
 
         <TabsContent value="help">
           <Card><CardContent className="space-y-2 p-4 text-sm text-slate-600"><p><strong>Lead:</strong> contato com potencial de virar cliente.</p><p><strong>Qualificação:</strong> etapa para entender necessidade, local, urgência e próximo passo.</p><p><strong>Follow-up:</strong> próximo contato planejado para continuar a negociação.</p><p><strong>Duplicidade:</strong> alerta para cadastros parecidos; nunca mescle sem conferir.</p><p><strong>Marketing:</strong> fica em Marketing & Captação; aqui aparecem apenas impactos comerciais.</p></CardContent></Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function NextStepButton({ onClick, label = "Próximo passo" }: { onClick: () => void; label?: string }) {
+  return (
+    <div className="flex justify-end">
+      <Button onClick={onClick} className="gap-2">{label} <ArrowRight className="h-4 w-4" /></Button>
     </div>
   );
 }
