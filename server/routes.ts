@@ -1,7 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
-import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -821,19 +820,6 @@ export async function registerRoutes(
     if (exact) return exact;
     return (await storage.getUsers()).find(user => user.username.trim().toLocaleLowerCase("pt-BR") === normalized);
   };
-
-  // TEMPORARY — one-shot additive migration runner, remove after running once against production.
-  // Adds: inventory.return_policy, work_orders.refusal_reason, job_statuses.color (all nullable, no data touched).
-  app.post("/api/admin/run-migration-0007", requireAdmin, async (_req, res) => {
-    try {
-      await pool.query('ALTER TABLE inventory ADD COLUMN IF NOT EXISTS return_policy text');
-      await pool.query('ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS refusal_reason text');
-      await pool.query('ALTER TABLE job_statuses ADD COLUMN IF NOT EXISTS color text');
-      res.json({ message: "Migração 0007 aplicada: return_policy, refusal_reason, color adicionadas." });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
-  });
 
   // Auth
   app.post(api.auth.login.path, async (req, res) => {
