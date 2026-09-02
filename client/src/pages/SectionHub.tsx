@@ -22,6 +22,7 @@ import {
   Settings,
   Shield,
   ShoppingCart,
+  Sparkles,
   Tag,
   TrendingDown,
   UserCog,
@@ -240,10 +241,11 @@ export function InventoryHub() {
         helpKey: "materiais",
         items: [
           { title: "Controle de Materiais", description: "Retirada, uso, devolução, fotos e assinatura.", href: "/controle-materiais", icon: PackageCheck, permission: "registrarMaterials", accent: accents.amber },
-          { title: "Estoque Atual", description: "Saldos, mínimos, status e resumo de entradas e saídas.", href: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent", accent: accents.blue },
-          { title: "Ferramentas", description: "Retornáveis, responsáveis, danos, perdas e manutenção.", href: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent", accent: accents.slate },
+          { title: "Registro Rápido", description: "Cole anotações do celular e o sistema interpreta retiradas e entradas.", href: "/estoque/registro-rapido", icon: Sparkles, permission: "registrarMaterials", accent: accents.violet },
           { title: "Venda de Materiais", description: "Carrinho, descontos autorizados e aprovação administrativa.", href: "/vendas-materiais", icon: ShoppingCart, permission: "viewMaterialSales", accent: accents.blue },
+          { title: "Ferramentas", description: "Retornáveis, responsáveis, danos, perdas e manutenção.", href: "/estoque/ferramentas", icon: Wrench, permission: "viewInventoryCurrent", accent: accents.slate },
           { title: "Contagem Rápida", description: "Auditoria física com processamento de lista e ajustes automáticos.", href: "/estoque/contagem-rapida", icon: ListChecks, permission: "viewInventoryCount", accent: accents.emerald },
+          { title: "Estoque Atual", description: "Saldos, mínimos, status e resumo de entradas e saídas.", href: "/estoque/atual", icon: Package, permission: "viewInventoryCurrent", accent: accents.blue },
         ],
       }}
     />

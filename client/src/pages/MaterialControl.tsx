@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, ClipboardList, DollarSign, History, Package, ShieldAlert, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowDownCircle, ArrowUpCircle, ClipboardList, DollarSign, History, Package, ShieldAlert, Users } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -12,7 +12,6 @@ import { MovementHistoryPanel } from "@/features/materials/components/MovementHi
 import { ResponsibilityPanel } from "@/features/materials/components/ResponsibilityPanel";
 import { ReturnForm } from "@/features/materials/components/ReturnForm";
 import { WithdrawalForm } from "@/features/materials/components/WithdrawalForm";
-import MobileNotesImport from "@/pages/MobileNotesImport";
 import { daysSince } from "@/features/materials/material-control-utils";
 import type { DiscountRule, InventoryItem, SalaryDiscount, UserItem, Withdrawal, WorkOrder } from "@/features/materials/types";
 import { isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
@@ -133,10 +132,9 @@ export default function MaterialControl() {
             <TabsList className="flex w-full justify-start overflow-x-auto">
               <TabsTrigger value="diario" data-testid="tab-controle-diario" className="shrink-0"><ClipboardList className="mr-1 h-3 w-3" /> Controle Diário</TabsTrigger>
               <TabsTrigger value="saida" data-testid="tab-saida" className="shrink-0"><ArrowDownCircle className="mr-1 h-3 w-3" /> Saídas</TabsTrigger>
-              <TabsTrigger value="rapido" data-testid="tab-registro-rapido" className="shrink-0"><Sparkles className="mr-1 h-3 w-3" /> Registro Rápido</TabsTrigger>
               <TabsTrigger value="retorno" data-testid="tab-retorno" className="shrink-0"><ArrowUpCircle className="mr-1 h-3 w-3" /> Retorno</TabsTrigger>
               <TabsTrigger value="responsabilidade" data-testid="tab-responsabilidade" className="shrink-0"><Users className="mr-1 h-3 w-3" /> Responsabilidades</TabsTrigger>
-              <TabsTrigger value="governanca-materiais" data-testid="tab-governanca-materiais" className="shrink-0"><ShieldAlert className="mr-1 h-3 w-3" /> Etapa 6</TabsTrigger>
+              <TabsTrigger value="governanca-materiais" data-testid="tab-governanca-materiais" className="shrink-0"><ShieldAlert className="mr-1 h-3 w-3" /> Governança</TabsTrigger>
               <TabsTrigger value="descontos" data-testid="tab-descontos" className="relative shrink-0">
                 <DollarSign className="mr-1 h-3 w-3" /> Apuração
                 {pendingDiscounts.length > 0 && <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">{pendingDiscounts.length}</span>}
@@ -159,10 +157,6 @@ export default function MaterialControl() {
                 description="Materiais que saíram com funcionários e ainda aguardam retorno, conferência ou responsabilidade."
                 groupByDay
               />
-            </TabsContent>
-
-            <TabsContent value="rapido" className="mt-4">
-              <MobileNotesImport embedded />
             </TabsContent>
 
             <TabsContent value="retorno" className="mt-4">

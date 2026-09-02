@@ -21,6 +21,7 @@ import MarketingContent from "@/pages/MarketingContent";
 import MobileJobDetail from "@/pages/mobile/MobileJobDetail";
 import MobileJobs from "@/pages/mobile/MobileJobs";
 import MobileLogin from "@/pages/mobile/MobileLogin";
+import MobileNotesImport from "@/pages/MobileNotesImport";
 import PagamentosConfig from "@/pages/PagamentosConfig";
 import PaymentConditions from "@/pages/PaymentConditions";
 import PaymentMethods from "@/pages/PaymentMethods";
@@ -107,6 +108,7 @@ export const adminRoutes: AppRoute[] = [
   { path: "/estoque/atual", component: InventoryCurrentPage, access: "admin", withLayout: true },
   { path: "/estoque/ferramentas", component: ToolsAndEquipment, access: "admin", withLayout: true },
   { path: "/estoque/contagem-rapida", component: InventoryQuickCountPage, access: "admin", withLayout: true },
+  { path: "/estoque/registro-rapido", component: MobileNotesImport, access: "admin", withLayout: true },
   { path: "/estoque/movimentacoes", component: InventoryMovementsPage, access: "admin", withLayout: true },
   { path: "/inventory", component: Inventory, access: "admin", withLayout: true },
   { path: "/financials", component: Financials, access: "admin", withLayout: true },
