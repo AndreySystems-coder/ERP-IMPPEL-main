@@ -35,7 +35,8 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useUser();
   const [location, setLocation] = useLocation();
-  const allowed = !!user && (user.role === "admin" || canAccessAny(user as any, permissionsForPath(location)));
+  const routePermissions = permissionsForPath(location);
+  const allowed = !!user && (routePermissions.length === 0 || user.role === "admin" || canAccessAny(user as any, routePermissions));
 
   useEffect(() => {
     if (!isLoading) {
