@@ -261,6 +261,7 @@ export default function Dashboard() {
     "Em Andamento": "bg-orange-100 text-orange-700",
     "Concluída": "bg-emerald-100 text-emerald-700",
     "Cancelada": "bg-red-100 text-red-700",
+    "Recusado": "bg-red-100 text-red-700",
   };
 
   return (

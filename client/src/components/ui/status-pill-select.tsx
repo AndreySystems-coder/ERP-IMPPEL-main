@@ -6,6 +6,7 @@ export function StatusPillSelect({
   value,
   options,
   variantForStatus,
+  colorForStatus,
   onChange,
   className,
   "data-testid": dataTestId,
@@ -13,11 +14,14 @@ export function StatusPillSelect({
   value: string;
   options: string[];
   variantForStatus: (status: string) => StatusPillVariant;
+  /** Cor customizável opcional por status (hex); quando presente, sobrepõe as classes de variante fixas. */
+  colorForStatus?: (status: string) => string | undefined;
   onChange: (value: string) => void;
   className?: string;
   "data-testid"?: string;
 }) {
   const styles = statusPillVariantStyles[variantForStatus(value)];
+  const customColor = colorForStatus?.(value);
 
   return (
     <Select value={value} onValueChange={onChange}>
@@ -25,21 +29,23 @@ export function StatusPillSelect({
         data-testid={dataTestId}
         className={cn(
           "h-auto w-auto min-w-0 gap-1.5 rounded-full border-0 px-2.5 py-1 text-xs font-semibold shadow-none focus:ring-2 focus:ring-primary/30 [&>svg]:hidden",
-          styles.bg,
-          styles.text,
+          !customColor && styles.bg,
+          !customColor && styles.text,
           className
         )}
+        style={customColor ? { backgroundColor: `${customColor}1a`, color: customColor } : undefined}
       >
-        <StatusDot variant={variantForStatus(value)} />
+        {customColor ? <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: customColor }} /> : <StatusDot variant={variantForStatus(value)} />}
         {value}
       </SelectTrigger>
       <SelectContent>
         {options.map((status) => {
           const optionVariant = variantForStatus(status);
+          const optionColor = colorForStatus?.(status);
           return (
             <SelectItem key={status} value={status} className="pl-8">
               <span className="inline-flex items-center gap-2">
-                <StatusDot variant={optionVariant} pulse={false} />
+                {optionColor ? <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: optionColor }} /> : <StatusDot variant={optionVariant} pulse={false} />}
                 {status}
               </span>
             </SelectItem>

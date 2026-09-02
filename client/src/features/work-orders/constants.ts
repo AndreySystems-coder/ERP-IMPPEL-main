@@ -14,13 +14,15 @@ export const STATUS_COLORS: Record<string, string> = {
   Agendada: "bg-amber-100 text-amber-700",
   "Em Andamento": "bg-primary/10 text-primary border border-primary/20",
   Concluída: "bg-emerald-100 text-emerald-700",
+  Recusado: "bg-red-100 text-red-700",
 };
 
-export const STATUS_PILL_VARIANTS: Record<string, "info" | "warning" | "primary" | "success"> = {
+export const STATUS_PILL_VARIANTS: Record<string, "info" | "warning" | "primary" | "success" | "error"> = {
   Planejada: "info",
   Agendada: "warning",
   "Em Andamento": "primary",
   Concluída: "success",
+  Recusado: "error",
 };
 
 export function workOrderStatusVariant(status: string) {

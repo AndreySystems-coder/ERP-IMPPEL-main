@@ -249,6 +249,9 @@ export function QuotesList({
       ? jobStatusConfigs.map((status) => status.name)
       : ["Lead", "Estimando", "Aprovado", "Agendada", "Em Progresso", "Concluída", "Faturada"];
 
+  const quoteStatusColor = (status: string): string | undefined =>
+    jobStatusConfigs.find((s) => s.name === status)?.color || undefined;
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-3 lg:hidden">
@@ -290,6 +293,7 @@ export function QuotesList({
                 value={job.status}
                 options={statusOptions}
                 variantForStatus={quoteStatusVariant}
+                colorForStatus={quoteStatusColor}
                 onChange={(status) => onStatusChange(job, status)}
                 className="w-full justify-center py-2.5 text-sm"
                 data-testid={`select-status-${job.id}`}

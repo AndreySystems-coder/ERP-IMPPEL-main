@@ -33,6 +33,7 @@ export default function Calendar() {
     Agendada: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
     "Em Andamento": { bg: "bg-primary/5", text: "text-primary", border: "border-primary/20" },
     Concluída: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+    Recusado: { bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
   };
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });

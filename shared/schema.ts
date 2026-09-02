@@ -132,6 +132,7 @@ export const workOrders = pgTable("work_orders", {
   scheduledDate: timestamp("scheduled_date"),
   teamAssigned: text("team_assigned"),
   status: text("status").notNull().default("Planejada"),
+  refusalReason: text("refusal_reason"), // Motivo quando status = "Recusado"
   photos: text("photos"), // JSON string with photos {category: "before"|"during"|"after", data: base64, timestamp}
   notes: text("notes"),
   // Registro de Obra fields
@@ -150,6 +151,8 @@ export const inventory = pgTable("inventory", {
   quantity: integer("quantity").notNull().default(0),
   minStock: integer("min_stock").notNull().default(5),
   pricePerUnit: real("price_per_unit").default(0),
+  // Explicit override for retornavel/consumivel; null falls back to the name-based guess in shared/materialReturnPolicy.ts
+  returnPolicy: text("return_policy"),
 });
 
 export const inventoryMovements = pgTable("inventory_movements", {
@@ -808,6 +811,7 @@ export const jobStatuses = pgTable("job_statuses", {
   extraFileData: text("extra_file_data"),   // base64 data URL
   sortOrder: integer("sort_order").default(0),
   generateOs: boolean("generate_os").default(false), // auto-create Work Order when this status is set
+  color: text("color"), // cor customizável exibida nos badges de status; null usa o mapa padrão do código
   createdAt: timestamp("created_at").defaultNow(),
 });
 

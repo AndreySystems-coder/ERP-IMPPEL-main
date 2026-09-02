@@ -21,6 +21,7 @@ function StatusForm({
   isSaving: boolean;
 }) {
   const [name, setName] = useState(initial.name || "");
+  const [color, setColor] = useState(initial.color || "#2563eb");
   const [message, setMessage] = useState(initial.message || "");
   const [includePdf, setIncludePdf] = useState(initial.includePdf !== false);
   const [generateOs, setGenerateOs] = useState(initial.generateOs === true);
@@ -53,6 +54,7 @@ function StatusForm({
     }
     onSave({
       name: name.trim(),
+      color,
       message: message.trim(),
       includePdf,
       generateOs,
@@ -63,18 +65,30 @@ function StatusForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 py-2">
-      {/* Nome */}
-      <div>
-        <label className="text-sm font-semibold text-slate-700 block mb-1.5">Nome do Status *</label>
-        <input
-          type="text"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="ex: Pendente, Aprovado, Finalizado..."
-          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-          data-testid="input-status-name"
-          required
-        />
+      {/* Nome + Cor */}
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <label className="text-sm font-semibold text-slate-700 block mb-1.5">Nome do Status *</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="ex: Pendente, Aprovado, Finalizado..."
+            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            data-testid="input-status-name"
+            required
+          />
+        </div>
+        <div>
+          <label className="text-sm font-semibold text-slate-700 block mb-1.5">Cor</label>
+          <input
+            type="color"
+            value={color}
+            onChange={e => setColor(e.target.value)}
+            className="w-14 h-[42px] border border-slate-200 rounded-xl cursor-pointer"
+            data-testid="input-status-color"
+          />
+        </div>
       </div>
 
       {/* Mensagem */}
@@ -256,7 +270,12 @@ export default function StatusPersonalizados() {
                   {statuses.map(s => (
                     <tr key={s.id} className="hover:bg-slate-50/50 transition-colors" data-testid={`row-status-${s.id}`}>
                       <td className="p-4 pl-6">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${s.color ? "" : "bg-primary/10 text-primary"}`}
+                          style={s.color ? { backgroundColor: `${s.color}1a`, color: s.color } : undefined}
+                          data-testid={`badge-status-${s.id}`}
+                        >
+                          {s.color && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />}
                           {s.name}
                         </span>
                       </td>

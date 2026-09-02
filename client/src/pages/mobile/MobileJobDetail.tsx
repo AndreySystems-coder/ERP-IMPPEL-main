@@ -42,6 +42,7 @@ export default function MobileJobDetail() {
 
   const wo = workOrdersList.find((w: any) => w.id === jobId);
   const [status, setStatus] = useState(wo?.status || "Planejada");
+  const [refusalReason, setRefusalReason] = useState(wo?.refusalReason || "");
   const [photos, setPhotos] = useState<Array<{ category: string; data: string; timestamp: string }>>(
     wo?.photos ? JSON.parse(wo.photos) : []
   );
@@ -125,6 +126,7 @@ export default function MobileJobDetail() {
   const handleSave = async () => {
     await updateWO.mutateAsync({
       status,
+      refusalReason: status === "Recusado" ? refusalReason.trim() : null,
       notes,
       photos: photos.length > 0 ? JSON.stringify(photos) : null,
     });
@@ -156,6 +158,7 @@ export default function MobileJobDetail() {
     Agendada: "bg-amber-100 text-amber-700",
     "Em Andamento": "bg-primary/10 text-primary",
     Concluída: "bg-emerald-100 text-emerald-700",
+    Recusado: "bg-red-100 text-red-700",
   };
 
   return (
@@ -227,10 +230,21 @@ export default function MobileJobDetail() {
             <option value="Agendada">Agendada</option>
             <option value="Em Andamento">Em Andamento</option>
             <option value="Concluída">Concluída</option>
+            <option value="Recusado">Recusado</option>
           </select>
           <span className={`inline-block mt-2 px-3 py-1 rounded text-xs font-semibold ${statusColors[status] || statusColors["Planejada"]}`}>
             {status}
           </span>
+          {status === "Recusado" && (
+            <textarea
+              required
+              value={refusalReason}
+              onChange={(e) => setRefusalReason(e.target.value)}
+              placeholder="Motivo da recusa (ex: cliente reclamou do valor)"
+              className="w-full mt-2 px-4 py-3 rounded-xl bg-red-50 border-2 border-red-200 focus:outline-none focus:border-red-500 transition-all text-base"
+              data-testid="input-mobile-refusal-reason"
+            />
+          )}
         </div>
 
         {/* Check-in/Check-out */}

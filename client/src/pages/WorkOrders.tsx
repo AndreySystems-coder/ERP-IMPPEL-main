@@ -104,6 +104,7 @@ export default function WorkOrders() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [teamAssigned, setTeamAssigned] = useState("");
   const [status, setStatus] = useState("Planejada");
+  const [refusalReason, setRefusalReason] = useState("");
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<Array<{ category: string; data: string; timestamp: string }>>([]);
 
@@ -135,7 +136,7 @@ export default function WorkOrders() {
     setEditingWO(null);
     setClientName(""); setAddress(""); setServiceType("");
     setScheduledDate(""); setTeamAssigned(""); setStatus("Planejada");
-    setNotes(""); setPhotos([]);
+    setRefusalReason(""); setNotes(""); setPhotos([]);
     setIsModalOpen(true);
   };
 
@@ -143,7 +144,7 @@ export default function WorkOrders() {
     setEditingWO(wo);
     setClientName(wo.clientName); setAddress(wo.address || ""); setServiceType(wo.serviceType);
     setScheduledDate(wo.scheduledDate ? wo.scheduledDate.split("T")[0] : "");
-    setTeamAssigned(wo.teamAssigned || ""); setStatus(wo.status); setNotes(wo.notes || "");
+    setTeamAssigned(wo.teamAssigned || ""); setStatus(wo.status); setRefusalReason(wo.refusalReason || ""); setNotes(wo.notes || "");
     setPhotos(wo.photos ? JSON.parse(wo.photos) : []);
     setIsModalOpen(true);
   };
@@ -226,6 +227,7 @@ export default function WorkOrders() {
       clientName, address, serviceType,
       scheduledDate: scheduledDate ? new Date(scheduledDate).toISOString() : null,
       teamAssigned, status,
+      refusalReason: status === "Recusado" ? refusalReason.trim() : null,
       photos: photos.length > 0 ? JSON.stringify(photos) : null,
       notes,
     };
@@ -552,6 +554,7 @@ export default function WorkOrders() {
         scheduledDate={scheduledDate}
         teamAssigned={teamAssigned}
         status={status}
+        refusalReason={refusalReason}
         notes={notes}
         photos={photos}
         isSaving={createWO.isPending || updateWO.isPending}
@@ -563,6 +566,7 @@ export default function WorkOrders() {
         onScheduledDateChange={setScheduledDate}
         onTeamAssignedChange={setTeamAssigned}
         onStatusChange={setStatus}
+        onRefusalReasonChange={setRefusalReason}
         onNotesChange={setNotes}
         onFileUpload={handleFileUpload}
         onRemovePhoto={removePhoto}

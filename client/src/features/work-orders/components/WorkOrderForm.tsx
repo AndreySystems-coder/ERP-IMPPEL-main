@@ -21,6 +21,7 @@ type WorkOrderFormProps = {
   scheduledDate: string;
   teamAssigned: string;
   status: string;
+  refusalReason: string;
   notes: string;
   photos: WorkOrderPhoto[];
   isSaving: boolean;
@@ -32,6 +33,7 @@ type WorkOrderFormProps = {
   onScheduledDateChange: (value: string) => void;
   onTeamAssignedChange: (value: string) => void;
   onStatusChange: (value: string) => void;
+  onRefusalReasonChange: (value: string) => void;
   onNotesChange: (value: string) => void;
   onFileUpload: (event: ChangeEvent<HTMLInputElement>, category: string) => void;
   onRemovePhoto: (index: number) => void;
@@ -55,6 +57,7 @@ export function WorkOrderForm({
   scheduledDate,
   teamAssigned,
   status,
+  refusalReason,
   notes,
   photos,
   isSaving,
@@ -66,6 +69,7 @@ export function WorkOrderForm({
   onScheduledDateChange,
   onTeamAssignedChange,
   onStatusChange,
+  onRefusalReasonChange,
   onNotesChange,
   onFileUpload,
   onRemovePhoto,
@@ -105,6 +109,7 @@ export function WorkOrderForm({
                   <option value="Agendada">Agendada</option>
                   <option value="Em Andamento">Em Andamento</option>
                   <option value="Concluída">Concluída</option>
+                  <option value="Recusado">Recusado</option>
                 </select>
               </div>
               <div>
@@ -112,6 +117,19 @@ export function WorkOrderForm({
                 <textarea value={notes} onChange={event => onNotesChange(event.target.value)} className="min-h-24 w-full resize-none rounded-xl border-2 border-border bg-slate-50 px-4 py-3 transition-all focus:border-primary focus:outline-none" placeholder="Observações..." data-testid="input-wo-notes" />
               </div>
             </div>
+            {status === "Recusado" && (
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-red-700">Motivo da recusa *</label>
+                <textarea
+                  required
+                  value={refusalReason}
+                  onChange={event => onRefusalReasonChange(event.target.value)}
+                  className="min-h-20 w-full resize-none rounded-xl border-2 border-red-200 bg-red-50/40 px-4 py-3 transition-all focus:border-red-500 focus:outline-none"
+                  placeholder="Ex: cliente reclamou do valor, desistiu do serviço..."
+                  data-testid="input-wo-refusal-reason"
+                />
+              </div>
+            )}
           </section>
 
           {materials.length > 0 && (

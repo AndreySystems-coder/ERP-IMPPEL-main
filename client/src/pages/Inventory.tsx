@@ -16,7 +16,7 @@ import { QuickCountPreview } from "@/features/inventory/components/QuickCountPre
 import type { BatchItem, InventoryItem, Movement, QuickCountRow as RapidaRow } from "@/features/inventory/types";
 import { useUser } from "@/hooks/use-auth";
 import { asArray } from "@/lib/safeData";
-import { getMaterialReturnPolicyLabel, isReturnableMaterialItem } from "@shared/materialReturnPolicy";
+import { getMaterialReturnPolicy, getMaterialReturnPolicyLabel, isReturnableMaterialItem } from "@shared/materialReturnPolicy";
 import { buildReturnableToolSummaryMap, type ReturnableWithdrawal } from "@shared/returnableToolSummary";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -372,6 +372,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const [quantity, setQuantity] = useState("");
   const [minStock, setMinStock] = useState("5");
   const [price, setPrice] = useState("");
+  const [returnPolicy, setReturnPolicy] = useState<"retornavel" | "consumivel">("retornavel");
   const [returnPolicyReason, setReturnPolicyReason] = useState("");
 
   // Movement state
@@ -802,6 +803,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const openNew = () => {
     setEditingItem(null);
     setName(""); setType("material"); setUnit("unid"); setQuantity(""); setMinStock("5"); setPrice("");
+    setReturnPolicy("retornavel");
     setReturnPolicyReason("");
     setIsModalOpen(true);
   };
@@ -811,13 +813,14 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
     setName(item.name); setType(item.type); setUnit(item.unit || "unid");
     setQuantity(item.quantity.toString()); setMinStock(item.minStock.toString());
     setPrice(item.pricePerUnit?.toString() || "");
+    setReturnPolicy(getMaterialReturnPolicy(item));
     setReturnPolicyReason("");
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = { name, type, unit, quantity: Number(quantity) || 0, minStock: Number(minStock) || 0, pricePerUnit: Number(price) || 0 };
+    const payload = { name, type, unit, quantity: Number(quantity) || 0, minStock: Number(minStock) || 0, pricePerUnit: Number(price) || 0, returnPolicy };
     if (editingItem) await updateItem.mutateAsync({ id: editingItem.id, ...payload, returnPolicyReason: returnPolicyReason.trim() || undefined });
     else await createItem.mutateAsync(payload);
     setIsModalOpen(false);
@@ -844,9 +847,7 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
   const currentEntries = movementsList.filter(m => m.type === "ENTRADA").reduce((sum, movement) => sum + movement.quantity, 0);
   const currentExits = movementsList.filter(m => m.type === "SAÍDA").reduce((sum, movement) => sum + movement.quantity, 0);
   const emptyStockCount = itemsList.filter(i => i.quantity <= 0).length;
-  const currentReturnPolicy = isReturnableMaterialItem({ name, type }) ? "retornavel" : "consumivel";
-  const editingReturnPolicy = editingItem ? (isReturnableMaterialItem(editingItem) ? "retornavel" : "consumivel") : currentReturnPolicy;
-  const returnPolicyChanged = !!editingItem && editingReturnPolicy !== currentReturnPolicy;
+  const returnPolicyChanged = !!editingItem && returnPolicy !== getMaterialReturnPolicy(editingItem);
 
   return (
     <div className="space-y-6">
@@ -1051,8 +1052,8 @@ export default function Inventory({ mode = "current" }: { mode?: InventoryMode }
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold text-slate-700">Politica de retorno</label>
               <select
-                value={currentReturnPolicy}
-                onChange={e => setType(e.target.value === "retornavel" ? "ferramenta" : "material")}
+                value={returnPolicy}
+                onChange={e => setReturnPolicy(e.target.value as "retornavel" | "consumivel")}
                 className="px-4 py-2.5 rounded-xl bg-slate-50 border-2 border-border focus:outline-none focus:border-primary transition-all"
                 data-testid="select-item-return-policy"
               >

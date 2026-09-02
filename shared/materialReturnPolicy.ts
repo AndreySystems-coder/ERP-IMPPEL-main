@@ -55,7 +55,8 @@ function normalizeMaterialText(value: unknown) {
 export type MaterialReturnPolicy = "retornavel" | "consumivel";
 export type MaterialReturnCondition = "bom" | "danificado" | "perdido" | "manutencao";
 
-export function getMaterialReturnPolicy(item: { productName?: unknown; name?: unknown; type?: unknown; category?: unknown }): MaterialReturnPolicy {
+export function getMaterialReturnPolicy(item: { productName?: unknown; name?: unknown; type?: unknown; category?: unknown; returnPolicy?: unknown }): MaterialReturnPolicy {
+  if (item.returnPolicy === "retornavel" || item.returnPolicy === "consumivel") return item.returnPolicy;
   const text = normalizeMaterialText([item.productName, item.name, item.type, item.category].filter(Boolean).join(" "));
   if (!text) return "retornavel";
   if (RETURNABLE_PATTERNS.some(pattern => pattern.test(text))) return "retornavel";

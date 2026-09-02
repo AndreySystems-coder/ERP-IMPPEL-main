@@ -29,6 +29,7 @@ export default function MobileJobs() {
     Agendada: { bg: "bg-amber-100", text: "text-amber-700" },
     "Em Andamento": { bg: "bg-primary/10", text: "text-primary" },
     Concluída: { bg: "bg-emerald-100", text: "text-emerald-700" },
+    Recusado: { bg: "bg-red-100", text: "text-red-700" },
   };
 
   return (
