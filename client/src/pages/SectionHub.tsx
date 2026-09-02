@@ -343,15 +343,14 @@ export function BackupsHub() {
     <HubPage
       config={{
         title: "Backups e Restauração",
-        description: "Crie cópias seguras, exporte módulos e restaure somente após validação, preview e confirmação.",
+        description: "Gere PDFs por módulo para conferência e restaure somente após preview e confirmação.",
         owner: "Administrador",
-        actions: ["Gerar backup completo antes de operações críticas.", "Exportar módulos para conferência.", "Restaurar apenas com preview e confirmação.", "Conferir histórico e resultado."],
+        actions: ["Gerar PDF de cada módulo regularmente.", "Restaurar apenas com preview e confirmação.", "Conferir histórico e resultado."],
         next: "Backup concluído → operação protegida para continuar ou migrar ambiente.",
         helpKey: "backup",
         items: [
-          { title: "Backup Completo", description: "Arquivo técnico restaurável com módulos suportados.", href: "/backups/backup", icon: FileText, permission: "viewBackups", accent: accents.blue },
-          { title: "Exportar Módulos", description: "Baixar relatórios em PDF para conferência humana.", href: "/backups/exportacao", icon: FileText, permission: "viewExports", accent: accents.emerald },
-          { title: "Restaurar", description: "Importar backups com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
+          { title: "Backup", description: "Um PDF por módulo, para conferência e restauração futura.", href: "/backups/backup", icon: FileText, permission: "viewBackupGeneration", accent: accents.blue },
+          { title: "Restauração", description: "Importar PDFs com preview antes de aplicar.", href: "/backups/restauracao", icon: Shield, permission: "viewRestore", accent: accents.orange },
         ],
       }}
     />

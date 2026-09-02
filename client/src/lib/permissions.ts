@@ -145,7 +145,6 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/contratos", permissions: ["viewSettings"] },
   { path: "/backups-hub", permissions: ["viewBackups", "viewBackupGeneration", "viewRestore", "viewExports"] },
   { path: "/backups/backup", permissions: ["viewBackups", "viewBackupGeneration"] },
-  { path: "/backups/exportacao", permissions: ["viewBackups", "viewExports"] },
   { path: "/backups/restauracao", permissions: ["viewBackups", "viewRestore"] },
   { path: "/backups", permissions: ["viewBackups", "viewBackupGeneration", "viewRestore", "viewExports"] },
 ];

@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
-import BackupCenter, { BackupExportPage, BackupGenerationPage, BackupRestorePage } from "@/pages/BackupCenter";
+import BackupCenter, { BackupGenerationPage, BackupRestorePage } from "@/pages/BackupCenter";
 import Calendar from "@/pages/Calendar";
 import Catalog from "@/pages/Catalog";
 import Clients from "@/pages/Clients";
@@ -130,7 +130,6 @@ export const adminRoutes: AppRoute[] = [
   { path: "/quote-templates", component: QuoteTemplates, access: "admin", withLayout: true },
   { path: "/controle-materiais", component: MaterialControl, access: "admin", withLayout: true },
   { path: "/backups/backup", component: BackupGenerationPage, access: "admin", withLayout: true },
-  { path: "/backups/exportacao", component: BackupExportPage, access: "admin", withLayout: true },
   { path: "/backups/restauracao", component: BackupRestorePage, access: "admin", withLayout: true },
   { path: "/backups", component: BackupCenter, access: "admin", withLayout: true },
 ];

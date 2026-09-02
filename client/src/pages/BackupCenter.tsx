@@ -1,21 +1,18 @@
 import { useState, useEffect } from "react";
 import {
-  Database, Upload, Download, Clock, FileText, Trash2,
-  RefreshCw, History, CheckCircle2, AlertTriangle, Package, Users,
+  Database, Clock, FileText, Trash2,
+  RefreshCw, History, AlertTriangle, Package, Users,
   Briefcase, ClipboardList, ShoppingCart, Layers, PackageCheck, Shield,
   HardDrive,
-  ShieldAlert, Eraser,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/Card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Button } from "@/components/ui/button";
 import BackupManager, {
   getBackupHistory, getRestoreLog, generatePDF, fmtDateTime,
   type BackupType, type BackupHistoryEntry, type RestoreLogEntry,
 } from "@/components/BackupManager";
-import { CompleteBackupGeneration, PdfBackupRestore } from "@/components/CompleteBackupManager";
+import { PdfBackupRestore } from "@/components/CompleteBackupManager";
 import { useUser } from "@/hooks/use-auth";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const ALL_BACKUP_TYPES: { type: BackupType; label: string; icon: React.ElementType; color: string; description: string }[] = [
@@ -35,11 +32,6 @@ const MODE_LABEL: Record<string, string> = {
   merge: "Merge",
   overwrite: "Sobrescrita",
 };
-
-const MONTHS = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
 
 const BACKUP_COVERAGE = [
   ["Usuários, cargos e permissões", "Sim", "PDF operacional", "PDF/backup técnico", "Restaurar antes dos módulos com responsáveis."],
@@ -144,20 +136,14 @@ function LogRow({ entry }: { entry: RestoreLogEntry }) {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
-export type BackupCenterMode = "backup" | "restore" | "exports";
+export type BackupCenterMode = "backup" | "restore";
 
 const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; panelTitle: string; panelDescription: string }> = {
   backup: {
     title: "Backup",
-    subtitle: "Gerar cópia segura dos dados",
-    panelTitle: "Gerar cópia segura dos dados",
-    panelDescription: "Gere ZIP técnico restaurável com manifesto, JSONs, checksums e PDF apenas para conferência.",
-  },
-  exports: {
-    title: "Exportação",
-    subtitle: "Baixar relatórios em PDF",
-    panelTitle: "Baixar relatórios em PDF",
-    panelDescription: "Exportação gera relatórios visuais para conferência. Não gera arquivo técnico de restauração.",
+    subtitle: "Gerar PDF por módulo",
+    panelTitle: "Gerar PDF por módulo",
+    panelDescription: "Um PDF por módulo, para conferência e para restaurar depois. Para tudo de uma vez, use a Restauração completa do ERP no Passo 2.",
   },
   restore: {
     title: "Restauração",
@@ -167,48 +153,13 @@ const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; pan
   },
 };
 
-export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenterMode }) {
+export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterMode }) {
   const { data: user } = useUser();
   const isAdmin = user?.role === "admin";
   const [history, setHistory] = useState<BackupHistoryEntry[]>([]);
   const [log, setLog] = useState<RestoreLogEntry[]>([]);
   const [refresh, setRefresh] = useState(0);
-  const [resetToken, setResetToken] = useState("");
-  const [resetConfirmation, setResetConfirmation] = useState("");
-  const [maintenanceMessage, setMaintenanceMessage] = useState("");
-  const [maintenanceError, setMaintenanceError] = useState("");
-  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
-  const now = new Date();
-  const [materialPeriod, setMaterialPeriod] = useState<"all" | "year" | "month">("all");
-  const [materialYear, setMaterialYear] = useState(String(now.getFullYear()));
-  const [materialMonth, setMaterialMonth] = useState(String(now.getMonth() + 1).padStart(2, "0"));
   const page = PAGE_COPY[mode];
-
-  const generateFullTechnicalBackup = async () => {
-    setMaintenanceLoading(true); setMaintenanceError(""); setMaintenanceMessage("");
-    try {
-      const response = await apiRequest("GET", "/api/backup/completo");
-      const backup = await response.json();
-      const token = String(backup.resetToken || "");
-      const { resetToken: _resetToken, ...downloadable } = backup;
-      const blob = new Blob([JSON.stringify(downloadable, null, 2)], { type: "application/json;charset=utf-8" });
-      const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
-      anchor.href = url; anchor.download = `Backup_Tecnico_Completo_${new Date().toISOString().slice(0, 10)}.json`; anchor.click(); URL.revokeObjectURL(url);
-      setResetToken(token); setMaintenanceMessage("Backup completo baixado. A autorização de limpeza vale por 15 minutos.");
-    } catch (err: any) { setMaintenanceError(err.message || "Falha ao gerar backup completo."); }
-    finally { setMaintenanceLoading(false); }
-  };
-
-  const clearOperationalData = async () => {
-    setMaintenanceLoading(true); setMaintenanceError(""); setMaintenanceMessage("");
-    try {
-      const response = await apiRequest("POST", "/api/maintenance/operational-reset", { resetToken, confirmation: resetConfirmation });
-      const result = await response.json();
-      setMaintenanceMessage(`${result.message} ${result.deleted || 0} registro(s) removido(s); ${result.preservedUsers || 0} usuário(s) e ${result.preservedRoles || 0} cargo(s) preservado(s).`);
-      setResetToken(""); setResetConfirmation(""); queryClient.clear();
-    } catch (err: any) { setMaintenanceError(err.message || "A limpeza não foi executada."); }
-    finally { setMaintenanceLoading(false); }
-  };
 
   useEffect(() => {
     setHistory(getBackupHistory());
@@ -284,7 +235,6 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
             <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
             <p className="text-sm text-slate-600">{page.panelDescription}</p>
           </div>
-          <CompleteBackupGeneration isAdmin={isAdmin} />
           <TechnicalCoverageDetails />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {
@@ -335,24 +285,6 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
             })}
           </div>
 
-          <Card className="border-red-200">
-            <CardContent className="space-y-4 p-5">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-                <div><h3 className="font-bold text-slate-900">Backup Completo Técnico e Limpeza Operacional</h3><p className="mt-1 text-sm text-slate-600">O backup técnico inclui usuários, cargos e hashes bcrypt; nunca inclui senha em texto. A limpeza preserva usuários, cargos e configurações essenciais.</p></div>
-              </div>
-              <Button type="button" variant="outline" onClick={generateFullTechnicalBackup} disabled={maintenanceLoading}><Download className="mr-2 h-4 w-4" />Baixar Backup Completo Técnico</Button>
-              <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
-                <p className="text-sm font-bold text-red-900">Limpeza Operacional</p>
-                <p className="text-xs text-red-800">Remove estoque, movimentações, catálogo, clientes, orçamentos, OS, registros de obra, financeiro, garantias, pós-venda, vendas e controle de materiais. Não executa sem backup completo recém-gerado.</p>
-                <input value={resetConfirmation} onChange={event => setResetConfirmation(event.target.value)} placeholder="Digite: LIMPAR DADOS OPERACIONAIS" className="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-sm" />
-                <Button type="button" onClick={clearOperationalData} disabled={maintenanceLoading || !resetToken || resetConfirmation !== "LIMPAR DADOS OPERACIONAIS"} className="bg-red-700 text-white hover:bg-red-800"><Eraser className="mr-2 h-4 w-4" />Executar Limpeza Operacional</Button>
-              </div>
-              {maintenanceError && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{maintenanceError}</p>}
-              {maintenanceMessage && <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{maintenanceMessage}</p>}
-            </CardContent>
-          </Card>
-
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-2">
@@ -396,87 +328,6 @@ export default function BackupCenter({ mode = "exports" }: { mode?: BackupCenter
           </Card>
           <TechnicalCoverageDetails />
           <PdfBackupRestore isAdmin={isAdmin} username={user?.username || "Admin"} onRestored={() => setRefresh(r => r + 1)} />
-        </div>
-      )}
-
-      {/* Tab: Exportação */}
-      {mode === "exports" && (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-orange-100 bg-orange-50/60 px-4 py-3">
-            <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
-            <p className="text-sm text-slate-600">{page.panelDescription}</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {ALL_BACKUP_TYPES.map(cfg => {
-              const Icon = cfg.icon;
-              return (
-                <Card key={cfg.type} className="overflow-hidden hover:shadow-md transition-shadow">
-                  <CardContent className="p-5 space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.color}`}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">{cfg.label}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">{cfg.description}</p>
-                      </div>
-                    </div>
-                    <BackupManager
-                      type={cfg.type}
-                      label={cfg.label}
-                      isAdmin={isAdmin}
-                      adminOnly={false}
-                      showRestore={false}
-                      purpose="export"
-                      backupButtonLabel="Baixar PDF"
-                      generatedBy={user?.username}
-                      materialFilters={cfg.type === "materiais" ? { period: materialPeriod, year: materialYear, month: materialMonth } : undefined}
-                      onRestored={() => setRefresh(r => r + 1)}
-                    />
-                    {cfg.type === "materiais" && (
-                      <div className="space-y-2 rounded-lg border border-amber-100 bg-amber-50/70 p-3">
-                        <p className="text-xs font-bold uppercase text-amber-700">Período</p>
-                        <select value={materialPeriod} onChange={event => setMaterialPeriod(event.target.value as "all" | "year" | "month")} className="h-9 w-full rounded-md border border-amber-200 bg-white px-2 text-xs">
-                          <option value="all">Todos os meses</option>
-                          <option value="year">Ano específico</option>
-                          <option value="month">Mês específico</option>
-                        </select>
-                        {materialPeriod !== "all" && (
-                          <input
-                            value={materialYear}
-                            onChange={event => setMaterialYear(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                            className="h-9 w-full rounded-md border border-amber-200 bg-white px-2 text-xs"
-                            placeholder="Ano"
-                          />
-                        )}
-                        {materialPeriod === "month" && (
-                          <select value={materialMonth} onChange={event => setMaterialMonth(event.target.value)} className="h-9 w-full rounded-md border border-amber-200 bg-white px-2 text-xs">
-                            {MONTHS.map((month, index) => (
-                              <option key={month} value={String(index + 1).padStart(2, "0")}>{month}</option>
-                            ))}
-                          </select>
-                        )}
-                        <p className="text-[11px] text-amber-800">Baixa PDF e JSON técnico usando a data operacional da retirada ou movimentação.</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <FileText className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" />
-                <div>
-                  <p className="text-sm font-bold text-slate-800">Exportação é somente relatório</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Estes PDFs servem para conferência, auditoria e compartilhamento. Para restaurar dados, use a tela Restauração com ZIP completo ou JSON técnico modular gerado pelo ERP.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       )}
     </div>
@@ -535,10 +386,6 @@ function TechnicalCoverageDetails() {
 
 export function BackupGenerationPage() {
   return <BackupCenter mode="backup" />;
-}
-
-export function BackupExportPage() {
-  return <BackupCenter mode="exports" />;
 }
 
 export function BackupRestorePage() {

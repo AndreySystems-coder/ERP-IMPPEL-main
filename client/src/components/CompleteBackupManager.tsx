@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Archive, CheckCircle2, Download, FileArchive, ShieldAlert, Upload } from "lucide-react";
+import { Archive, ArrowRightLeft, CheckCircle2, Download, FileArchive, Layers, Package, PackageCheck, ShieldAlert, ShoppingCart, Upload, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   buildCompleteBackupArchive,
@@ -105,6 +105,15 @@ const PDF_RESTORE_MODULES: PdfRestoreModule[] = [
   { id: "movimentacoes", type: "estoque", label: "Movimentações de Estoque" },
   { id: "materiais", type: "materiais", label: "Controle de Materiais" },
 ];
+
+const PDF_RESTORE_MODULE_STYLES: Record<string, { icon: typeof Users; color: string; description: string }> = {
+  usuarios: { icon: Users, color: "text-indigo-600 bg-indigo-50 border-indigo-200", description: "Usuários, cargos e permissões" },
+  produtos: { icon: ShoppingCart, color: "text-emerald-600 bg-emerald-50 border-emerald-200", description: "Produtos do catálogo de vendas" },
+  servicos: { icon: Layers, color: "text-violet-600 bg-violet-50 border-violet-200", description: "Serviços com custos e margens" },
+  estoque: { icon: Package, color: "text-blue-600 bg-blue-50 border-blue-200", description: "Itens de estoque cadastrados" },
+  movimentacoes: { icon: ArrowRightLeft, color: "text-blue-600 bg-blue-50 border-blue-200", description: "Entradas e saídas de estoque" },
+  materiais: { icon: PackageCheck, color: "text-amber-600 bg-amber-50 border-amber-200", description: "Retiradas e consumo de obra" },
+};
 
 type PdfImportHistoryEntry = {
   id: string;
@@ -668,17 +677,28 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
 
         <div>
           <p className="text-sm font-bold text-slate-900">1. Escolher módulo</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {PDF_RESTORE_MODULES.map(module => (
-              <button
-                key={module.id}
-                type="button"
-                onClick={() => { setSelectedModuleId(module.id); setPreviews([]); setSafetyBackup(null); setConfirmation(""); }}
-                className={`rounded-lg border px-3 py-2 text-left text-sm font-semibold ${selectedModuleId === module.id ? "border-amber-500 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}
-              >
-                {module.label}
-              </button>
-            ))}
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {PDF_RESTORE_MODULES.map(module => {
+              const style = PDF_RESTORE_MODULE_STYLES[module.id];
+              const Icon = style?.icon || FileArchive;
+              const active = selectedModuleId === module.id;
+              return (
+                <button
+                  key={module.id}
+                  type="button"
+                  onClick={() => { setSelectedModuleId(module.id); setPreviews([]); setSafetyBackup(null); setConfirmation(""); }}
+                  className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-shadow hover:shadow-md ${active ? "border-amber-500 bg-amber-50/60 ring-2 ring-amber-200" : "border-slate-200 bg-white"}`}
+                >
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${style?.color || "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">{module.label}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{style?.description}</p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -690,7 +710,8 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
         </label>
 
         <button type="button" onClick={buildPreview} disabled={!isAdmin || busy || files.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">
-          {busy ? "Lendo PDFs..." : "3. Gerar preview"}
+          <Upload className="h-4 w-4" />
+          {busy ? "Lendo PDFs..." : "3. Restaurar PDF"}
         </button>
 
         {previews.length > 0 && (

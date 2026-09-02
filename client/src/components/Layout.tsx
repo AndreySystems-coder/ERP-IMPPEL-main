@@ -214,8 +214,8 @@ const ALL_SECTIONS: NavSection[] = [
     permission: "viewBackups",
     items: [
       { name: "Todos", path: "/backups-hub", icon: FileText, permission: "viewBackups" },
-      { name: "Exportar", path: "/backups/exportacao", icon: FileText, permission: "viewExports" },
-      { name: "Restaurar", path: "/backups/restauracao", icon: Shield, permission: "viewRestore" },
+      { name: "Backup", path: "/backups/backup", icon: FileText, permission: "viewBackupGeneration" },
+      { name: "Restauração", path: "/backups/restauracao", icon: Shield, permission: "viewRestore" },
     ],
   },
 ];
