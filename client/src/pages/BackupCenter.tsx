@@ -143,7 +143,7 @@ const PAGE_COPY: Record<BackupCenterMode, { title: string; subtitle: string; pan
     title: "Backup",
     subtitle: "Gerar PDF por módulo",
     panelTitle: "Gerar PDF por módulo",
-    panelDescription: "Um PDF por módulo, para conferência e para restaurar depois. Para tudo de uma vez, use a Restauração completa do ERP no Passo 2.",
+    panelDescription: "Um PDF por módulo, para conferência e para restaurar depois no Passo 2.",
   },
   restore: {
     title: "Restauração",
