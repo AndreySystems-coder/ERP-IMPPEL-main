@@ -222,7 +222,6 @@ export function ExecutionQualityHub() {
         items: [
           { title: "Registro de Obra", description: "Registro diário, observações, fotos e consumo real.", href: "/registro-obra", icon: Clipboard, permission: "viewWorks", accent: accents.orange },
           { title: "Ordem de Serviço", description: "Execução, progresso, materiais, qualidade e finalização.", href: "/work-orders", icon: ClipboardList, permission: "viewWorkOrders", accent: accents.blue },
-          { title: "Configurar Qualidade", description: "Atalho administrativo para procedimentos, checklists e padrões.", href: "/qualidade-obras", icon: ListChecks, permission: "viewSettings", accent: accents.slate },
         ],
       }}
     />

@@ -10,6 +10,7 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { asArray } from "@/lib/safeData";
+import RegistroObraQuality from "@/features/work-quality/RegistroObraQuality";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ServiceProgress {
@@ -485,6 +486,9 @@ export default function RegistroObra() {
               </Button>
             </div>
           </div>
+
+          {/* ── Qualidade da Obra ────────────────────────────────────────── */}
+          <RegistroObraQuality workOrderId={selectedWO.id} />
 
           {/* ── Lançar Consumo ──────────────────────────────────────────── */}
           <div className="border-2 border-primary/30 rounded-2xl bg-gradient-to-br from-primary/5 to-white p-5 space-y-4">
