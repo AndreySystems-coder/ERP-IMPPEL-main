@@ -2,12 +2,13 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
-  DollarSign, TrendingUp, Activity, Briefcase, Users, Target,
+  DollarSign, TrendingUp, TrendingDown, Activity, Briefcase, Users, Target,
   Package, AlertTriangle, Plus, ClipboardList, Warehouse, CheckSquare,
   ArrowRight, Calendar, ChevronRight, BarChart2, FileText, Clock, ShoppingCart, PackageCheck,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+  LineChart, Line, PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -161,6 +162,37 @@ export default function Dashboard() {
     });
     return Array.from(totals.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
   }, [salesList]);
+
+  const revenueTrend = React.useMemo(() => {
+    const grouped = new Map<string, { key: string; name: string; total: number }>();
+    jobsList.forEach((job: any) => {
+      if (!statusIncludes(job.status, ["aprovado", "fechado", "ganho"])) return;
+      const date = job.createdAt || job.updatedAt;
+      if (!date) return;
+      const parsed = new Date(date);
+      if (Number.isNaN(parsed.getTime())) return;
+      const key = format(parsed, "yyyy-MM");
+      const name = format(parsed, "MMM/yy", { locale: ptBR });
+      const row = grouped.get(key) || { key, name, total: 0 };
+      row.total += Number(job.realPriceSold || job.calculatedPrice || 0);
+      grouped.set(key, row);
+    });
+    return Array.from(grouped.values()).sort((a, b) => a.key.localeCompare(b.key)).slice(-6);
+  }, [jobsList]);
+
+  const revenueTrendDelta = React.useMemo(() => {
+    if (revenueTrend.length < 2) return null;
+    const previous = revenueTrend[revenueTrend.length - 2].total;
+    const current = revenueTrend[revenueTrend.length - 1].total;
+    if (previous <= 0) return null;
+    return ((current - previous) / previous) * 100;
+  }, [revenueTrend]);
+
+  const worksDistribution = [
+    { name: "Em andamento", value: runningWorks.length, color: "#2563eb" },
+    { name: "Concluídas", value: finishedWorks.length, color: "#059669" },
+    { name: "Agendadas", value: scheduledWorks.length, color: "#d97706" },
+  ].filter(slice => slice.value > 0);
 
   const kpis = [
     {
@@ -318,6 +350,34 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Revenue trend ──────────────────────────────────────────────────── */}
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-blue-700" /> Tendência de Faturamento</h3>
+          {revenueTrendDelta !== null && (
+            <span className={`flex items-center gap-1 text-xs font-bold ${revenueTrendDelta >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+              {revenueTrendDelta >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+              {Math.abs(revenueTrendDelta).toFixed(1)}% vs mês anterior
+            </span>
+          )}
+        </div>
+        <div className="h-64 p-5">
+          {revenueTrend.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={revenueTrend}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="name" fontSize={11} />
+                <YAxis fontSize={11} tickFormatter={(value) => formatBRL(value)} width={90} />
+                <RechartsTooltip formatter={(value: number) => formatBRL(value)} />
+                <Line type="monotone" dataKey="total" name="Faturamento" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="flex h-full items-center justify-center text-sm text-slate-400">Sem orçamentos aprovados/fechados para gerar a tendência.</p>
+          )}
+        </div>
+      </section>
+
       {/* ── Operational widgets ───────────────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -356,10 +416,27 @@ export default function Dashboard() {
             <Link href="/work-orders" className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">Abrir <ChevronRight className="w-3.5 h-3.5" /></Link>
           </div>
           <div className="p-5">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><p className="text-2xl font-bold">{runningWorks.length}</p><p className="text-xs font-bold text-slate-700">Em andamento</p></div>
-              <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><p className="text-2xl font-bold">{finishedWorks.length}</p><p className="text-xs font-bold text-slate-700">Concluídas</p></div>
-              <div className="rounded-xl bg-amber-50 p-3 text-amber-700"><p className="text-2xl font-bold">{scheduledWorks.length}</p><p className="text-xs font-bold text-slate-700">Agendadas</p></div>
+            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl bg-blue-50 p-3 text-blue-700"><p className="text-2xl font-bold">{runningWorks.length}</p><p className="text-xs font-bold text-slate-700">Em andamento</p></div>
+                <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><p className="text-2xl font-bold">{finishedWorks.length}</p><p className="text-xs font-bold text-slate-700">Concluídas</p></div>
+                <div className="rounded-xl bg-amber-50 p-3 text-amber-700"><p className="text-2xl font-bold">{scheduledWorks.length}</p><p className="text-xs font-bold text-slate-700">Agendadas</p></div>
+              </div>
+              <div className="h-40">
+                {worksDistribution.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={worksDistribution} dataKey="value" nameKey="name" innerRadius={35} outerRadius={60}>
+                        {worksDistribution.map((slice) => <Cell key={slice.name} fill={slice.color} />)}
+                      </Pie>
+                      <RechartsTooltip />
+                      <Legend iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="flex h-full items-center justify-center text-xs text-slate-400">Sem obras cadastradas.</p>
+                )}
+              </div>
             </div>
             <MiniList title="Últimas OS" empty="Nenhuma ordem de serviço cadastrada." rows={[...workOrdersList].sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 5).map((item: any) => ({ name: `OS #${item.id} - ${item.clientName || "Cliente"}`, detail: item.status || "Sem status" }))} />
           </div>
