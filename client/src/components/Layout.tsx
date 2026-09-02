@@ -6,7 +6,6 @@ import {
   Briefcase,
   Building2,
   Calendar as CalendarIcon,
-  ChevronDown,
   ChevronLeft,
   Clipboard,
   ClipboardList,
@@ -41,7 +40,6 @@ import { motion } from "framer-motion";
 
 import { useLogout, useUser } from "@/hooks/use-auth";
 import { canAccess, canAccessAny, type PermissionKey } from "@/lib/permissions";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface NavItem {
   name: string;
@@ -251,49 +249,41 @@ function NavSectionGroup({
     location === section.path ||
     visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
 
+  const canExpand = !collapsed && visibleItems.length > 1;
+
   const rowClassName = `flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
     hasActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
   } ${collapsed ? "justify-center px-0" : ""}`;
 
-  const row = (
-    <div className={rowClassName}>
-      <Link href={section.path} onClick={onNavClick} className={`flex min-w-0 items-center gap-2.5 ${collapsed ? "justify-center" : "flex-1"}`}>
-        <motion.span
-          whileHover={{ scale: 1.15 }}
-          transition={{ type: "spring", stiffness: 400, damping: 15 }}
-          className="flex shrink-0"
-        >
-          <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
-        </motion.span>
-        {!collapsed && <span className="truncate">{section.label}</span>}
-      </Link>
-      {!collapsed && visibleItems.length > 1 && (
-        <button type="button" onClick={onToggle} aria-label={`Abrir atalhos de ${section.label}`}>
-          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-        </button>
-      )}
-    </div>
+  const iconAndLabel = (
+    <>
+      <motion.span
+        whileHover={{ scale: 1.15 }}
+        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+        className="flex shrink-0"
+      >
+        <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
+      </motion.span>
+      {!collapsed && <span className="truncate">{section.label}</span>}
+    </>
+  );
+
+  // Com mais de um item, o clique no nome inteiro abre/fecha a lista ali mesmo,
+  // em vez de navegar — evita a antiga setinha separada. Sem itens extras (ou
+  // colapsado), o nome navega direto para o hub do módulo.
+  const row = canExpand ? (
+    <button type="button" onClick={onToggle} aria-expanded={isOpen} className={rowClassName}>
+      {iconAndLabel}
+    </button>
+  ) : (
+    <Link href={section.path} onClick={onNavClick} className={rowClassName}>
+      {iconAndLabel}
+    </Link>
   );
 
   return (
     <div className="mb-1">
-      {collapsed ? (
-        <Tooltip delayDuration={150}>
-          <TooltipTrigger asChild>{row}</TooltipTrigger>
-          <TooltipContent side="right" className="max-w-[200px]">
-            <p className="font-semibold">{section.label}</p>
-            {visibleItems.length > 1 && (
-              <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                {visibleItems.map((item) => (
-                  <li key={`${item.name}-${item.path}`}>{item.name}</li>
-                ))}
-              </ul>
-            )}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        row
-      )}
+      {row}
       {!collapsed && isOpen && (
         <div className="mt-1 space-y-1 pl-4">
           {visibleItems.map((item) => {
@@ -323,9 +313,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useUser();
   const logout = useLogout();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(true);
+  const [isHoverExpanded, setIsHoverExpanded] = React.useState(false);
   const [openSection, setOpenSection] = React.useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = React.useState("");
+  // No mobile a barra lateral é um menu off-canvas de largura total — o
+  // colapso/hover só existe na barra fixa de telas grandes.
+  const effectiveCollapsed = isSidebarCollapsed && !isHoverExpanded && !isMobileMenuOpen;
 
   if (isLoading) {
     return (
@@ -434,11 +428,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
 
         <aside
+          onMouseEnter={() => setIsHoverExpanded(true)}
+          onMouseLeave={() => setIsHoverExpanded(false)}
           className={`
             fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white
-            shadow-[2px_0_15px_-3px_rgba(0,0,0,0.05)] transition-transform duration-300 ease-in-out
+            shadow-[2px_0_15px_-3px_rgba(0,0,0,0.05)] transition-all duration-200 ease-in-out
             lg:static lg:h-full lg:transform-none lg:shadow-none
-            ${isSidebarCollapsed ? "w-64 lg:w-16" : "w-64"}
+            ${effectiveCollapsed ? "w-64 lg:w-16" : "w-64"}
             ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           `}
         >
@@ -450,7 +446,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 location={location}
                 user={user}
                 onNavClick={() => setIsMobileMenuOpen(false)}
-                collapsed={isSidebarCollapsed}
+                collapsed={effectiveCollapsed}
                 isOpen={openSection === section.label}
                 onToggle={() => setOpenSection(current => current === section.label ? null : section.label)}
               />
@@ -464,7 +460,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
             >
               <LogOut className="h-4 w-4" />
-              {!isSidebarCollapsed && <span>Sair do sistema</span>}
+              {!effectiveCollapsed && <span>Sair do sistema</span>}
             </button>
           </div>
         </aside>
