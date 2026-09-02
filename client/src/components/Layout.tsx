@@ -6,7 +6,6 @@ import {
   Briefcase,
   Building2,
   Calendar as CalendarIcon,
-  ChevronLeft,
   Clipboard,
   ClipboardList,
   CreditCard,
@@ -245,28 +244,33 @@ function NavSectionGroup({
     location === section.path ||
     visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
 
+  const iconClassName = `flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+    hasActive ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+  }`;
+
   // Clique navega direto para o hub do módulo (que já lista os itens internos
   // como cards na tela) — a barra lateral nunca expande uma sublista aqui.
+  if (collapsed) {
+    // Barra compacta (dock): só o ícone sob o mouse mostra o rótulo, como uma
+    // dica flutuante — o resto da barra fica parado, sem expandir junto.
+    return (
+      <div className="group/item relative mb-1 flex justify-center">
+        <Link href={section.path} onClick={onNavClick} className={iconClassName}>
+          <section.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+        </Link>
+        <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover/item:opacity-100">
+          {section.label}
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <Link
-      href={section.path}
-      onClick={onNavClick}
-      className={`group relative mb-1 flex min-w-0 items-center gap-3 rounded-2xl px-2 py-1.5 transition-colors ${
-        collapsed ? "justify-center px-0" : ""
-      }`}
-    >
-      <motion.span
-        whileHover={{ scale: 1.08 }}
-        transition={{ type: "spring", stiffness: 400, damping: 15 }}
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
-          hasActive ? "bg-slate-900 text-white" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-900"
-        }`}
-      >
+    <Link href={section.path} onClick={onNavClick} className={`mb-1 flex min-w-0 items-center gap-3 rounded-xl px-2 py-1.5 transition-colors ${hasActive ? "bg-slate-100" : "hover:bg-slate-50"}`}>
+      <span className={iconClassName}>
         <section.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-      </motion.span>
-      {!collapsed && (
-        <span className={`truncate text-sm font-semibold ${hasActive ? "text-slate-900" : "text-slate-500 group-hover:text-slate-900"}`}>{section.label}</span>
-      )}
+      </span>
+      <span className={`truncate text-sm font-semibold ${hasActive ? "text-slate-900" : "text-slate-600"}`}>{section.label}</span>
     </Link>
   );
 }
@@ -276,12 +280,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading } = useUser();
   const logout = useLogout();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(true);
-  const [isHoverExpanded, setIsHoverExpanded] = React.useState(false);
   const [globalSearch, setGlobalSearch] = React.useState("");
-  // No mobile a barra lateral é um menu off-canvas de largura total — o
-  // colapso/hover só existe na barra fixa de telas grandes.
-  const effectiveCollapsed = isSidebarCollapsed && !isHoverExpanded && !isMobileMenuOpen;
+  // No desktop a barra é sempre compacta (dock, só ícones com dica ao passar
+  // o mouse); no mobile ela vira um menu off-canvas de largura total quando aberta.
+  const effectiveCollapsed = !isMobileMenuOpen;
 
   if (isLoading) {
     return (
@@ -324,15 +326,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <button
-            className="hidden rounded-md p-1.5 text-primary-foreground/80 transition-colors hover:text-white lg:inline-flex"
-            onClick={() => setIsSidebarCollapsed(value => !value)}
-            type="button"
-            aria-label={isSidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
-          >
-            <ChevronLeft className={`h-5 w-5 transition-transform ${isSidebarCollapsed ? "rotate-180" : ""}`} />
-          </button>
-
           <div className="font-display flex items-center gap-1 text-lg font-bold tracking-tight">
             <span className="text-white">IMPP</span>
             <span className="text-accent">EL</span>
@@ -390,8 +383,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
 
         <aside
-          onMouseEnter={() => setIsHoverExpanded(true)}
-          onMouseLeave={() => setIsHoverExpanded(false)}
           className={`
             fixed left-0 top-14 bottom-0 z-[45] flex flex-col border-r border-slate-200 bg-white
             transition-[width] duration-200 ease-in-out
@@ -413,15 +404,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          <div className="border-t border-slate-100 p-4">
-            <button
-              onClick={() => logout.mutate()}
-              type="button"
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
-            >
-              <LogOut className="h-4 w-4" strokeWidth={1.75} />
-              {!effectiveCollapsed && <span>Sair do sistema</span>}
-            </button>
+          <div className="border-t border-slate-100 p-3">
+            {effectiveCollapsed ? (
+              <div className="group/item relative flex justify-center">
+                <button
+                  onClick={() => logout.mutate()}
+                  type="button"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                >
+                  <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                </button>
+                <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover/item:opacity-100">
+                  Sair do sistema
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={() => logout.mutate()}
+                type="button"
+                className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
+                  <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
+                </span>
+                <span>Sair do sistema</span>
+              </button>
+            )}
           </div>
         </aside>
 
