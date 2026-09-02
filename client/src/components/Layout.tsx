@@ -53,6 +53,7 @@ interface NavSection {
   label: string;
   path: string;
   icon: React.ElementType;
+  color: string;
   adminOnly?: boolean;
   permission?: PermissionKey;
   items: NavItem[];
@@ -63,6 +64,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Início",
     path: "/",
     icon: LayoutDashboard,
+    color: "bg-blue-600",
     permission: "viewDashboard",
     items: [
       { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -73,6 +75,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Marketing",
     path: "/marketing",
     icon: Palette,
+    color: "bg-fuchsia-500",
     adminOnly: true,
     permission: "viewMarketingContent",
     items: [
@@ -85,6 +88,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Atendimento",
     path: "/crm",
     icon: PhoneCall,
+    color: "bg-violet-500",
     adminOnly: true,
     permission: "viewCrm",
     items: [
@@ -99,6 +103,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Orçamentos",
     path: "/orcamentos",
     icon: Briefcase,
+    color: "bg-orange-500",
     adminOnly: true,
     permission: "viewQuotes",
     items: [
@@ -115,6 +120,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Planejamento",
     path: "/planejamento-obras",
     icon: ClipboardList,
+    color: "bg-cyan-500",
     permission: "viewWorks",
     items: [
       { name: "Todos", path: "/planejamento-obras", icon: ClipboardList, permission: "viewWorkOrders" },
@@ -126,6 +132,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Execução",
     path: "/execucao-qualidade",
     icon: Clipboard,
+    color: "bg-emerald-500",
     permission: "viewWorks",
     items: [
       { name: "Todos", path: "/execucao-qualidade", icon: Clipboard, permission: "viewWorkOrders" },
@@ -137,6 +144,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Materiais",
     path: "/materiais-equipamentos",
     icon: Package,
+    color: "bg-amber-500",
     adminOnly: true,
     permission: "viewInventory",
     items: [
@@ -152,6 +160,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Financeiro",
     path: "/financeiro",
     icon: DollarSign,
+    color: "bg-teal-600",
     adminOnly: true,
     permission: "viewFinancials",
     items: [
@@ -167,6 +176,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Equipe",
     path: "/equipe",
     icon: Users,
+    color: "bg-indigo-500",
     adminOnly: true,
     permission: "viewTeam",
     items: [
@@ -180,6 +190,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Pós-venda",
     path: "/pos-venda-hub",
     icon: Heart,
+    color: "bg-rose-500",
     adminOnly: true,
     permission: "viewPostSale",
     items: [
@@ -192,6 +203,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Gestão",
     path: "/gestao",
     icon: Settings,
+    color: "bg-slate-600",
     adminOnly: true,
     permission: "viewSettings",
     items: [
@@ -208,6 +220,7 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Backups",
     path: "/backups-hub",
     icon: FileText,
+    color: "bg-sky-500",
     adminOnly: true,
     permission: "viewBackups",
     items: [
@@ -229,16 +242,12 @@ function NavSectionGroup({
   user,
   onNavClick,
   collapsed,
-  isOpen,
-  onToggle,
 }: {
   section: NavSection;
   location: string;
   user: any;
   onNavClick: () => void;
   collapsed: boolean;
-  isOpen: boolean;
-  onToggle: () => void;
 }) {
   const visibleItems = section.items.filter((item) => canAccess(user, item.permission));
   const sectionPermissions = [section.permission, ...section.items.map((item) => item.permission)].filter(Boolean) as PermissionKey[];
@@ -249,62 +258,27 @@ function NavSectionGroup({
     location === section.path ||
     visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
 
-  const canExpand = !collapsed && visibleItems.length > 1;
-
-  const rowClassName = `flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition-colors ${
-    hasActive ? "bg-primary/10 text-primary" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-  } ${collapsed ? "justify-center px-0" : ""}`;
-
-  const iconAndLabel = (
-    <>
-      <motion.span
-        whileHover={{ scale: 1.15 }}
-        transition={{ type: "spring", stiffness: 400, damping: 15 }}
-        className="flex shrink-0"
-      >
-        <section.icon className={`h-4 w-4 shrink-0 ${hasActive ? "text-primary" : "text-slate-400"}`} />
-      </motion.span>
-      {!collapsed && <span className="truncate">{section.label}</span>}
-    </>
-  );
-
-  // Com mais de um item, o clique no nome inteiro abre/fecha a lista ali mesmo,
-  // em vez de navegar — evita a antiga setinha separada. Sem itens extras (ou
-  // colapsado), o nome navega direto para o hub do módulo.
-  const row = canExpand ? (
-    <button type="button" onClick={onToggle} aria-expanded={isOpen} className={rowClassName}>
-      {iconAndLabel}
-    </button>
-  ) : (
-    <Link href={section.path} onClick={onNavClick} className={rowClassName}>
-      {iconAndLabel}
-    </Link>
-  );
-
+  // Clique navega direto para o hub do módulo (que já lista os itens internos
+  // como cards na tela) — a barra lateral nunca expande uma sublista aqui.
   return (
-    <div className="mb-1">
-      {row}
-      {!collapsed && isOpen && (
-        <div className="mt-1 space-y-1 pl-4">
-          {visibleItems.map((item) => {
-            const active = location === item.path || (item.path !== "/" && location.startsWith(item.path));
-            return (
-              <Link
-                key={`${item.name}-${item.path}`}
-                href={item.path}
-                onClick={onNavClick}
-                className={`flex min-w-0 items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-                  active ? "bg-primary text-white" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                }`}
-              >
-                <item.icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{item.name}</span>
-              </Link>
-            );
-          })}
-        </div>
+    <Link
+      href={section.path}
+      onClick={onNavClick}
+      className={`group relative mb-1.5 flex min-w-0 items-center gap-3 rounded-xl px-2 py-2 transition-colors ${
+        hasActive ? "bg-primary/10" : "hover:bg-slate-50"
+      } ${collapsed ? "justify-center px-0" : ""}`}
+    >
+      <motion.span
+        whileHover={{ scale: 1.1 }}
+        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm ${section.color}`}
+      >
+        <section.icon className="h-[18px] w-[18px] text-white" />
+      </motion.span>
+      {!collapsed && (
+        <span className={`truncate text-sm font-semibold ${hasActive ? "text-primary" : "text-slate-700"}`}>{section.label}</span>
       )}
-    </div>
+    </Link>
   );
 }
 
@@ -315,7 +289,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(true);
   const [isHoverExpanded, setIsHoverExpanded] = React.useState(false);
-  const [openSection, setOpenSection] = React.useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = React.useState("");
   // No mobile a barra lateral é um menu off-canvas de largura total — o
   // colapso/hover só existe na barra fixa de telas grandes.
@@ -431,14 +404,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           onMouseEnter={() => setIsHoverExpanded(true)}
           onMouseLeave={() => setIsHoverExpanded(false)}
           className={`
-            fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200 bg-white
-            shadow-[2px_0_15px_-3px_rgba(0,0,0,0.05)] transition-all duration-200 ease-in-out
-            lg:static lg:h-full lg:transform-none lg:shadow-none
-            ${effectiveCollapsed ? "w-64 lg:w-16" : "w-64"}
+            fixed left-0 top-14 bottom-0 z-[45] flex flex-col border-r border-slate-200 bg-white
+            transition-[width] duration-200 ease-in-out
+            ${effectiveCollapsed ? "w-16" : "w-64 shadow-[4px_0_24px_-6px_rgba(0,0,0,0.15)]"}
             ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           `}
         >
-          <nav className="custom-scrollbar flex-1 overflow-y-auto px-3 py-4">
+          <nav className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
             {ALL_SECTIONS.map((section) => (
               <NavSectionGroup
                 key={section.label}
@@ -447,8 +419,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 user={user}
                 onNavClick={() => setIsMobileMenuOpen(false)}
                 collapsed={effectiveCollapsed}
-                isOpen={openSection === section.label}
-                onToggle={() => setOpenSection(current => current === section.label ? null : section.label)}
               />
             ))}
           </nav>
@@ -464,6 +434,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </aside>
+
+        {/* Reserva o espaço da barra colapsada — a barra em si é fixed e nunca
+            empurra o conteúdo, nem ao expandir no hover nem ao fixar aberta. */}
+        <div className="hidden w-16 shrink-0 lg:block" />
 
         <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-50/50 p-4 lg:px-8 lg:py-6">
           <motion.div
