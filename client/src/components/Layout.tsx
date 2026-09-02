@@ -53,7 +53,6 @@ interface NavSection {
   label: string;
   path: string;
   icon: React.ElementType;
-  color: string;
   adminOnly?: boolean;
   permission?: PermissionKey;
   items: NavItem[];
@@ -64,7 +63,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Início",
     path: "/",
     icon: LayoutDashboard,
-    color: "bg-blue-600",
     permission: "viewDashboard",
     items: [
       { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -75,7 +73,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Marketing",
     path: "/marketing",
     icon: Palette,
-    color: "bg-fuchsia-500",
     adminOnly: true,
     permission: "viewMarketingContent",
     items: [
@@ -88,7 +85,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Atendimento",
     path: "/crm",
     icon: PhoneCall,
-    color: "bg-violet-500",
     adminOnly: true,
     permission: "viewCrm",
     items: [
@@ -103,7 +99,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Orçamentos",
     path: "/orcamentos",
     icon: Briefcase,
-    color: "bg-orange-500",
     adminOnly: true,
     permission: "viewQuotes",
     items: [
@@ -120,7 +115,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Planejamento",
     path: "/planejamento-obras",
     icon: ClipboardList,
-    color: "bg-cyan-500",
     permission: "viewWorks",
     items: [
       { name: "Todos", path: "/planejamento-obras", icon: ClipboardList, permission: "viewWorkOrders" },
@@ -132,7 +126,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Execução",
     path: "/execucao-qualidade",
     icon: Clipboard,
-    color: "bg-emerald-500",
     permission: "viewWorks",
     items: [
       { name: "Todos", path: "/execucao-qualidade", icon: Clipboard, permission: "viewWorkOrders" },
@@ -144,7 +137,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Materiais",
     path: "/materiais-equipamentos",
     icon: Package,
-    color: "bg-amber-500",
     adminOnly: true,
     permission: "viewInventory",
     items: [
@@ -160,7 +152,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Financeiro",
     path: "/financeiro",
     icon: DollarSign,
-    color: "bg-teal-600",
     adminOnly: true,
     permission: "viewFinancials",
     items: [
@@ -176,7 +167,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Equipe",
     path: "/equipe",
     icon: Users,
-    color: "bg-indigo-500",
     adminOnly: true,
     permission: "viewTeam",
     items: [
@@ -190,7 +180,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Pós-venda",
     path: "/pos-venda-hub",
     icon: Heart,
-    color: "bg-rose-500",
     adminOnly: true,
     permission: "viewPostSale",
     items: [
@@ -203,7 +192,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Gestão",
     path: "/gestao",
     icon: Settings,
-    color: "bg-slate-600",
     adminOnly: true,
     permission: "viewSettings",
     items: [
@@ -220,7 +208,6 @@ const ALL_SECTIONS: NavSection[] = [
     label: "Backups",
     path: "/backups-hub",
     icon: FileText,
-    color: "bg-sky-500",
     adminOnly: true,
     permission: "viewBackups",
     items: [
@@ -264,19 +251,21 @@ function NavSectionGroup({
     <Link
       href={section.path}
       onClick={onNavClick}
-      className={`group relative mb-1.5 flex min-w-0 items-center gap-3 rounded-xl px-2 py-2 transition-colors ${
-        hasActive ? "bg-primary/10" : "hover:bg-slate-50"
-      } ${collapsed ? "justify-center px-0" : ""}`}
+      className={`group relative mb-1 flex min-w-0 items-center gap-3 rounded-2xl px-2 py-1.5 transition-colors ${
+        collapsed ? "justify-center px-0" : ""
+      }`}
     >
       <motion.span
-        whileHover={{ scale: 1.1 }}
+        whileHover={{ scale: 1.08 }}
         transition={{ type: "spring", stiffness: 400, damping: 15 }}
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm ${section.color}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+          hasActive ? "bg-slate-900 text-white" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-900"
+        }`}
       >
-        <section.icon className="h-[18px] w-[18px] text-white" />
+        <section.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
       </motion.span>
       {!collapsed && (
-        <span className={`truncate text-sm font-semibold ${hasActive ? "text-primary" : "text-slate-700"}`}>{section.label}</span>
+        <span className={`truncate text-sm font-semibold ${hasActive ? "text-slate-900" : "text-slate-500 group-hover:text-slate-900"}`}>{section.label}</span>
       )}
     </Link>
   );
@@ -406,7 +395,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           className={`
             fixed left-0 top-14 bottom-0 z-[45] flex flex-col border-r border-slate-200 bg-white
             transition-[width] duration-200 ease-in-out
-            ${effectiveCollapsed ? "w-16" : "w-64 shadow-[4px_0_24px_-6px_rgba(0,0,0,0.15)]"}
+            lg:left-3 lg:top-[4.5rem] lg:bottom-3 lg:rounded-3xl lg:border lg:shadow-[0_12px_32px_-8px_rgba(15,23,42,0.16)]
+            ${effectiveCollapsed ? "w-16" : "w-64"}
             ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           `}
         >
@@ -429,7 +419,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               type="button"
               className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-4 w-4" strokeWidth={1.75} />
               {!effectiveCollapsed && <span>Sair do sistema</span>}
             </button>
           </div>
@@ -437,7 +427,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Reserva o espaço da barra colapsada — a barra em si é fixed e nunca
             empurra o conteúdo, nem ao expandir no hover nem ao fixar aberta. */}
-        <div className="hidden w-16 shrink-0 lg:block" />
+        <div className="hidden w-24 shrink-0 lg:block" />
 
         <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-50/50 p-4 lg:px-8 lg:py-6">
           <motion.div
