@@ -4728,7 +4728,7 @@ export async function registerRoutes(
     try {
       const selectedType = String(req.body?.selectedType || "") as any;
       const allowedTypes = new Set(["usuarios", "produtos", "servicos", "estoque", "financeiro", "clientes", "orcamentos", "ordens-servico", "pos-venda", "garantias", "materiais"]);
-      if (!allowedTypes.has(selectedType)) return res.status(400).json({ message: "Selecione um módulo válido." });
+      if (selectedType !== "auto" && !allowedTypes.has(selectedType)) return res.status(400).json({ message: "Selecione um módulo válido." });
       const files: Array<{ name?: string; dataBase64?: string; mimeType?: string }> = Array.isArray(req.body?.files) ? req.body.files : [];
       if (files.length === 0) return res.status(400).json({ message: "Anexe ao menos um PDF." });
       if (files.length > 12) return res.status(400).json({ message: "Envie no máximo 12 PDFs por preview." });

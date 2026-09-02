@@ -190,7 +190,7 @@ function getOperationalUserRows(users: unknown): string[][] {
   ]);
 }
 
-function buildOperationalUsersBackup(backup: any): any {
+export function buildOperationalUsersBackup(backup: any): any {
   const users = asArray<any>(backup.data?.users).map((user: any) => ({
     login: user.login || user.username || "",
     senhaInicial: getOperationalInitialPassword(user),
@@ -231,7 +231,7 @@ function getPreviewItems(type: BackupType, backup: any): { name: string; detail?
 }
 
 // ─── PDF Generation ──────────────────────────────────────────────────────────
-export function generatePDF(type: BackupType, backup: any, options: { titlePrefix?: string; generatedBy?: string; filePrefix?: string } = {}) {
+function buildBackupDoc(type: BackupType, backup: any, options: { titlePrefix?: string; generatedBy?: string; filePrefix?: string } = {}): jsPDF {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const now = new Date().toLocaleString("pt-BR");
   const label = TYPE_LABELS[type];
@@ -440,7 +440,21 @@ export function generatePDF(type: BackupType, backup: any, options: { titlePrefi
     doc.text("Documento confidencial", 250, 205);
   }
 
-  doc.save(`${generateFileBaseName(type, options.filePrefix || titlePrefix)}.pdf`);
+  return doc;
+}
+
+export function generatePDF(type: BackupType, backup: any, options: { titlePrefix?: string; generatedBy?: string; filePrefix?: string } = {}) {
+  const doc = buildBackupDoc(type, backup, options);
+  doc.save(`${generateFileBaseName(type, options.filePrefix || options.titlePrefix || "Backup")}.pdf`);
+}
+
+export function generatePDFBytes(type: BackupType, backup: any, options: { titlePrefix?: string; generatedBy?: string; filePrefix?: string } = {}): Uint8Array {
+  const doc = buildBackupDoc(type, backup, options);
+  return new Uint8Array(doc.output("arraybuffer"));
+}
+
+export function backupPdfFileName(type: BackupType, options: { titlePrefix?: string; filePrefix?: string } = {}) {
+  return `${generateFileBaseName(type, options.filePrefix || options.titlePrefix || "Backup")}.pdf`;
 }
 
 // ─── Restore Modal ────────────────────────────────────────────────────────────

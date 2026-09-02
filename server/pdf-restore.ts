@@ -886,21 +886,24 @@ function parseMaterials(fileName: string, selectedType: BackupType, report: Retu
   return preview;
 }
 
-export async function previewErpPdfBuffer(input: { fileName: string; selectedType: BackupType; data: Uint8Array }) {
+export async function previewErpPdfBuffer(input: { fileName: string; selectedType: BackupType | "auto"; data: Uint8Array }) {
   const { rows, rawText } = await extractPdf(input.data);
   const report = detectReport(rawText);
-  if (report.restoreType && input.selectedType !== report.restoreType && !(input.selectedType === "estoque" && report.type === "movimentacoes")) {
+  // No modo "auto" (usado ao anexar um ZIP com vários PDFs) confiamos no tipo
+  // detectado pelo próprio conteúdo do PDF em vez de exigir escolha manual.
+  if (input.selectedType !== "auto" && report.restoreType && input.selectedType !== report.restoreType && !(input.selectedType === "estoque" && report.type === "movimentacoes")) {
     const preview = basePreview(input.fileName, input.selectedType, report);
     preview.errorCount = 1;
     preview.errors.push(`Módulo selecionado (${input.selectedType}) não confere com o PDF detectado (${report.restoreType}).`);
-  return preview;
-}
-  if (report.type === "usuarios") return parseUsers(input.fileName, input.selectedType, report, rows, rawText);
-  if (report.type === "produtos") return parseProducts(input.fileName, input.selectedType, report, rows);
-  if (report.type === "servicos") return parseServices(input.fileName, input.selectedType, report, rows);
-  if (report.type === "estoque" || report.type === "movimentacoes") return parseStock(input.fileName, input.selectedType, report, rows);
-  if (report.type === "materiais") return parseMaterials(input.fileName, input.selectedType, report, rows, rawText);
-  return unsupportedPreview(input.fileName, input.selectedType, report);
+    return preview;
+  }
+  const effectiveType: BackupType = input.selectedType === "auto" ? (report.restoreType || (report.type as BackupType)) : input.selectedType;
+  if (report.type === "usuarios") return parseUsers(input.fileName, effectiveType, report, rows, rawText);
+  if (report.type === "produtos") return parseProducts(input.fileName, effectiveType, report, rows);
+  if (report.type === "servicos") return parseServices(input.fileName, effectiveType, report, rows);
+  if (report.type === "estoque" || report.type === "movimentacoes") return parseStock(input.fileName, effectiveType, report, rows);
+  if (report.type === "materiais") return parseMaterials(input.fileName, effectiveType, report, rows, rawText);
+  return unsupportedPreview(input.fileName, effectiveType, report);
 }
 
 export const __testPdfRestoreParsing = {

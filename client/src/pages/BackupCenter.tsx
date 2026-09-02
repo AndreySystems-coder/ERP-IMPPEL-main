@@ -1,32 +1,20 @@
 import { useState, useEffect } from "react";
+import { zipSync } from "fflate";
 import {
   Database, Clock, FileText, Trash2,
-  RefreshCw, History, AlertTriangle, Package, Users,
-  Briefcase, ClipboardList, ShoppingCart, Layers, PackageCheck, Shield,
-  HardDrive,
+  RefreshCw, History, AlertTriangle,
+  HardDrive, Archive, Download,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/Card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import BackupManager, {
-  getBackupHistory, getRestoreLog, generatePDF, fmtDateTime,
-  type BackupType, type BackupHistoryEntry, type RestoreLogEntry,
+  getBackupHistory, getRestoreLog, generatePDF, generatePDFBytes, backupPdfFileName, buildOperationalUsersBackup, fmtDateTime,
+  type BackupHistoryEntry, type RestoreLogEntry,
 } from "@/components/BackupManager";
 import { PdfBackupRestore } from "@/components/CompleteBackupManager";
+import { ALL_BACKUP_TYPES } from "@/lib/backupModules";
+import { apiRequest } from "@/lib/queryClient";
 import { useUser } from "@/hooks/use-auth";
-
-// ─── Config ───────────────────────────────────────────────────────────────────
-const ALL_BACKUP_TYPES: { type: BackupType; label: string; icon: React.ElementType; color: string; description: string }[] = [
-  { type: "usuarios", label: "Usuários e Cargos", icon: Users, color: "text-indigo-600 bg-indigo-50 border-indigo-200", description: "Backup técnico com hashes bcrypt" },
-  { type: "estoque", label: "Estoque", icon: Package, color: "text-blue-600 bg-blue-50 border-blue-200", description: "Itens e movimentações" },
-  { type: "produtos", label: "Catálogo de Produtos", icon: ShoppingCart, color: "text-emerald-600 bg-emerald-50 border-emerald-200", description: "Produtos do catálogo de vendas" },
-  { type: "servicos", label: "Catálogo de Serviços", icon: Layers, color: "text-violet-600 bg-violet-50 border-violet-200", description: "Serviços com custos e margens" },
-  { type: "materiais", label: "Controle de Materiais", icon: PackageCheck, color: "text-amber-600 bg-amber-50 border-amber-200", description: "Retiradas e consumo de obra" },
-  { type: "clientes", label: "Clientes", icon: Users, color: "text-sky-600 bg-sky-50 border-sky-200", description: "Cadastro completo de clientes" },
-  { type: "orcamentos", label: "Orçamentos", icon: Briefcase, color: "text-orange-600 bg-orange-50 border-orange-200", description: "Orçamentos e negociações" },
-  { type: "ordens-servico", label: "Ordens de Serviço", icon: ClipboardList, color: "text-rose-600 bg-rose-50 border-rose-200", description: "Ordens de execução de obras" },
-  { type: "financeiro", label: "Financeiro", icon: FileText, color: "text-green-600 bg-green-50 border-green-200", description: "Pagamentos, recebimentos e caixa" },
-  { type: "pos-venda", label: "Garantias/Pós-venda", icon: Shield, color: "text-teal-600 bg-teal-50 border-teal-200", description: "Garantias, NPS e manutenções" },
-];
 
 const MODE_LABEL: Record<string, string> = {
   merge: "Merge",
@@ -46,6 +34,68 @@ const BACKUP_COVERAGE = [
 
 function reDownloadPDF(entry: BackupHistoryEntry) {
   generatePDF(entry.type, entry.backup);
+}
+
+// ─── Download all as ZIP ─────────────────────────────────────────────────────
+function DownloadAllZipCard({ username }: { username?: string }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const downloadAll = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const files: Record<string, Uint8Array> = {};
+      for (const cfg of ALL_BACKUP_TYPES) {
+        const response = await apiRequest("GET", `/api/backup/${cfg.type}`);
+        const backup = await response.json();
+        const downloadableBackup = cfg.type === "usuarios" ? buildOperationalUsersBackup(backup) : backup;
+        files[backupPdfFileName(cfg.type)] = generatePDFBytes(cfg.type, downloadableBackup, { generatedBy: username });
+      }
+      const zipped = zipSync(files, { level: 6 });
+      const blob = new Blob([zipped], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      link.download = `ERP-IMPPEL-backups-pdf-${stamp}.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setMessage(`ZIP gerado com ${ALL_BACKUP_TYPES.length} PDFs, um por módulo.`);
+    } catch (error: any) {
+      setMessage(error.message || "Não foi possível gerar o ZIP com todos os PDFs.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="border-blue-200">
+      <CardContent className="p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700">
+              <Archive className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Baixar tudo em um ZIP</h2>
+              <p className="mt-1 text-sm text-slate-600">Um PDF de cada módulo, compactados em um único arquivo — para guardar ou restaurar depois no Passo 2.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={downloadAll}
+            disabled={busy}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {busy ? "Gerando…" : "Baixar ZIP com todos os PDFs"}
+          </button>
+        </div>
+        {message && <p className="mt-3 text-sm text-slate-700" role="status">{message}</p>}
+      </CardContent>
+    </Card>
+  );
 }
 
 // ─── History Card ─────────────────────────────────────────────────────────────
@@ -235,6 +285,7 @@ export default function BackupCenter({ mode = "backup" }: { mode?: BackupCenterM
             <h2 className="text-lg font-bold text-slate-900">{page.panelTitle}</h2>
             <p className="text-sm text-slate-600">{page.panelDescription}</p>
           </div>
+          <DownloadAllZipCard username={user?.username} />
           <TechnicalCoverageDetails />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {ALL_BACKUP_TYPES.map(cfg => {

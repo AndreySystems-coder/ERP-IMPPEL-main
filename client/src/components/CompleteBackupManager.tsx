@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
-import { Archive, ArrowRightLeft, CheckCircle2, Download, FileArchive, Layers, Package, PackageCheck, ShieldAlert, ShoppingCart, Upload, Users } from "lucide-react";
+import { unzipSync } from "fflate";
+import { Archive, CheckCircle2, Download, FileArchive, FileUp, ShieldAlert, Upload } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { ALL_BACKUP_TYPES } from "@/lib/backupModules";
+import type { BackupType } from "@/components/BackupManager";
 import {
   buildCompleteBackupArchive,
   MODULE_LABELS,
@@ -14,7 +17,7 @@ import {
 
 type PdfRestoreModule = {
   id: string;
-  type: "usuarios" | "produtos" | "servicos" | "estoque" | "financeiro" | "clientes" | "orcamentos" | "ordens-servico" | "pos-venda" | "garantias" | "materiais";
+  type: BackupType;
   label: string;
 };
 
@@ -97,23 +100,13 @@ type PdfRestorePreview = {
   canApply: boolean;
 };
 
-const PDF_RESTORE_MODULES: PdfRestoreModule[] = [
-  { id: "usuarios", type: "usuarios", label: "Usuários e Cargos" },
-  { id: "produtos", type: "produtos", label: "Catálogo de Produtos" },
-  { id: "servicos", type: "servicos", label: "Catálogo de Serviços" },
-  { id: "estoque", type: "estoque", label: "Estoque" },
-  { id: "movimentacoes", type: "estoque", label: "Movimentações de Estoque" },
-  { id: "materiais", type: "materiais", label: "Controle de Materiais" },
-];
+// Mesma lista de módulos do Passo 1 (Backup) — os dois passos mostram os
+// mesmos cards; só a função do botão muda (gerar PDF vs. restaurar PDF).
+const PDF_RESTORE_MODULES: PdfRestoreModule[] = ALL_BACKUP_TYPES.map(cfg => ({ id: cfg.type, type: cfg.type, label: cfg.label }));
 
-const PDF_RESTORE_MODULE_STYLES: Record<string, { icon: typeof Users; color: string; description: string }> = {
-  usuarios: { icon: Users, color: "text-indigo-600 bg-indigo-50 border-indigo-200", description: "Usuários, cargos e permissões" },
-  produtos: { icon: ShoppingCart, color: "text-emerald-600 bg-emerald-50 border-emerald-200", description: "Produtos do catálogo de vendas" },
-  servicos: { icon: Layers, color: "text-violet-600 bg-violet-50 border-violet-200", description: "Serviços com custos e margens" },
-  estoque: { icon: Package, color: "text-blue-600 bg-blue-50 border-blue-200", description: "Itens de estoque cadastrados" },
-  movimentacoes: { icon: ArrowRightLeft, color: "text-blue-600 bg-blue-50 border-blue-200", description: "Entradas e saídas de estoque" },
-  materiais: { icon: PackageCheck, color: "text-amber-600 bg-amber-50 border-amber-200", description: "Retiradas e consumo de obra" },
-};
+const PDF_RESTORE_MODULE_STYLES: Record<string, { icon: React.ElementType; color: string; description: string }> = Object.fromEntries(
+  ALL_BACKUP_TYPES.map(cfg => [cfg.type, { icon: cfg.icon, color: cfg.color, description: cfg.description }])
+);
 
 type PdfImportHistoryEntry = {
   id: string;
@@ -156,12 +149,8 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 const PDF_REPORT_LABELS: Record<string, string> = {
-  usuarios: "Usuários e Cargos",
-  produtos: "Catálogo de Produtos",
-  servicos: "Catálogo de Serviços",
-  estoque: "Estoque",
+  ...Object.fromEntries(ALL_BACKUP_TYPES.map(cfg => [cfg.type, cfg.label])),
   movimentacoes: "Movimentações de Estoque",
-  materiais: "Controle de Materiais",
 };
 
 function pdfRestoreLabel(preview: PdfRestorePreview) {
@@ -409,6 +398,15 @@ function fileToBase64(file: File) {
   });
 }
 
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
 export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { isAdmin: boolean; onRestored: () => void; username?: string }) {
   const [selectedModuleId, setSelectedModuleId] = useState("usuarios");
   const selectedModule = PDF_RESTORE_MODULES.find(module => module.id === selectedModuleId) || PDF_RESTORE_MODULES[0];
@@ -418,6 +416,7 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [isZipBatch, setIsZipBatch] = useState(false);
   const [history, setHistory] = useState<PdfImportHistoryEntry[]>(() => getPdfImportHistory());
 
   const loadFiles = (list?: FileList | null) => {
@@ -427,12 +426,60 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
     setPreviews([]);
     setSafetyBackup(null);
     setConfirmation("");
+    setIsZipBatch(false);
     if (invalid) {
       setFiles([]);
       setMessage("Use apenas PDFs gerados pelo ERP.");
       return;
     }
     setFiles(selected);
+  };
+
+  const loadZip = async (file?: File) => {
+    if (!file) return;
+    setMessage("");
+    setPreviews([]);
+    setSafetyBackup(null);
+    setConfirmation("");
+    setFiles([]);
+    setIsZipBatch(true);
+    setBusy(true);
+    try {
+      const entries = unzipSync(new Uint8Array(await file.arrayBuffer()));
+      const pdfEntries = Object.entries(entries).filter(([name, bytes]) => name.toLowerCase().endsWith(".pdf") && bytes.length > 0);
+      if (pdfEntries.length === 0) throw new Error("O ZIP não contém nenhum PDF.");
+      const zipFiles = pdfEntries.map(([name, bytes]) => new File([bytes], name.split("/").pop() || name, { type: "application/pdf" }));
+      const collectedPreviews: PdfRestorePreview[] = [];
+      let collectedSafetyBackup: CompleteBackupPackage | null = null;
+      for (const [name, bytes] of pdfEntries) {
+        const response = await fetch("/api/backup/preview/pdf", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            selectedType: "auto",
+            files: [{ name: name.split("/").pop() || name, mimeType: "application/pdf", dataBase64: bytesToBase64(bytes) }],
+          }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.message || `Não foi possível ler ${name} dentro do ZIP.`);
+        collectedPreviews.push(...(result.previews || []));
+        if (!collectedSafetyBackup && result.safetyBackup) collectedSafetyBackup = result.safetyBackup;
+      }
+      setFiles(zipFiles);
+      setPreviews(collectedPreviews);
+      setSafetyBackup(collectedSafetyBackup);
+      setMessage(collectedSafetyBackup
+        ? `ZIP lido: ${pdfEntries.length} PDF(s) detectado(s) e distribuído(s) por módulo automaticamente. Backup automático interno gerado.`
+        : `ZIP lido: ${pdfEntries.length} PDF(s) processado(s), mas o backup automático não foi confirmado.`);
+    } catch (error: any) {
+      setPreviews([]);
+      setSafetyBackup(null);
+      setFiles([]);
+      setMessage(error.message || "Não foi possível ler o ZIP.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const buildPreview = async () => {
@@ -595,7 +642,7 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
         id: Date.now().toString(36),
         importedAt: new Date().toISOString(),
         username,
-        moduleLabel: selectedModule.label,
+        moduleLabel: isZipBatch ? "Vários módulos (ZIP)" : selectedModule.label,
         files: files.map(file => file.name),
         imported,
         ignored: totals.ignoredCount + totals.pendingCount + totals.duplicateCount,
@@ -626,7 +673,7 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
         id: Date.now().toString(36),
         importedAt: new Date().toISOString(),
         username,
-        moduleLabel: selectedModule.label,
+        moduleLabel: isZipBatch ? "Vários módulos (ZIP)" : selectedModule.label,
         files: files.map(file => file.name),
         imported: 0,
         ignored: totals.ignoredCount + totals.pendingCount + totals.duplicateCount,
@@ -662,6 +709,7 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
     setSafetyBackup(null);
     setConfirmation("");
     setMessage("");
+    setIsZipBatch(false);
   };
 
   return (
@@ -702,14 +750,23 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
           </div>
         </div>
 
-        <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 text-center hover:border-amber-400">
-          <Upload className="mb-2 h-5 w-5 text-slate-500" />
-          <span className="text-sm font-semibold text-slate-700">2. Selecionar PDF(s) do ERP</span>
-          <span className="mt-1 text-xs text-slate-500">{files.length ? `${files.length} arquivo(s) selecionado(s)` : "Apenas .pdf"}</span>
-          <input type="file" multiple accept=".pdf,application/pdf" className="sr-only" onChange={event => loadFiles(event.target.files)} />
-        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 text-center hover:border-amber-400">
+            <Upload className="mb-2 h-5 w-5 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-700">2. Selecionar PDF(s) do ERP</span>
+            <span className="mt-1 text-xs text-slate-500">{!isZipBatch && files.length ? `${files.length} arquivo(s) selecionado(s)` : "Um módulo por vez"}</span>
+            <input type="file" multiple accept=".pdf,application/pdf" className="sr-only" onChange={event => loadFiles(event.target.files)} />
+          </label>
 
-        <button type="button" onClick={buildPreview} disabled={!isAdmin || busy || files.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">
+          <label className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 text-center hover:border-amber-400">
+            <FileUp className="mb-2 h-5 w-5 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-700">Ou anexar um ZIP com vários PDFs</span>
+            <span className="mt-1 text-xs text-slate-500">{isZipBatch && files.length ? `${files.length} PDF(s) detectado(s) no ZIP` : "O módulo de cada PDF é detectado sozinho"}</span>
+            <input type="file" accept=".zip,application/zip" className="sr-only" onChange={event => loadZip(event.target.files?.[0])} />
+          </label>
+        </div>
+
+        <button type="button" onClick={buildPreview} disabled={!isAdmin || busy || isZipBatch || files.length === 0} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 disabled:opacity-50">
           <Upload className="h-4 w-4" />
           {busy ? "Lendo PDFs..." : "3. Restaurar PDF"}
         </button>
@@ -717,7 +774,7 @@ export function PdfBackupRestore({ isAdmin, onRestored, username = "Admin" }: { 
         {previews.length > 0 && (
           <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
             <div className="flex flex-col gap-1 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
-              <strong>Módulo selecionado: {selectedModule.label}</strong>
+              <strong>{isZipBatch ? "Módulos detectados automaticamente pelo ZIP" : `Módulo selecionado: ${selectedModule.label}`}</strong>
               <span>{files.length} arquivo(s) lido(s)</span>
             </div>
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
