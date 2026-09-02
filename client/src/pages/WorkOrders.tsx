@@ -223,6 +223,9 @@ export default function WorkOrders() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (status === "Agendada" && !scheduledDate) {
+      return toast({ title: "Defina a Data Agendada antes de salvar como Agendada", variant: "destructive" });
+    }
     const payload = {
       clientName, address, serviceType,
       scheduledDate: scheduledDate ? new Date(scheduledDate).toISOString() : null,

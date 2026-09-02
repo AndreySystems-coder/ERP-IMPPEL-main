@@ -175,8 +175,8 @@ export default function Calendar() {
 
       {/* Weekly View */}
       {viewMode === "weekly" && (
-        <div className="flex flex-col lg:flex-row gap-4 items-start">
-          <div className={`grid grid-cols-7 gap-3 transition-all duration-300 ${detailDay ? "lg:flex-[1.6]" : "flex-1"} w-full`}>
+        <div className="flex flex-col gap-4">
+          <div className="grid w-full grid-cols-7 gap-3">
             {weekDays.map((day) => {
               const dayKey = day.toISOString().split("T")[0];
               const orders = weeklyOrdersByDay[dayKey] || [];
@@ -234,7 +234,7 @@ export default function Calendar() {
           </div>
 
           {detailDay && (
-            <Card className="w-full lg:w-80 shrink-0 lg:sticky lg:top-4">
+            <Card className="w-full">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>

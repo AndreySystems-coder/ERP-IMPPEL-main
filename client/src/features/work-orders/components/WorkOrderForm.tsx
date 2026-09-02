@@ -94,7 +94,14 @@ export function WorkOrderForm({
           <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
             <SectionTitle icon={CalendarDays} title="Agenda e responsável" />
             <div className="grid gap-3 sm:grid-cols-2">
-              <Input label="Data Agendada" type="date" value={scheduledDate} onChange={event => onScheduledDateChange(event.target.value)} data-testid="input-wo-date" />
+              <Input
+                label="Data Agendada"
+                type="date"
+                value={scheduledDate}
+                onChange={event => onScheduledDateChange(event.target.value)}
+                error={status === "Agendada" && !scheduledDate ? "Obrigatória para o status Agendada" : undefined}
+                data-testid="input-wo-date"
+              />
               <Input label="Equipe Atribuída" value={teamAssigned} onChange={event => onTeamAssignedChange(event.target.value)} data-testid="input-wo-team" />
             </div>
           </section>

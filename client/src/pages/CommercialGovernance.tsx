@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ClipboardCheck, FilePlus2, Route, Scale, TrendingDown, WalletCards, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ClipboardCheck, FilePlus2, Route, Scale, TrendingDown, WalletCards, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +67,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function CommercialGovernance() {
   const { toast } = useToast();
+  const [showIndicators, setShowIndicators] = useState(false);
   const [policy, setPolicy] = useState({ name: "", type: "desconto", notes: "" });
   const [discount, setDiscount] = useState({ jobId: "", originalPrice: "", requestedPrice: "", reason: "" });
   const [commission, setCommission] = useState({ jobId: "", username: "", baseAmount: "", percent: "", fixedAmount: "" });
@@ -121,23 +122,38 @@ export default function CommercialGovernance() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><TrendingDown className="h-4 w-4" /> Margem Média</CardTitle></CardHeader>
-          <CardContent className="text-2xl font-semibold">{percent(indicators.data?.averageMargin)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Scale className="h-4 w-4" /> Descontos Pendentes</CardTitle></CardHeader>
-          <CardContent className="text-2xl font-semibold">{indicators.data?.pendingDiscounts || 0}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><WalletCards className="h-4 w-4" /> Comissões Previstas</CardTitle></CardHeader>
-          <CardContent className="text-2xl font-semibold">{currency(indicators.data?.commissionForecast)}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4" /> Risco Comercial</CardTitle></CardHeader>
-          <CardContent><StatusBadge status={commercialRisk} /></CardContent>
-        </Card>
+      <div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setShowIndicators(value => !value)}
+          className="gap-2"
+          data-testid="button-toggle-indicadores"
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${showIndicators ? "rotate-180" : ""}`} />
+          {showIndicators ? "Ocultar indicadores comerciais" : "Ver indicadores comerciais"}
+        </Button>
+        {showIndicators && (
+          <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><TrendingDown className="h-4 w-4" /> Margem Média</CardTitle></CardHeader>
+              <CardContent className="text-2xl font-semibold">{percent(indicators.data?.averageMargin)}</CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Scale className="h-4 w-4" /> Descontos Pendentes</CardTitle></CardHeader>
+              <CardContent className="text-2xl font-semibold">{indicators.data?.pendingDiscounts || 0}</CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><WalletCards className="h-4 w-4" /> Comissões Previstas</CardTitle></CardHeader>
+              <CardContent className="text-2xl font-semibold">{currency(indicators.data?.commissionForecast)}</CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><AlertTriangle className="h-4 w-4" /> Risco Comercial</CardTitle></CardHeader>
+              <CardContent><StatusBadge status={commercialRisk} /></CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
