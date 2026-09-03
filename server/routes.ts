@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
+import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -4271,6 +4272,24 @@ export async function registerRoutes(
         errorMessage: null,
       });
       res.json({ ok: true, log });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // TEMPORÁRIO: roda a migração 0008 (automação n8n) e depois é removido.
+  app.post("/api/admin/run-migration-0008", requireAdmin, async (_req, res) => {
+    try {
+      await pool.query(`ALTER TABLE whatsapp_send_logs ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'manual'`);
+      await pool.query(`ALTER TABLE whatsapp_send_logs ADD COLUMN IF NOT EXISTS direction text NOT NULL DEFAULT 'saida'`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS automation_settings (
+          id serial PRIMARY KEY,
+          n8n_webhook_url text,
+          incoming_secret text,
+          whatsapp_auto_send_enabled boolean NOT NULL DEFAULT false,
+          updated_at timestamp DEFAULT now()
+        )
+      `);
+      res.json({ ok: true, message: "Migração 0008 aplicada." });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
