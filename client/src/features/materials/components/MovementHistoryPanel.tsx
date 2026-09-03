@@ -57,7 +57,7 @@ export function MovementHistoryPanel({
     const groups = new Map<string, Withdrawal[]>();
     filtered.forEach(withdrawal => {
       const date = new Date(`${withdrawal.withdrawalDate || withdrawal.createdAt}`);
-      const day = date.toISOString().slice(0, 10);
+      const day = Number.isNaN(date.getTime()) ? "sem-data" : date.toISOString().slice(0, 10);
       const key = groupMode === "year" ? day.slice(0, 4)
         : groupMode === "month" ? day.slice(0, 7)
         : groupMode === "workOrder" ? `OS ${withdrawal.workOrderId || "Sem OS"}`
@@ -69,6 +69,7 @@ export function MovementHistoryPanel({
   }, [filtered, groupMode]);
 
   const groupLabel = (key: string) => {
+    if (key === "sem-data") return "Sem data registrada";
     if (groupMode === "day") return new Date(`${key}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
     if (groupMode === "month") return new Date(`${key}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
     if (groupMode === "year") return `Ano ${key}`;

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Route, Switch } from "wouter";
 
 import { appRoutes, renderRouteComponent, type RouteAccess } from "@/app/app-routes";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Layout } from "@/components/Layout";
 import { AdminRoute, ProtectedRoute } from "@/components/ProtectedRoute";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,15 +12,19 @@ import { queryClient } from "@/lib/queryClient";
 import NotFound from "@/pages/not-found";
 
 const routeWrappers: Record<RouteAccess, (children: ReactNode) => ReactNode> = {
-  public: (children) => children,
+  public: (children) => <ErrorBoundary>{children}</ErrorBoundary>,
   protected: (children) => (
     <ProtectedRoute>
-      <Layout>{children}</Layout>
+      <Layout>
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </Layout>
     </ProtectedRoute>
   ),
   admin: (children) => (
     <AdminRoute>
-      <Layout>{children}</Layout>
+      <Layout>
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </Layout>
     </AdminRoute>
   ),
 };

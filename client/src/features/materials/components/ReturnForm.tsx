@@ -25,7 +25,9 @@ function withdrawalOptionLabel(withdrawal: Withdrawal) {
 }
 
 function dayKey(withdrawal: Withdrawal) {
-  return new Date(`${withdrawal.withdrawalDate || withdrawal.createdAt}`).toISOString().slice(0, 10);
+  const date = new Date(`${withdrawal.withdrawalDate || withdrawal.createdAt}`);
+  if (Number.isNaN(date.getTime())) return "sem-data";
+  return date.toISOString().slice(0, 10);
 }
 
 export function ReturnForm({
@@ -116,7 +118,9 @@ export function ReturnForm({
                     >
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-700"><Calendar className="h-4 w-4" /></div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold capitalize text-slate-900">{new Date(`${key}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}</p>
+                        <p className="text-sm font-bold capitalize text-slate-900">
+                          {key === "sem-data" ? "Sem data registrada" : new Date(`${key}T12:00:00`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" })}
+                        </p>
                         <div className="mt-0.5 flex flex-wrap gap-3 text-xs text-slate-500">
                           <span>{dayWithdrawals.length} saída(s) pendente(s)</span>
                           <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {employees.size} funcionário(s)</span>
