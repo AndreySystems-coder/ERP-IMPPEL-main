@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
+import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -2190,7 +2191,7 @@ export async function registerRoutes(
 
   const reconcileLeadOperationalStatus = async (leadId: number) => {
     const lead = await storage.getLead(leadId);
-    if (!lead) return null;
+    if (!lead || (lead as any).statusLocked) return lead;
 
     const [jobs, workOrders] = await Promise.all([storage.getJobs(), storage.getWorkOrders()]);
     const operationalStatus = getLeadOperationalStatus(leadId, jobs, workOrders);
@@ -2203,6 +2204,10 @@ export async function registerRoutes(
     const updatedLeads = [];
 
     for (const lead of leads) {
+      if ((lead as any).statusLocked) {
+        updatedLeads.push(lead);
+        continue;
+      }
       const operationalStatus = getLeadOperationalStatus(lead.id, jobs, workOrders);
       if (operationalStatus && lead.status !== operationalStatus) {
         updatedLeads.push(await storage.updateLead(lead.id, { status: operationalStatus }) || lead);
@@ -2564,6 +2569,10 @@ export async function registerRoutes(
         history: statusChanged
           ? appendLeadHistory((current as any).history, { action: "status_changed", from: current.status, to: input.status, user: actor.username, at: new Date().toISOString() })
           : (input as any).history,
+        // Uma vez que o status é mudado manualmente (arrastar no Pipeline, editar o lead), ele
+        // fica travado: a reconciliação automática (baseada em orçamento/obra vinculados) não
+        // deve mais sobrescrever essa escolha.
+        statusLocked: statusChanged ? true : (current as any).statusLocked,
       } as any);
       if (!lead) return res.status(404).json({ message: "Not found" });
       if (statusChanged) {
@@ -4272,6 +4281,19 @@ export async function registerRoutes(
       });
       res.json({ ok: true, log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // TEMPORÁRIO: roda a migração 0009 (coluna leads.status_locked) + backfill de leads
+  // faltantes a partir de clientes/orçamentos já existentes. Remover depois de rodar uma vez.
+  app.post("/api/admin/run-migration-0009", async (_req, res) => {
+    try {
+      await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS status_locked boolean NOT NULL DEFAULT false;`);
+      const { runCrmLeadsBackfill } = await import("../script/backfill-crm-leads");
+      const summary = await runCrmLeadsBackfill();
+      res.json({ ok: true, summary });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // ─── Automação (n8n) ──────────────────────────────────────────────────────────

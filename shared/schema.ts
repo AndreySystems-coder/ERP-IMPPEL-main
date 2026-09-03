@@ -80,6 +80,7 @@ export const leads = pgTable("leads", {
   history: text("history").default("[]"),
   notes: text("notes"),
   nextContactDate: timestamp("next_contact_date"),
+  statusLocked: boolean("status_locked").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

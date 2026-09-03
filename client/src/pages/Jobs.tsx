@@ -80,7 +80,6 @@ export default function Jobs() {
   const { data: costConfig } = useCostConfig();
   const { data: inventoryItems = [] } = useQuery<any[]>({ queryKey: ["/api/inventory"] });
   const { data: workOrders = [] } = useQuery<any[]>({ queryKey: ["/api/work-orders"] });
-  const { data: leads = [] } = useQuery<any[]>({ queryKey: ["/api/leads"] });
   const { data: paymentMethodsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-methods"] });
   const { data: paymentConditionsList = [] } = useQuery<any[]>({ queryKey: ["/api/payment-conditions"] });
   const { data: settings = [] } = useSettings();
@@ -91,7 +90,6 @@ export default function Jobs() {
   const jobStatuses = asArray<any>(jobStatusConfigs);
   const inventoryItemsList = asArray<any>(inventoryItems);
   const workOrdersList = asArray<any>(workOrders);
-  const leadsList = asArray<any>(leads);
   const paymentMethods = asArray<any>(paymentMethodsList);
   const paymentConditions = asArray<any>(paymentConditionsList);
   const settingsList = asArray<any>(settings);
@@ -396,41 +394,12 @@ export default function Jobs() {
         }))
       : undefined;
     const primaryClientName = validClientes[0]?.nome || clientName;
+    // Cliente e lead são resolvidos/criados no servidor (ensureJobCustomerRelations),
+    // que já faz essa mesma busca com uma normalização mais robusta (nome + telefone)
+    // e usa o status correto ("Proposal"). Duplicar essa lógica aqui causava leads
+    // órfãos (status "Proposta" em português, que não batia com nenhuma coluna do Pipeline).
     let effectiveClientId = Number(clientId) || undefined;
     let effectiveLeadId: number | undefined;
-
-    if (!editingJob && primaryClientName) {
-      const normalizedName = primaryClientName.trim().toLocaleLowerCase("pt-BR");
-      const primaryClient = validClientes[0];
-      const existingClient = clientsList.find(client => String(client.name || "").trim().toLocaleLowerCase("pt-BR") === normalizedName);
-      if (existingClient) {
-        effectiveClientId = existingClient.id;
-      } else {
-        const address = [[primaryClient?.rua, primaryClient?.numero].filter(Boolean).join(", "), primaryClient?.bairro].filter(Boolean).join(" - ");
-        const response = await fetch("/api/clients", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: primaryClientName, phone: primaryClient?.telefone || "", address, city: primaryClient?.cidade || "", state: primaryClient?.estado || "" }),
-        });
-        if (!response.ok) throw new Error("Não foi possível criar o cliente do orçamento.");
-        effectiveClientId = (await response.json()).id;
-        queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      }
-
-      const existingLead = leadsList.find(lead => String(lead.name || "").trim().toLocaleLowerCase("pt-BR") === normalizedName);
-      if (existingLead) {
-        effectiveLeadId = existingLead.id;
-      } else {
-        const response = await fetch("/api/leads", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: primaryClientName, phone: primaryClient?.telefone || "", source: "Orçamento", status: "Proposta", notes: "Criado automaticamente pelo fluxo de orçamento." }),
-        });
-        if (!response.ok) throw new Error("Não foi possível criar o lead do orçamento.");
-        effectiveLeadId = (await response.json()).id;
-        queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
-      }
-    }
 
     // Serialize responsáveis
     const validResp = responsaveis.filter(r => r.nome.trim());
