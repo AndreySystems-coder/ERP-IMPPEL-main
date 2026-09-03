@@ -259,9 +259,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const sidebarLinks = visibleSections.map((section) => {
     const hasActive = location === section.path || (section.path !== "/" && location.startsWith(section.path));
     return {
-      label: section.label,
-      href: section.path,
-      icon: <section.icon className={`h-5 w-5 shrink-0 ${hasActive ? "text-primary" : "text-neutral-700 dark:text-neutral-200"}`} />,
+      active: hasActive,
+      link: {
+        label: section.label,
+        href: section.path,
+        icon: <section.icon className={`h-5 w-5 shrink-0 ${hasActive ? "text-primary" : "text-neutral-700 dark:text-neutral-200"}`} />,
+      },
     };
   });
 
@@ -322,8 +325,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <SidebarBody className="justify-between gap-10 border-r border-slate-200 bg-white dark:bg-neutral-900">
             <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
               <div className="mt-2 flex flex-col gap-1">
-                {sidebarLinks.map((link) => (
-                  <SidebarLink key={link.href} link={link} />
+                {sidebarLinks.map(({ link, active }) => (
+                  <SidebarLink key={link.href} link={link} active={active} />
                 ))}
               </div>
             </div>
