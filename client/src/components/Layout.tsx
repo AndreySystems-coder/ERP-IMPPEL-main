@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import {
   BarChart3,
   BookOpen,
@@ -18,7 +18,6 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
-  Menu,
   MessageSquare,
   Package,
   PackageCheck,
@@ -38,7 +37,8 @@ import {
 import { motion } from "framer-motion";
 
 import { useLogout, useUser } from "@/hooks/use-auth";
-import { canAccess, canAccessAny, type PermissionKey } from "@/lib/permissions";
+import { canAccessAny, type PermissionKey } from "@/lib/permissions";
+import { Sidebar, SidebarBody, SidebarLink } from "@/components/ui/sidebar";
 
 interface NavItem {
   name: string;
@@ -222,68 +222,11 @@ const SEARCH_ITEMS = ALL_SECTIONS.flatMap((section) => [
   ...section.items,
 ]);
 
-function NavSectionGroup({
-  section,
-  location,
-  user,
-  onNavClick,
-  collapsed,
-}: {
-  section: NavSection;
-  location: string;
-  user: any;
-  onNavClick: () => void;
-  collapsed: boolean;
-}) {
-  const visibleItems = section.items.filter((item) => canAccess(user, item.permission));
-  const sectionPermissions = [section.permission, ...section.items.map((item) => item.permission)].filter(Boolean) as PermissionKey[];
-  if (!canAccessAny(user, sectionPermissions)) return null;
-  if (visibleItems.length === 0) return null;
-
-  const hasActive =
-    location === section.path ||
-    visibleItems.some((item) => location === item.path || (item.path !== "/" && location.startsWith(item.path)));
-
-  const iconClassName = `flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
-    hasActive ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-  }`;
-
-  // Clique navega direto para o hub do módulo (que já lista os itens internos
-  // como cards na tela) — a barra lateral nunca expande uma sublista aqui.
-  if (collapsed) {
-    // Barra compacta (dock): só o ícone sob o mouse mostra o rótulo, como uma
-    // dica flutuante — o resto da barra fica parado, sem expandir junto.
-    return (
-      <div className="group/item relative mb-1 flex justify-center">
-        <Link href={section.path} onClick={onNavClick} className={iconClassName}>
-          <section.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-        </Link>
-        <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover/item:opacity-100">
-          {section.label}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <Link href={section.path} onClick={onNavClick} className={`mb-1 flex min-w-0 items-center gap-3 rounded-xl px-2 py-1.5 transition-colors ${hasActive ? "bg-slate-100" : "hover:bg-slate-50"}`}>
-      <span className={iconClassName}>
-        <section.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-      </span>
-      <span className={`truncate text-sm font-semibold ${hasActive ? "text-slate-900" : "text-slate-600"}`}>{section.label}</span>
-    </Link>
-  );
-}
-
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, navigate] = useLocation();
   const { data: user, isLoading } = useUser();
   const logout = useLogout();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [globalSearch, setGlobalSearch] = React.useState("");
-  // No desktop a barra é sempre compacta (dock, só ícones com dica ao passar
-  // o mouse); no mobile ela vira um menu off-canvas de largura total quando aberta.
-  const effectiveCollapsed = !isMobileMenuOpen;
 
   if (isLoading) {
     return (
@@ -311,21 +254,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const goToResult = (path: string) => {
     navigate(path);
     setGlobalSearch("");
-    setIsMobileMenuOpen(false);
   };
+
+  const sidebarLinks = visibleSections.map((section) => {
+    const hasActive = location === section.path || (section.path !== "/" && location.startsWith(section.path));
+    return {
+      label: section.label,
+      href: section.path,
+      icon: <section.icon className={`h-5 w-5 shrink-0 ${hasActive ? "text-primary" : "text-neutral-700 dark:text-neutral-200"}`} />,
+    };
+  });
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background font-sans">
       <header className="relative z-50 flex h-14 shrink-0 items-center justify-between bg-primary px-4 text-primary-foreground shadow-sm sm:px-6">
         <div className="flex items-center gap-4">
-          <button
-            className="rounded-md p-1.5 -ml-1.5 text-primary-foreground/80 transition-colors hover:text-white lg:hidden"
-            onClick={() => setIsMobileMenuOpen(true)}
-            type="button"
-            aria-label="Abrir menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
           <div className="font-display flex items-center gap-1 text-lg font-bold tracking-tight">
             <span className="text-white">IMPP</span>
             <span className="text-accent">EL</span>
@@ -374,68 +317,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {isMobileMenuOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-primary/20 backdrop-blur-sm lg:hidden"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-        )}
-
-        <aside
-          className={`
-            fixed left-0 top-14 bottom-0 z-[45] flex flex-col border-r border-slate-200 bg-white
-            transition-[width] duration-200 ease-in-out
-            lg:left-3 lg:top-[4.5rem] lg:bottom-3 lg:rounded-3xl lg:border lg:shadow-[0_12px_32px_-8px_rgba(15,23,42,0.16)]
-            ${effectiveCollapsed ? "w-16" : "w-64"}
-            ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-          `}
-        >
-          <nav className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden px-3 py-4">
-            {ALL_SECTIONS.map((section) => (
-              <NavSectionGroup
-                key={section.label}
-                section={section}
-                location={location}
-                user={user}
-                onNavClick={() => setIsMobileMenuOpen(false)}
-                collapsed={effectiveCollapsed}
-              />
-            ))}
-          </nav>
-
-          <div className="border-t border-slate-100 p-3">
-            {effectiveCollapsed ? (
-              <div className="group/item relative flex justify-center">
-                <button
-                  onClick={() => logout.mutate()}
-                  type="button"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
-                >
-                  <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
-                </button>
-                <span className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover/item:opacity-100">
-                  Sair do sistema
-                </span>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        <Sidebar>
+          <SidebarBody className="justify-between gap-10 border-r border-slate-200 bg-white dark:bg-neutral-900">
+            <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+              <div className="mt-2 flex flex-col gap-1">
+                {sidebarLinks.map((link) => (
+                  <SidebarLink key={link.href} link={link} />
+                ))}
               </div>
-            ) : (
-              <button
+            </div>
+            <div className="border-t border-slate-100 pt-3">
+              <SidebarLink
+                link={{ label: "Sair do sistema", href: "#", icon: <LogOut className="h-5 w-5 shrink-0 text-red-500" /> }}
                 onClick={() => logout.mutate()}
-                type="button"
-                className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:bg-red-50 hover:text-red-600"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-                  <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
-                </span>
-                <span>Sair do sistema</span>
-              </button>
-            )}
-          </div>
-        </aside>
-
-        {/* Reserva o espaço da barra colapsada — a barra em si é fixed e nunca
-            empurra o conteúdo, nem ao expandir no hover nem ao fixar aberta. */}
-        <div className="hidden w-24 shrink-0 lg:block" />
+                className="text-red-600 hover:text-red-700"
+              />
+            </div>
+          </SidebarBody>
+        </Sidebar>
 
         <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-50/50 p-4 lg:px-8 lg:py-6">
           <motion.div
