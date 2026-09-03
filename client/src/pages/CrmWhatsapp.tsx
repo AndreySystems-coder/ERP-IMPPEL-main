@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ClipboardList, Library, Users, Zap } from "lucide-react";
+import { Bot, ClipboardList, Library, Users, Zap } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { asArray } from "@/lib/safeData";
+import { AutomationSettingsPanel } from "@/features/crm-whatsapp/components/AutomationSettingsPanel";
 import { CrmContactHistory } from "@/features/crm-whatsapp/components/CrmContactHistory";
 import { CrmFilters } from "@/features/crm-whatsapp/components/CrmFilters";
 import { CrmLeadList } from "@/features/crm-whatsapp/components/CrmLeadList";
@@ -225,7 +226,7 @@ export default function CrmWhatsapp() {
       />
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-4 sm:max-w-lg">
+        <TabsList className="grid w-full grid-cols-5 sm:max-w-xl">
           <TabsTrigger value="mensagens" className="gap-1.5 text-xs" data-testid="tab-mensagens">
             <Library className="h-3.5 w-3.5" />
             Mensagens
@@ -241,6 +242,10 @@ export default function CrmWhatsapp() {
           <TabsTrigger value="logs" className="gap-1.5 text-xs" data-testid="tab-logs">
             <ClipboardList className="h-3.5 w-3.5" />
             Logs
+          </TabsTrigger>
+          <TabsTrigger value="automacao" className="gap-1.5 text-xs" data-testid="tab-automacao">
+            <Bot className="h-3.5 w-3.5" />
+            Automação
           </TabsTrigger>
         </TabsList>
 
@@ -294,6 +299,10 @@ export default function CrmWhatsapp() {
 
         <TabsContent value="logs" className="mt-4">
           <CrmContactHistory logs={logsList} isLoading={logsLoading} onRefresh={refreshLogs} />
+        </TabsContent>
+
+        <TabsContent value="automacao" className="mt-4">
+          <AutomationSettingsPanel />
         </TabsContent>
       </Tabs>
 

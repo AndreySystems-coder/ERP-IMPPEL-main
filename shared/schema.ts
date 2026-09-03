@@ -761,8 +761,21 @@ export const whatsappSendLogs = pgTable("whatsapp_send_logs", {
   message: text("message").notNull(),
   status: text("status").notNull().default("sent"), // 'sent' | 'error'
   errorMessage: text("error_message"),
+  channel: text("channel").notNull().default("manual"), // 'manual' (wa.me) | 'n8n' (automático)
+  direction: text("direction").notNull().default("saida"), // 'saida' | 'entrada' (resposta do cliente via n8n)
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// ─── Automação (n8n) ──────────────────────────────────────────────────────────
+export const automationSettings = pgTable("automation_settings", {
+  id: serial("id").primaryKey(),
+  n8nWebhookUrl: text("n8n_webhook_url"),
+  incomingSecret: text("incoming_secret"),
+  whatsappAutoSendEnabled: boolean("whatsapp_auto_send_enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type AutomationSettings = typeof automationSettings.$inferSelect;
 
 // ─── WhatsApp Templates (Biblioteca de Mensagens) ─────────────────────────────
 export const whatsappTemplates = pgTable("whatsapp_templates", {

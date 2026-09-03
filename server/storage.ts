@@ -2,7 +2,7 @@ import { db, pool } from "./db";
 import {
   users, clients, services, leads, jobs, workOrders, inventory, inventoryMovements, payments, products, materialSales, jobTracking, priorityRules, transactions, settings, costConfig, obraRegistros, jobStatuses, paymentMethods, paymentConditions, obraConsumoLogs,
   contracts, warranties, warrantyIncidents, productionLogs, npsResponses, maintenanceReminders,
-  whatsappFlows, whatsappSendLogs, whatsappTemplates, quoteTemplates,
+  whatsappFlows, whatsappSendLogs, whatsappTemplates, quoteTemplates, automationSettings,
   materialWithdrawals, materialWithdrawalItems, mobileImportAliases, mobileImportHistory,
   materialCustodyTransfers, materialResponsibilityCases, materialKits, materialKitItems, toolMaintenanceRecords, materialCountAudits, materialTrainingGuides,
   salaryDiscountRules, salaryDiscounts,
@@ -26,6 +26,7 @@ import {
   type MaintenanceReminder, type InsertMaintenanceReminder,
   type WhatsappFlow, type InsertWhatsappFlow,
   type WhatsappSendLog, type InsertWhatsappSendLog,
+  type AutomationSettings,
   type WhatsappTemplate, type InsertWhatsappTemplate,
   type QuoteTemplate, type InsertQuoteTemplate,
   type MaterialWithdrawal, type MaterialWithdrawalItem,
@@ -320,6 +321,10 @@ export interface IStorage {
   deleteWhatsappFlow(id: number): Promise<void>;
   getWhatsappSendLogs(limit?: number): Promise<WhatsappSendLog[]>;
   createWhatsappSendLog(data: InsertWhatsappSendLog): Promise<WhatsappSendLog>;
+  updateWhatsappSendLogStatus(id: number, status: string, errorMessage?: string | null): Promise<WhatsappSendLog | undefined>;
+  // Automação (n8n)
+  getAutomationSettings(): Promise<AutomationSettings>;
+  updateAutomationSettings(data: Partial<Pick<AutomationSettings, "n8nWebhookUrl" | "whatsappAutoSendEnabled" | "incomingSecret">>): Promise<AutomationSettings>;
   // WhatsApp Templates
   getWhatsappTemplates(): Promise<WhatsappTemplate[]>;
   getWhatsappTemplatesByCategory(category: string): Promise<WhatsappTemplate[]>;
@@ -1056,6 +1061,23 @@ export class DatabaseStorage implements IStorage {
   async createWhatsappSendLog(data: InsertWhatsappSendLog): Promise<WhatsappSendLog> {
     const [log] = await db.insert(whatsappSendLogs).values(data).returning();
     return log;
+  }
+  async updateWhatsappSendLogStatus(id: number, status: string, errorMessage?: string | null): Promise<WhatsappSendLog | undefined> {
+    const [updated] = await db.update(whatsappSendLogs).set({ status, errorMessage: errorMessage ?? null }).where(eq(whatsappSendLogs.id, id)).returning();
+    return updated;
+  }
+
+  // Automação (n8n)
+  async getAutomationSettings(): Promise<AutomationSettings> {
+    const [existing] = await db.select().from(automationSettings).limit(1);
+    if (existing) return existing;
+    const [created] = await db.insert(automationSettings).values({}).returning();
+    return created;
+  }
+  async updateAutomationSettings(data: Partial<Pick<AutomationSettings, "n8nWebhookUrl" | "whatsappAutoSendEnabled" | "incomingSecret">>): Promise<AutomationSettings> {
+    const current = await this.getAutomationSettings();
+    const [updated] = await db.update(automationSettings).set({ ...data, updatedAt: new Date() }).where(eq(automationSettings.id, current.id)).returning();
+    return updated;
   }
 
   async getWhatsappFlows(): Promise<WhatsappFlow[]> {

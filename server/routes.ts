@@ -1,7 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
-import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -4275,21 +4274,96 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
-  // TEMPORÁRIO: roda a migração 0008 (automação n8n) e depois é removido.
-  app.post("/api/admin/run-migration-0008", requireAdmin, async (_req, res) => {
+  // ─── Automação (n8n) ──────────────────────────────────────────────────────────
+  app.get("/api/automation-settings", requireAdmin, async (_req, res) => {
     try {
-      await pool.query(`ALTER TABLE whatsapp_send_logs ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'manual'`);
-      await pool.query(`ALTER TABLE whatsapp_send_logs ADD COLUMN IF NOT EXISTS direction text NOT NULL DEFAULT 'saida'`);
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS automation_settings (
-          id serial PRIMARY KEY,
-          n8n_webhook_url text,
-          incoming_secret text,
-          whatsapp_auto_send_enabled boolean NOT NULL DEFAULT false,
-          updated_at timestamp DEFAULT now()
-        )
-      `);
-      res.json({ ok: true, message: "Migração 0008 aplicada." });
+      const settings = await storage.getAutomationSettings();
+      res.json({ ...settings, incomingSecret: settings.incomingSecret ? "•".repeat(8) + settings.incomingSecret.slice(-4) : null });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.put("/api/automation-settings", requireAdmin, async (req, res) => {
+    try {
+      const { n8nWebhookUrl, whatsappAutoSendEnabled } = req.body;
+      if (n8nWebhookUrl && !/^https?:\/\//i.test(n8nWebhookUrl)) {
+        return res.status(400).json({ message: "URL do webhook n8n inválida." });
+      }
+      const updated = await storage.updateAutomationSettings({
+        n8nWebhookUrl: n8nWebhookUrl || null,
+        whatsappAutoSendEnabled: Boolean(whatsappAutoSendEnabled),
+      });
+      res.json({ ...updated, incomingSecret: updated.incomingSecret ? "•".repeat(8) + updated.incomingSecret.slice(-4) : null });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/automation-settings/regenerate-secret", requireAdmin, async (_req, res) => {
+    try {
+      const newSecret = randomUUID();
+      await storage.updateAutomationSettings({ incomingSecret: newSecret });
+      // O segredo completo só é exibido nesta resposta, uma única vez.
+      res.json({ incomingSecret: newSecret });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  app.post("/api/whatsapp/send-automatico", requireAdmin, async (req, res) => {
+    try {
+      const { phone, message, flowId, flowName } = req.body;
+      if (!phone || !message) return res.status(400).json({ message: "phone e message obrigatórios" });
+      const automation = await storage.getAutomationSettings();
+      if (!automation.whatsappAutoSendEnabled || !automation.n8nWebhookUrl) {
+        return res.status(400).json({ message: "Envio automático não está configurado. Configure o webhook do n8n primeiro." });
+      }
+      let log = await storage.createWhatsappSendLog({
+        flowId: flowId || null,
+        flowName: flowName || "Envio Automático",
+        phone,
+        message,
+        status: "enviando",
+        errorMessage: null,
+        channel: "n8n",
+      } as any);
+      try {
+        const response = await fetch(automation.n8nWebhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, message, logId: log.id }),
+        });
+        if (!response.ok) throw new Error(`n8n respondeu ${response.status}`);
+        log = (await storage.updateWhatsappSendLogStatus(log.id, "sent")) || log;
+      } catch (sendError: any) {
+        log = (await storage.updateWhatsappSendLogStatus(log.id, "error", sendError.message)) || log;
+      }
+      res.json({ ok: log.status === "sent", log });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Chamado pelo n8n para confirmar entrega ou registrar resposta recebida do cliente.
+  // Protegido por segredo compartilhado (não usa sessão, pois quem chama é o n8n).
+  app.post("/api/webhooks/n8n/whatsapp-status", async (req, res) => {
+    try {
+      const automation = await storage.getAutomationSettings();
+      const providedSecret = req.get("x-erp-webhook-secret") || req.body?.secret;
+      if (!automation.incomingSecret || providedSecret !== automation.incomingSecret) {
+        return res.status(401).json({ message: "Segredo inválido." });
+      }
+      const { logId, status, errorMessage, incomingPhone, incomingMessage } = req.body;
+      if (logId && status) {
+        const updated = await storage.updateWhatsappSendLogStatus(Number(logId), String(status), errorMessage || null);
+        return res.json({ ok: true, log: updated });
+      }
+      if (incomingPhone && incomingMessage) {
+        const log = await storage.createWhatsappSendLog({
+          flowName: "Resposta recebida",
+          phone: incomingPhone,
+          message: incomingMessage,
+          status: "sent",
+          errorMessage: null,
+          channel: "n8n",
+          direction: "entrada",
+        } as any);
+        return res.json({ ok: true, log });
+      }
+      res.status(400).json({ message: "Envie logId+status para confirmação, ou incomingPhone+incomingMessage para mensagem recebida." });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

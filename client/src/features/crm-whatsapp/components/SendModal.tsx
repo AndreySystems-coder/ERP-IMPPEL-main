@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { ExternalLink, Loader2, MessageCircle, Phone } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Bot, ExternalLink, Loader2, MessageCircle, Phone } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -33,8 +33,18 @@ export function SendModal({ open, onClose, target }: SendModalProps) {
     }
   }, [open, target]);
 
+  const { data: automation } = useQuery<{ whatsappAutoSendEnabled: boolean; n8nWebhookUrl: string | null }>({
+    queryKey: ["/api/automation-settings"],
+  });
+  const autoSendReady = Boolean(automation?.whatsappAutoSendEnabled && automation?.n8nWebhookUrl);
+
   const logMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/whatsapp/log", data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/whatsapp-logs"] }),
+  });
+
+  const autoSendMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/whatsapp/send-automatico", data).then(res => res.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/whatsapp-logs"] }),
   });
 
@@ -57,6 +67,21 @@ export function SendModal({ open, onClose, target }: SendModalProps) {
         : "Mensagem já preenchida. Basta clicar em Enviar.",
     });
     onClose();
+  };
+
+  const handleAutoSend = async () => {
+    if (!canSend) return;
+    try {
+      const result = await autoSendMutation.mutateAsync({ phone: phoneDigits, message: customMessage, flowId: target?.flowId, flowName: target?.flowName || "Envio Automático" });
+      toast({
+        title: result.ok ? "Enviado via n8n!" : "Falha no envio automático",
+        description: result.ok ? "O n8n recebeu a mensagem para envio." : (result.log?.errorMessage || "Verifique a configuração do n8n."),
+        variant: result.ok ? "default" : "destructive",
+      });
+      if (result.ok) onClose();
+    } catch (error: any) {
+      toast({ title: "Falha no envio automático", description: error.message, variant: "destructive" });
+    }
   };
 
   return (
@@ -90,8 +115,14 @@ export function SendModal({ open, onClose, target }: SendModalProps) {
             </div>
           )}
         </div>
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end sm:gap-2">
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          {autoSendReady && (
+            <Button onClick={handleAutoSend} disabled={!canSend || autoSendMutation.isPending} className="gap-2 bg-violet-600 text-white hover:bg-violet-700" data-testid="btn-send-auto">
+              {autoSendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+              Enviar automático (n8n)
+            </Button>
+          )}
           <Button onClick={handleSend} disabled={!canSend || logMutation.isPending} className="gap-2 bg-green-600 text-white hover:bg-green-700" data-testid="btn-send-wame">
             {logMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
             Abrir no WhatsApp

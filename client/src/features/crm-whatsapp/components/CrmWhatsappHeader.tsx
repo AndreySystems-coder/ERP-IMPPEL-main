@@ -56,7 +56,7 @@ export function CrmWhatsappHeader({ tab, onNewTemplate, onNewFlow, onRefreshLogs
       <div className="flex gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
         <MessageCircle className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
         <div className="text-sm text-blue-800 dark:text-blue-300">
-          <span className="font-semibold">Como funciona:</span> Crie templates na aba <strong>Mensagens</strong> e use-os em qualquer lugar. Nos <strong>Orçamentos</strong> e <strong>Ordens de Serviço</strong> há botões de envio rápido. Todos os envios abrem o WhatsApp Web com a mensagem pronta (link wa.me).
+          <span className="font-semibold">Como funciona:</span> Crie templates na aba <strong>Mensagens</strong> e use-os em qualquer lugar. Por padrão, o envio abre o WhatsApp Web com a mensagem pronta. Configurando a aba <strong>Automação</strong>, o envio pode ser feito automaticamente via n8n.
         </div>
       </div>
     </>
