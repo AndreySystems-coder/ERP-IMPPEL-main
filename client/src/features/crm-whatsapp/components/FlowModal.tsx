@@ -37,7 +37,9 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
         name: flow.name,
         trigger: flow.trigger,
         message: flow.message,
-        messageType: (flow.messageType as "text" | "buttons" | "poll") || "text",
+        // "buttons" era o tipo antigo (botões não são confiáveis no WhatsApp) — passa a
+        // se comportar exatamente como enquete, então trata como o mesmo tipo aqui.
+        messageType: flow.messageType === "text" ? "text" : "poll",
         buttons: parsedButtons,
         includePdf: !!flow.includePdf,
         active: !!flow.active,
@@ -96,8 +98,7 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
               <SelectTrigger data-testid="select-message-type"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="text">Texto simples</SelectItem>
-                <SelectItem value="buttons">Botões (não confiável no WhatsApp — evite)</SelectItem>
-                <SelectItem value="poll">Enquete (recomendado — funciona de verdade)</SelectItem>
+                <SelectItem value="poll">Enquete (com opções)</SelectItem>
               </SelectContent>
             </Select>
             {form.messageType === "poll" && (
@@ -107,8 +108,8 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
             )}
           </div>
 
-          {(form.messageType === "buttons" || form.messageType === "poll") && (
-            <ButtonEditor buttons={form.buttons} onChange={buttons => setField("buttons", buttons)} isPoll={form.messageType === "poll"} />
+          {form.messageType === "poll" && (
+            <ButtonEditor buttons={form.buttons} onChange={buttons => setField("buttons", buttons)} />
           )}
 
           <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
@@ -129,8 +130,8 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={() => {
             if (!form.name || !form.message) return toast({ title: "Preencha nome e mensagem", variant: "destructive" });
-            if ((form.messageType === "buttons" || form.messageType === "poll") && form.buttons.length === 0) return toast({ title: "Adicione pelo menos 1 opção", variant: "destructive" });
-            saveMutation.mutate({ ...form, buttons: (form.messageType === "buttons" || form.messageType === "poll") ? JSON.stringify(form.buttons) : null });
+            if (form.messageType === "poll" && form.buttons.length === 0) return toast({ title: "Adicione pelo menos 1 opção", variant: "destructive" });
+            saveMutation.mutate({ ...form, buttons: form.messageType === "poll" ? JSON.stringify(form.buttons) : null });
           }} disabled={saveMutation.isPending} className="bg-green-600 text-white hover:bg-green-700" data-testid="btn-save-flow">
             {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {flow ? "Salvar" : "Criar Fluxo"}
@@ -141,7 +142,7 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
   );
 }
 
-function ButtonEditor({ buttons, onChange, isPoll = false }: { buttons: ButtonItem[]; onChange: (buttons: ButtonItem[]) => void; isPoll?: boolean }) {
+function ButtonEditor({ buttons, onChange }: { buttons: ButtonItem[]; onChange: (buttons: ButtonItem[]) => void }) {
   const add = () => {
     if (buttons.length >= 4) return;
     onChange([...buttons, { id: String(Date.now()), text: "", responseMessage: "" }]);
@@ -162,9 +163,7 @@ function ButtonEditor({ buttons, onChange, isPoll = false }: { buttons: ButtonIt
             <button type="button" onClick={() => remove(index)} className="text-red-400 hover:text-red-600" data-testid={`btn-remove-${index}`}><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
           <Input placeholder="Texto da opção (ex: 📋 Quero um orçamento)" value={button.text} onChange={event => update(index, "text", event.target.value)} className="text-sm" data-testid={`btn-text-${index}`} />
-          {!isPoll && (
-            <Textarea placeholder="Resposta automática ao selecionar esta opção..." value={button.responseMessage} onChange={event => update(index, "responseMessage", event.target.value)} rows={2} className="resize-none text-sm" data-testid={`btn-response-${index}`} />
-          )}
+          <Textarea placeholder="Resposta automática ao escolher esta opção (enviada quando o cliente responder com o número ou o nome dela)..." value={button.responseMessage} onChange={event => update(index, "responseMessage", event.target.value)} rows={2} className="resize-none text-sm" data-testid={`btn-response-${index}`} />
         </div>
       ))}
       {buttons.length < 4 && (

@@ -4728,6 +4728,7 @@ export async function registerRoutes(
           source: "WhatsApp - Primeiro Contato",
           status: "New Lead",
           notes: "Criado automaticamente pela saudação de primeiro contato do WhatsApp.",
+          currentFlowTrigger: "atendimento_inicial",
         } as any);
         isNew = true;
       }
@@ -4745,17 +4746,51 @@ export async function registerRoutes(
 
       // Palavra-chave (ou número da opção) reconhecida no texto livre — o voto em si da
       // enquete do WhatsApp não chega decifrado até aqui, então esse é o sinal real que o
-      // sistema consegue usar (a mensagem de saudação já pede pra responder com o número).
-      const normalizedChoice = choice
-        .normalize("NFD")
-        .replace(new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g"), "")
-        .trim()
-        .toLowerCase();
+      // sistema consegue usar (a mensagem do fluxo já pede pra responder com o número).
+      const stripAccents = (text: string) => text.normalize("NFD").replace(new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g"), "");
+      const normalizedChoice = stripAccents(choice).trim().toLowerCase();
+
       let nextAction: string | undefined;
-      if (normalizedChoice.includes("orcamento") || normalizedChoice === "1") nextAction = "Cliente quer orçamento — iniciar atendimento.";
+      let matchedOption: { text: string; responseMessage?: string } | undefined;
+      let matchedFlowName: string | undefined;
+
+      if (lead.currentFlowTrigger && normalizedChoice) {
+        const flows = await storage.getWhatsappFlows();
+        const activeFlow = flows.find(f => f.trigger === lead!.currentFlowTrigger);
+        if (activeFlow?.buttons) {
+          try {
+            const options = JSON.parse(activeFlow.buttons as string) as { text: string; responseMessage?: string }[];
+            const byPosition = /^[1-9]$/.test(normalizedChoice) ? options[Number(normalizedChoice) - 1] : undefined;
+            const byKeyword = byPosition ? undefined : options.find(opt => {
+              const keyword = stripAccents(opt.text).toLowerCase().replace(/^[^a-z]+/, "").split(/\s+/).find(word => word.length > 3);
+              return keyword ? normalizedChoice.includes(keyword) : false;
+            });
+            matchedOption = byPosition || byKeyword;
+            matchedFlowName = activeFlow.name;
+          } catch {}
+        }
+      }
+
+      if (matchedOption) {
+        nextAction = `Cliente escolheu: "${matchedOption.text}"`;
+      } else if (normalizedChoice.includes("orcamento") || normalizedChoice === "1") nextAction = "Cliente quer orçamento — iniciar atendimento.";
       else if (normalizedChoice.includes("atendente") || normalizedChoice === "2") nextAction = "Cliente pediu para falar com atendente.";
       else if (normalizedChoice.includes("duvida") || normalizedChoice === "3") nextAction = "Cliente tem dúvida técnica.";
       if (nextAction) await storage.updateLead(lead.id, { nextAction } as any);
+
+      if (matchedOption?.responseMessage && lead.phone) {
+        const jobs = await storage.getJobs();
+        const latestJob = jobs.filter(j => Number(j.leadId) === lead!.id).sort((a, b) => Number(b.id) - Number(a.id))[0];
+        const replyMessage = substituteMessageVariables(matchedOption.responseMessage, {
+          nome_cliente: lead.name?.split(" ")[0] || "Cliente",
+          ...(latestJob ? {
+            numero_orcamento: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0"),
+            tipo_servico: latestJob.serviceType || "",
+            valor_orcamento: latestJob.realPriceSold ? Number(latestJob.realPriceSold).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
+          } : {}),
+        });
+        await sendViaEvolution({ phone: lead.phone, message: replyMessage, flowName: `${matchedFlowName || "Fluxo"} — resposta da opção` });
+      }
 
       res.json({ ok: true, isNew, leadId: lead.id });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
