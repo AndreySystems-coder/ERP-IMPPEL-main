@@ -1,7 +1,7 @@
 ﻿import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/Button";
-import { Calendar, MessageCircle, Phone, Plus } from "lucide-react";
+import { Calendar, LayoutGrid, LayoutList, MessageCircle, Phone, Plus } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/hooks/use-auth";
@@ -9,6 +9,7 @@ import { WorkOrderDetailModal } from "@/features/work-orders/components/WorkOrde
 import { generateWorkOrderReportPdf } from "@/features/work-orders/workOrderReportPdf";
 import { WorkOrderForm } from "@/features/work-orders/components/WorkOrderForm";
 import { WorkOrderList } from "@/features/work-orders/components/WorkOrderList";
+import { WorkOrderBoard } from "@/features/work-orders/components/WorkOrderBoard";
 import { CHECKLIST_ITEMS, STATUS_COLORS } from "@/features/work-orders/constants";
 import type { ServiceProgress, WorkOrderMaterialReconciliationResponse } from "@/features/work-orders/types";
 import { buildProgressFromJob, ceilQty, getExceededMaterials } from "@/features/work-orders/utils";
@@ -56,6 +57,16 @@ export default function WorkOrders() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/work-orders"] }); toast({ title: "OS atualizada!" }); },
     onError: () => toast({ title: "Erro ao salvar", variant: "destructive" }),
   });
+  const handleBoardStatusChange = (workOrder: any, newStatus: string) => {
+    let refusalReason: string | null = workOrder.refusalReason || null;
+    if (newStatus === "Recusado") {
+      const reason = window.prompt("Motivo da recusa desta ordem de serviço:");
+      if (!reason || !reason.trim()) return; // cancelado ou vazio: não move o card
+      refusalReason = reason.trim();
+    }
+    updateWO.mutate({ id: workOrder.id, status: newStatus, refusalReason });
+  };
+
   const deleteWO = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/work-orders/${id}`),
     onSuccess: () => {
@@ -66,6 +77,7 @@ export default function WorkOrders() {
   });
 
   const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"lista" | "quadro">("lista");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeDetailTab, setActiveDetailTab] = useState<"info" | "obra">("info");
   const [detailWO, setDetailWO] = useState<any>(null);
@@ -472,29 +484,65 @@ export default function WorkOrders() {
           <p className="text-slate-500 mt-1">Gerencie ordens, equipes, materiais e o registro de obra.</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("lista")}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${viewMode === "lista" ? "bg-primary text-white" : "text-slate-500 hover:text-slate-700"}`}
+              data-testid="button-view-lista-wo"
+            >
+              <LayoutList className="h-4 w-4" /> Lista
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("quadro")}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${viewMode === "quadro" ? "bg-primary text-white" : "text-slate-500 hover:text-slate-700"}`}
+              data-testid="button-view-quadro-wo"
+            >
+              <LayoutGrid className="h-4 w-4" /> Quadro
+            </button>
+          </div>
           <Button onClick={openNew} className="min-h-11 w-full sm:w-auto" data-testid="button-new-wo">
             <Plus className="w-5 h-5 mr-2" /> Criar Ordem
           </Button>
         </div>
       </div>
 
-      <WorkOrderList
-        workOrders={filteredWO}
-        isLoading={isLoadingWorkOrders}
-        search={search}
-        statusColors={STATUS_COLORS}
-        onSearchChange={setSearch}
-        onWhatsApp={openWAModal}
-        onDetail={wo => {
-          setDetailWO(wo);
-          openDetail(wo);
-          setIsDetailOpen(true);
-        }}
-        onEdit={openEdit}
-        onDelete={wo => {
-          if (confirm("Deletar ordem?")) deleteWO.mutate(wo.id);
-        }}
-      />
+      {viewMode === "quadro" ? (
+        <WorkOrderBoard
+          workOrders={filteredWO}
+          isLoading={isLoadingWorkOrders}
+          onStatusChange={handleBoardStatusChange}
+          onWhatsApp={openWAModal}
+          onDetail={wo => {
+            setDetailWO(wo);
+            openDetail(wo);
+            setIsDetailOpen(true);
+          }}
+          onEdit={openEdit}
+          onDelete={wo => {
+            if (confirm("Deletar ordem?")) deleteWO.mutate(wo.id);
+          }}
+        />
+      ) : (
+        <WorkOrderList
+          workOrders={filteredWO}
+          isLoading={isLoadingWorkOrders}
+          search={search}
+          statusColors={STATUS_COLORS}
+          onSearchChange={setSearch}
+          onWhatsApp={openWAModal}
+          onDetail={wo => {
+            setDetailWO(wo);
+            openDetail(wo);
+            setIsDetailOpen(true);
+          }}
+          onEdit={openEdit}
+          onDelete={wo => {
+            if (confirm("Deletar ordem?")) deleteWO.mutate(wo.id);
+          }}
+        />
+      )}
 
       <WorkOrderDetailModal
         isOpen={isDetailOpen}

@@ -15,11 +15,11 @@ const QUOTE_STATUS_VARIANTS: Record<string, StatusPillVariant> = {
   Faturada: "purple",
 };
 
-function quoteStatusVariant(status: string): StatusPillVariant {
+export function quoteStatusVariant(status: string): StatusPillVariant {
   return QUOTE_STATUS_VARIANTS[status] || "neutral";
 }
 
-interface QuotesListProps {
+export interface QuotesListProps {
   jobs: any[];
   jobsWithScores: any[];
   services: any[];
@@ -38,11 +38,11 @@ interface QuotesListProps {
   maskNumber?: (value: unknown, suffix?: string) => string;
 }
 
-function formatQuoteNumber(job: any) {
+export function formatQuoteNumber(job: any) {
   return String(job.orcamentoNumero ?? job.id).padStart(4, "0");
 }
 
-function formatMoney(value: number | null | undefined) {
+export function formatMoney(value: number | null | undefined) {
   return (value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
@@ -50,7 +50,7 @@ function getLinkedWorkOrders(job: any, workOrders: any[] = []) {
   return workOrders.filter(workOrder => Number(workOrder.jobId) === Number(job.id));
 }
 
-function WorkOrderLinkBadge({ job, workOrders = [] }: { job: any; workOrders?: any[] }) {
+export function WorkOrderLinkBadge({ job, workOrders = [] }: { job: any; workOrders?: any[] }) {
   const linkedWorkOrders = getLinkedWorkOrders(job, workOrders);
   if (linkedWorkOrders.length === 0) return null;
   const latest = linkedWorkOrders[0];
@@ -63,7 +63,7 @@ function WorkOrderLinkBadge({ job, workOrders = [] }: { job: any; workOrders?: a
   );
 }
 
-function RecommendationBadge({ job, jobsWithScores, services, costConfig }: Pick<QuotesListProps, "jobsWithScores" | "services" | "costConfig"> & { job: any }) {
+export function RecommendationBadge({ job, jobsWithScores, services, costConfig }: Pick<QuotesListProps, "jobsWithScores" | "services" | "costConfig"> & { job: any }) {
   if (!costConfig) return <span className="text-slate-400 text-xs">-</span>;
 
   const svc = services.find((s: any) => s.name === job.serviceType);
@@ -122,7 +122,7 @@ function RecommendationBadge({ job, jobsWithScores, services, costConfig }: Pick
   );
 }
 
-function MarginBadge({ job, services, costConfig }: Pick<QuotesListProps, "services" | "costConfig"> & { job: any }) {
+export function MarginBadge({ job, services, costConfig }: Pick<QuotesListProps, "services" | "costConfig"> & { job: any }) {
   if (!costConfig || !job.realPriceSold) return null;
   const svc = services.find((s: any) => s.name === job.serviceType);
   if (!svc) return null;
@@ -141,7 +141,7 @@ function MarginBadge({ job, services, costConfig }: Pick<QuotesListProps, "servi
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${color}`}>{(margin.marginPercent * 100).toFixed(0)}%</span>;
 }
 
-function QuoteActions({
+export function QuoteActions({
   job,
   onSendWhatsApp,
   onGeneratePdf,
