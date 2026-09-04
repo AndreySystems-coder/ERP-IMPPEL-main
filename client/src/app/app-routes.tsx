@@ -36,6 +36,7 @@ import ServicesCatalog from "@/pages/ServicesCatalog";
 import Settings from "@/pages/Settings";
 import { BackupsHub, CrmHub, ExecutionQualityHub, FinancialHub, InventoryHub, MarketingHub, PostSaleHub, QuotesHub, SettingsHub, TeamHub, WorksHub } from "@/pages/SectionHub";
 import StatusPersonalizados from "@/pages/StatusPersonalizados";
+import StatusObras from "@/pages/StatusObras";
 import TeamProductivity from "@/pages/TeamProductivity";
 import TeamGovernance from "@/pages/TeamGovernance";
 import ToolsAndEquipment from "@/pages/ToolsAndEquipment";
@@ -119,6 +120,7 @@ export const adminRoutes: AppRoute[] = [
   { path: "/governanca-comercial", component: CommercialGovernance, access: "admin", withLayout: true },
   { path: "/usuarios", component: Usuarios, access: "admin", withLayout: true },
   { path: "/status-personalizados", component: StatusPersonalizados, access: "admin", withLayout: true },
+  { path: "/status-obras", component: StatusObras, access: "admin", withLayout: true },
   { path: "/formas-pagamento", component: PaymentMethods, access: "admin", withLayout: true },
   { path: "/condicoes-pagamento", component: PaymentConditions, access: "admin", withLayout: true },
   { path: "/pagamentos-config", component: PagamentosConfig, access: "admin", withLayout: true },

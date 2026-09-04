@@ -1194,6 +1194,7 @@ export async function registerRoutes(
     { prefix: "/api/obra-registros", permissions: ["viewObraRegistro"] },
     { prefix: "/api/obra-consumo-logs", permissions: ["registrarMaterials", "viewWorkOrders", "viewAllWorkOrders"] },
     { prefix: "/api/job-statuses", permissions: ["viewStatusSettings"] },
+    { prefix: "/api/work-order-statuses", permissions: ["viewStatusSettings"] },
     { prefix: "/api/payment-methods", permissions: ["viewFinancialSettings"] },
     { prefix: "/api/payment-conditions", permissions: ["viewFinancialSettings"] },
     { prefix: "/api/contracts", permissions: ["viewSettings"] },
@@ -2247,6 +2248,85 @@ export async function registerRoutes(
     }
   };
 
+  // Envia uma mensagem via n8n reutilizando o mesmo caminho do botão manual "Enviar automático"
+  // (SendModal). Usado tanto pela rota HTTP quanto pelo disparo automático ao mudar status de
+  // orçamento/obra — para não duplicar a lógica de log e chamada do webhook em dois lugares.
+  const sendWhatsappAutomatico = async ({
+    phone,
+    message,
+    flowId,
+    flowName,
+  }: {
+    phone: string;
+    message: string;
+    flowId?: number | string | null;
+    flowName?: string;
+  }) => {
+    const automation = await storage.getAutomationSettings();
+    if (!automation.whatsappAutoSendEnabled || !automation.n8nWebhookUrl) {
+      return { ok: false, log: null as any, message: "Envio automático não está configurado. Configure o webhook do n8n primeiro." };
+    }
+    let log = await storage.createWhatsappSendLog({
+      flowId: flowId || null,
+      flowName: flowName || "Envio Automático",
+      phone,
+      message,
+      status: "enviando",
+      errorMessage: null,
+      channel: "n8n",
+    } as any);
+    try {
+      const response = await fetch(automation.n8nWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, message, logId: log.id }),
+      });
+      if (!response.ok) throw new Error(`n8n respondeu ${response.status}`);
+      log = (await storage.updateWhatsappSendLogStatus(log.id, "sent")) || log;
+    } catch (sendError: any) {
+      log = (await storage.updateWhatsappSendLogStatus(log.id, "error", sendError.message)) || log;
+    }
+    return { ok: log.status === "sent", log };
+  };
+
+  // Resolve o telefone de contato de um orçamento: cliente vinculado, lead vinculado, ou o
+  // primeiro contato salvo no próprio orçamento (mesma ordem de prioridade usada manualmente
+  // em Jobs.tsx:handleEnviarWhatsApp).
+  const resolveJobContactPhone = async (job: any): Promise<string | null> => {
+    if (job?.clientId) {
+      const client = await storage.getClient(Number(job.clientId));
+      if (client?.phone) return client.phone;
+    }
+    if (job?.leadId) {
+      const lead = await storage.getLead(Number(job.leadId));
+      if (lead?.phone) return lead.phone;
+    }
+    const contact = parseJobPrimaryContact(job);
+    return contact.phone || null;
+  };
+
+  // Resolve o telefone de contato de uma obra: cliente vinculado direto, ou através do
+  // orçamento que originou a obra.
+  const resolveWorkOrderContactPhone = async (workOrder: any): Promise<string | null> => {
+    if (workOrder?.clientId) {
+      const client = await storage.getClient(Number(workOrder.clientId));
+      if (client?.phone) return client.phone;
+    }
+    if (workOrder?.jobId) {
+      const job = await storage.getJob(Number(workOrder.jobId));
+      if (job) return resolveJobContactPhone(job);
+    }
+    return null;
+  };
+
+  // Mesma convenção de placeholders usada manualmente em Jobs.tsx:handleEnviarWhatsApp
+  // ({cliente}, {numero}), case-insensitive.
+  const substituteMessageVariables = (template: string, vars: Record<string, string>) =>
+    Object.entries(vars).reduce(
+      (text, [key, value]) => text.replace(new RegExp(`\\{${key}\\}`, "gi"), value),
+      template
+    );
+
   const ensureJobCustomerRelations = async (input: any) => {
     const result = { ...input };
     const contact = parseJobPrimaryContact(input);
@@ -2645,6 +2725,23 @@ export async function registerRoutes(
         await reconcileLeadOperationalStatus(Number(previousJob.leadId));
       }
       await ensureWorkOrderFlowForJob(job);
+      if (previousJob && previousJob.status !== job.status) {
+        try {
+          const statusConfig = (await storage.getJobStatuses()).find(s => s.name === job.status);
+          if (statusConfig?.autoSendWhatsapp && statusConfig.message) {
+            const phone = await resolveJobContactPhone(job);
+            if (phone) {
+              const message = substituteMessageVariables(statusConfig.message, {
+                cliente: job.clientName?.split(" ")[0] || "Cliente",
+                numero: String(job.orcamentoNumero ?? job.id).padStart(4, "0"),
+              });
+              await sendWhatsappAutomatico({ phone, message, flowName: `Status do orçamento: ${job.status}` });
+            }
+          }
+        } catch (autoSendErr: any) {
+          console.error("Falha ao enviar WhatsApp automático (mudança de status do orçamento):", autoSendErr?.message || autoSendErr);
+        }
+      }
       res.json(job);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -2697,6 +2794,23 @@ export async function registerRoutes(
     if (order) {
       const job = order.jobId ? await storage.getJob(Number(order.jobId)) : undefined;
       await ensureObraRecordForWorkOrder(order, job);
+    }
+    if (order && previousOrder && previousOrder.status !== order.status) {
+      try {
+        const statusConfig = (await storage.getWorkOrderStatuses()).find(s => s.name === order.status);
+        if (statusConfig?.autoSendWhatsapp && statusConfig.message) {
+          const phone = await resolveWorkOrderContactPhone(order);
+          if (phone) {
+            const message = substituteMessageVariables(statusConfig.message, {
+              cliente: order.clientName?.split(" ")[0] || "Cliente",
+              os: String(order.id).padStart(4, "0"),
+            });
+            await sendWhatsappAutomatico({ phone, message, flowName: `Status da obra: ${order.status}` });
+          }
+        }
+      } catch (autoSendErr: any) {
+        console.error("Falha ao enviar WhatsApp automático (mudança de status da obra):", autoSendErr?.message || autoSendErr);
+      }
     }
     res.json(order);
   });
@@ -3711,6 +3825,58 @@ export async function registerRoutes(
     }
   });
 
+  // Work Order Statuses (mesmo conceito de Job Statuses, para o funil de Obras)
+  const DEFAULT_WORK_ORDER_STATUSES = [
+    { name: "Planejada",    sortOrder: 1, message: "Olá {cliente}! Sua obra foi planejada pela IMPPEL. Em breve entraremos em contato para agendar a execução." },
+    { name: "Agendada",     sortOrder: 2, message: "Olá {cliente}! Sua obra foi agendada. Nossa equipe estará no local na data combinada." },
+    { name: "Em Andamento", sortOrder: 3, message: "Olá {cliente}! A execução da sua obra já começou. Qualquer novidade, avisamos por aqui." },
+    { name: "Concluída",    sortOrder: 4, message: "Olá {cliente}! Sua obra foi concluída. Obrigado pela confiança na IMPPEL!" },
+    { name: "Recusado",     sortOrder: 5, message: "" },
+  ];
+
+  app.get("/api/work-order-statuses", async (req, res) => {
+    try {
+      let list = await storage.getWorkOrderStatuses();
+      if (list.length === 0) {
+        for (const s of DEFAULT_WORK_ORDER_STATUSES) {
+          await storage.createWorkOrderStatus(s as any);
+        }
+        list = await storage.getWorkOrderStatuses();
+      }
+      res.json(list);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.post("/api/work-order-statuses", async (req, res) => {
+    try {
+      const created = await storage.createWorkOrderStatus(req.body);
+      res.status(201).json(created);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.put("/api/work-order-statuses/:id", async (req, res) => {
+    try {
+      const updated = await storage.updateWorkOrderStatus(Number(req.params.id), req.body);
+      if (!updated) return res.status(404).json({ message: "Not found" });
+      res.json(updated);
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
+  app.delete("/api/work-order-statuses/:id", async (req, res) => {
+    try {
+      await storage.deleteWorkOrderStatus(Number(req.params.id));
+      res.status(204).send();
+    } catch (err) {
+      res.status(500).json({ message: "Internal Error" });
+    }
+  });
+
   // ─── Payment Methods (Formas de Pagamento) ───
   app.get("/api/payment-methods", async (req, res) => {
     try {
@@ -4317,31 +4483,9 @@ export async function registerRoutes(
     try {
       const { phone, message, flowId, flowName } = req.body;
       if (!phone || !message) return res.status(400).json({ message: "phone e message obrigatórios" });
-      const automation = await storage.getAutomationSettings();
-      if (!automation.whatsappAutoSendEnabled || !automation.n8nWebhookUrl) {
-        return res.status(400).json({ message: "Envio automático não está configurado. Configure o webhook do n8n primeiro." });
-      }
-      let log = await storage.createWhatsappSendLog({
-        flowId: flowId || null,
-        flowName: flowName || "Envio Automático",
-        phone,
-        message,
-        status: "enviando",
-        errorMessage: null,
-        channel: "n8n",
-      } as any);
-      try {
-        const response = await fetch(automation.n8nWebhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone, message, logId: log.id }),
-        });
-        if (!response.ok) throw new Error(`n8n respondeu ${response.status}`);
-        log = (await storage.updateWhatsappSendLogStatus(log.id, "sent")) || log;
-      } catch (sendError: any) {
-        log = (await storage.updateWhatsappSendLogStatus(log.id, "error", sendError.message)) || log;
-      }
-      res.json({ ok: log.status === "sent", log });
+      const result = await sendWhatsappAutomatico({ phone, message, flowId, flowName });
+      if (!result.log) return res.status(400).json({ message: result.message });
+      res.json({ ok: result.ok, log: result.log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

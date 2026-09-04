@@ -1,6 +1,6 @@
 import { db, pool } from "./db";
 import {
-  users, clients, services, leads, jobs, workOrders, inventory, inventoryMovements, payments, products, materialSales, jobTracking, priorityRules, transactions, settings, costConfig, obraRegistros, jobStatuses, paymentMethods, paymentConditions, obraConsumoLogs,
+  users, clients, services, leads, jobs, workOrders, inventory, inventoryMovements, payments, products, materialSales, jobTracking, priorityRules, transactions, settings, costConfig, obraRegistros, jobStatuses, workOrderStatuses, paymentMethods, paymentConditions, obraConsumoLogs,
   contracts, warranties, warrantyIncidents, productionLogs, npsResponses, maintenanceReminders,
   whatsappFlows, whatsappSendLogs, whatsappTemplates, quoteTemplates, automationSettings,
   materialWithdrawals, materialWithdrawalItems, mobileImportAliases, mobileImportHistory,
@@ -15,6 +15,7 @@ import {
   type User, type Client, type Service, type Lead, type Job, type WorkOrder, type Inventory, type InventoryMovement, type Payment, type Product, type JobTracking, type PriorityRules, type Transaction, type Setting, type CostConfig, type InsertCostConfig, type ObraRegistro, type InsertObraRegistro,
   type InsertUser, type InsertClient, type InsertService, type InsertLead, type InsertJob, type InsertWorkOrder, type InsertInventory, type InsertInventoryMovement, type InsertPayment, type InsertProduct, type InsertJobTracking, type InsertPriorityRules, type InsertTransaction, type InsertSetting,
   type JobStatus, type InsertJobStatus,
+  type WorkOrderStatus, type InsertWorkOrderStatus,
   type PaymentMethod, type InsertPaymentMethod,
   type PaymentCondition, type InsertPaymentCondition,
   type ObraConsumoLog, type InsertObraConsumoLog,
@@ -56,7 +57,7 @@ export const COMPLETE_BACKUP_MODULE_TABLES = {
   financeiro: ["payments", "transactions"],
   garantias: ["warranties", "warrantyIncidents", "contracts"],
   posVenda: ["npsResponses", "maintenanceReminders"],
-  configuracoes: ["settings", "costConfig", "priorityRules", "jobStatuses", "whatsappFlows", "whatsappSendLogs", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"],
+  configuracoes: ["settings", "costConfig", "priorityRules", "jobStatuses", "workOrderStatuses", "whatsappFlows", "whatsappSendLogs", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"],
   formasPagamento: ["paymentMethods"],
   condicoesPagamento: ["paymentConditions"],
   governancaComercial: ["commercialPolicies", "discountRequests", "commissionRecords", "logisticsRecords", "quoteVersions", "scopeChangeRequests"],
@@ -92,6 +93,7 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   costConfig: { table: costConfig, dbName: "cost_config" },
   obraRegistros: { table: obraRegistros, dbName: "obra_registros" },
   jobStatuses: { table: jobStatuses, dbName: "job_statuses" },
+  workOrderStatuses: { table: workOrderStatuses, dbName: "work_order_statuses" },
   paymentMethods: { table: paymentMethods, dbName: "payment_methods" },
   paymentConditions: { table: paymentConditions, dbName: "payment_conditions" },
   obraConsumoLogs: { table: obraConsumoLogs, dbName: "obra_consumo_logs" },
@@ -293,6 +295,13 @@ export interface IStorage {
   createJobStatus(data: InsertJobStatus): Promise<JobStatus>;
   updateJobStatus(id: number, data: Partial<InsertJobStatus>): Promise<JobStatus | undefined>;
   deleteJobStatus(id: number): Promise<void>;
+
+  // Work Order Statuses (custom WhatsApp messages per status, mesmo conceito de Job Statuses)
+  getWorkOrderStatuses(): Promise<WorkOrderStatus[]>;
+  getWorkOrderStatus(id: number): Promise<WorkOrderStatus | undefined>;
+  createWorkOrderStatus(data: InsertWorkOrderStatus): Promise<WorkOrderStatus>;
+  updateWorkOrderStatus(id: number, data: Partial<InsertWorkOrderStatus>): Promise<WorkOrderStatus | undefined>;
+  deleteWorkOrderStatus(id: number): Promise<void>;
 
   // Payment Methods (Formas de Pagamento)
   getPaymentMethods(): Promise<PaymentMethod[]>;
@@ -892,6 +901,26 @@ export class DatabaseStorage implements IStorage {
     await db.delete(jobStatuses).where(eq(jobStatuses.id, id));
   }
 
+  // Work Order Statuses
+  async getWorkOrderStatuses(): Promise<WorkOrderStatus[]> {
+    return await db.select().from(workOrderStatuses).orderBy(workOrderStatuses.sortOrder);
+  }
+  async getWorkOrderStatus(id: number): Promise<WorkOrderStatus | undefined> {
+    const [status] = await db.select().from(workOrderStatuses).where(eq(workOrderStatuses.id, id));
+    return status;
+  }
+  async createWorkOrderStatus(data: InsertWorkOrderStatus): Promise<WorkOrderStatus> {
+    const [created] = await db.insert(workOrderStatuses).values(data).returning();
+    return created;
+  }
+  async updateWorkOrderStatus(id: number, data: Partial<InsertWorkOrderStatus>): Promise<WorkOrderStatus | undefined> {
+    const [updated] = await db.update(workOrderStatuses).set(data).where(eq(workOrderStatuses.id, id)).returning();
+    return updated;
+  }
+  async deleteWorkOrderStatus(id: number): Promise<void> {
+    await db.delete(workOrderStatuses).where(eq(workOrderStatuses.id, id));
+  }
+
   // Payment Methods
   async getPaymentMethods(): Promise<PaymentMethod[]> {
     return await db.select().from(paymentMethods).orderBy(paymentMethods.id);
@@ -1375,6 +1404,7 @@ export function createMemoryStorage(): IStorage {
     costConfig: [],
     obraRegistros: [],
     jobStatuses: [],
+    workOrderStatuses: [],
     paymentMethods: [],
     paymentConditions: [],
     obraConsumoLogs: [],
@@ -1386,6 +1416,7 @@ export function createMemoryStorage(): IStorage {
     maintenanceReminders: [],
     whatsappFlows: [],
     whatsappSendLogs: [],
+    automationSettings: [],
     whatsappTemplates: [],
     quoteTemplates: [],
     materialWithdrawals: [],
@@ -1480,6 +1511,8 @@ export function createMemoryStorage(): IStorage {
     ObraRegistros: "obraRegistros",
     JobStatus: "jobStatuses",
     JobStatuses: "jobStatuses",
+    WorkOrderStatus: "workOrderStatuses",
+    WorkOrderStatuses: "workOrderStatuses",
     PaymentMethod: "paymentMethods",
     PaymentMethods: "paymentMethods",
     PaymentCondition: "paymentConditions",
@@ -1608,7 +1641,7 @@ export function createMemoryStorage(): IStorage {
     clearOperationalData: async () => {
       const preservedUsers = data.users.length;
       const preservedRoles = data.roles.length;
-      const preservedTables = new Set(["users", "roles", "settings", "costConfig", "priorityRules", "jobStatuses", "paymentMethods", "paymentConditions", "whatsappFlows", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"]);
+      const preservedTables = new Set(["users", "roles", "settings", "costConfig", "priorityRules", "jobStatuses", "workOrderStatuses", "paymentMethods", "paymentConditions", "whatsappFlows", "whatsappTemplates", "quoteTemplates", "salaryDiscountRules"]);
       let deleted = 0;
       Object.keys(data).forEach(table => {
         if (preservedTables.has(table)) return;
@@ -1644,6 +1677,16 @@ export function createMemoryStorage(): IStorage {
         });
       }
       return Object.assign(sale, { status: "aprovada", approvedByUserId: approver.id, approvedByUsername: approver.username, approvedAt: now() });
+    },
+    getAutomationSettings: async () => {
+      if (!data.automationSettings[0]) {
+        return insert("automationSettings", { n8nWebhookUrl: null, incomingSecret: null, whatsappAutoSendEnabled: false });
+      }
+      return data.automationSettings[0];
+    },
+    updateAutomationSettings: async (updates: any) => {
+      if (data.automationSettings[0]) return Object.assign(data.automationSettings[0], updates, { updatedAt: now() });
+      return insert("automationSettings", { n8nWebhookUrl: null, incomingSecret: null, whatsappAutoSendEnabled: false, ...updates, updatedAt: now() });
     },
     getCostConfig: async () => data.costConfig[0],
     updateCostConfig: async (updates: any) => {

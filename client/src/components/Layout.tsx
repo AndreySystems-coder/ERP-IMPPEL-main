@@ -197,6 +197,7 @@ const ALL_SECTIONS: NavSection[] = [
       { name: "Todos", path: "/gestao", icon: Settings, permission: "viewSettings" },
       { name: "Configurações Gerais", path: "/settings", icon: Settings, permission: "viewSettings" },
       { name: "Status Personalizados", path: "/status-personalizados", icon: Hash, permission: "viewStatusSettings" },
+      { name: "Status de Obras", path: "/status-obras", icon: Hash, permission: "viewStatusSettings" },
       { name: "Regras de Prioridade", path: "/priority-rules", icon: Scale, permission: "viewPriorityRules" },
       { name: "Formas de Pagamento", path: "/formas-pagamento", icon: CreditCard, permission: "viewFinancialSettings" },
       { name: "Condições de Pagamento", path: "/condicoes-pagamento", icon: Clipboard, permission: "viewFinancialSettings" },

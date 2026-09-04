@@ -25,6 +25,7 @@ function StatusForm({
   const [message, setMessage] = useState(initial.message || "");
   const [includePdf, setIncludePdf] = useState(initial.includePdf !== false);
   const [generateOs, setGenerateOs] = useState(initial.generateOs === true);
+  const [autoSendWhatsapp, setAutoSendWhatsapp] = useState((initial as any).autoSendWhatsapp === true);
   const [extraFileName, setExtraFileName] = useState(initial.extraFileName || "");
   const [extraFileData, setExtraFileData] = useState(initial.extraFileData || "");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -58,9 +59,10 @@ function StatusForm({
       message: message.trim(),
       includePdf,
       generateOs,
+      autoSendWhatsapp,
       extraFileName: extraFileName || undefined,
       extraFileData: extraFileData || undefined,
-    });
+    } as any);
   };
 
   return (
@@ -138,6 +140,22 @@ function StatusForm({
         <label htmlFor="generate-os" className="text-sm font-medium text-slate-700 cursor-pointer flex items-center gap-1.5">
           <span className="text-emerald-600">⚙️</span>
           Gerar Ordem de Serviço automaticamente ao ativar este status
+        </label>
+      </div>
+
+      {/* Auto Send WhatsApp */}
+      <div className="flex items-center gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3">
+        <input
+          type="checkbox"
+          id="auto-send-whatsapp"
+          checked={autoSendWhatsapp}
+          onChange={e => setAutoSendWhatsapp(e.target.checked)}
+          className="w-4 h-4 accent-green-600"
+          data-testid="checkbox-auto-send-whatsapp"
+        />
+        <label htmlFor="auto-send-whatsapp" className="text-sm font-medium text-slate-700 cursor-pointer flex items-center gap-1.5">
+          <SiWhatsapp className="w-4 h-4 text-green-500" />
+          Enviar esta mensagem automaticamente ao entrar neste status (sem precisar clicar em nada)
         </label>
       </div>
 
@@ -240,6 +258,11 @@ export default function StatusPersonalizados() {
             e abre o WhatsApp Web com o texto pré-preenchido. Se "Incluir PDF" estiver marcado, o PDF é baixado
             automaticamente. Se houver arquivo extra, ele também é baixado para você anexar manualmente.
           </p>
+          <p>
+            Marcando <strong>"Enviar automaticamente"</strong>, a mensagem é disparada sozinha assim que o orçamento
+            entra nesse status — sem precisar clicar em nada. Isso só funciona com a automação via n8n configurada
+            e ativada em <strong>Atendimento → CRM e WhatsApp → Automação</strong>.
+          </p>
         </div>
       </div>
 
@@ -262,6 +285,7 @@ export default function StatusPersonalizados() {
                     <th className="p-4 text-left font-semibold text-slate-600">Prévia da Mensagem</th>
                     <th className="p-4 text-center font-semibold text-slate-600">PDF?</th>
                     <th className="p-4 text-center font-semibold text-slate-600">Gerar OS?</th>
+                    <th className="p-4 text-center font-semibold text-slate-600">Auto-envio?</th>
                     <th className="p-4 text-left font-semibold text-slate-600">Arquivo Extra</th>
                     <th className="p-4 pr-6 text-right font-semibold text-slate-600">Ações</th>
                   </tr>
@@ -295,6 +319,15 @@ export default function StatusPersonalizados() {
                         {s.generateOs ? (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
                             ⚙️ Sim
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">Não</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center">
+                        {(s as any).autoSendWhatsapp ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                            <SiWhatsapp className="w-3 h-3" /> Sim
                           </span>
                         ) : (
                           <span className="text-xs text-slate-400">Não</span>

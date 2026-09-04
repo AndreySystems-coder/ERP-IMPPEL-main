@@ -826,10 +826,25 @@ export const jobStatuses = pgTable("job_statuses", {
   sortOrder: integer("sort_order").default(0),
   generateOs: boolean("generate_os").default(false), // auto-create Work Order when this status is set
   color: text("color"), // cor customizável exibida nos badges de status; null usa o mapa padrão do código
+  autoSendWhatsapp: boolean("auto_send_whatsapp").notNull().default(false), // envia `message` automaticamente via n8n ao entrar neste status
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertJobStatusSchema = createInsertSchema(jobStatuses).omit({ id: true, createdAt: true });
+
+// Work Order Statuses — mesmo conceito de jobStatuses, mas para o funil de Obras (que não tinha
+// tabela própria: os status eram strings fixas em client/src/features/work-orders/constants.ts).
+export const workOrderStatuses = pgTable("work_order_statuses", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  message: text("message").notNull().default(""),
+  color: text("color"),
+  sortOrder: integer("sort_order").default(0),
+  autoSendWhatsapp: boolean("auto_send_whatsapp").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWorkOrderStatusSchema = createInsertSchema(workOrderStatuses).omit({ id: true, createdAt: true });
 export const insertJobSchema = createInsertSchema(jobs).omit({ id: true, createdAt: true });
 
 // ─── Obra Consumo Logs — per-user material consumption records ───────────────
@@ -1451,6 +1466,8 @@ export type PaymentCondition = typeof paymentConditions.$inferSelect;
 
 export type InsertJobStatus = z.infer<typeof insertJobStatusSchema>;
 export type JobStatus = typeof jobStatuses.$inferSelect;
+export type InsertWorkOrderStatus = z.infer<typeof insertWorkOrderStatusSchema>;
+export type WorkOrderStatus = typeof workOrderStatuses.$inferSelect;
 
 export type InsertObraConsumoLog = z.infer<typeof insertObraConsumoLogSchema>;
 export type ObraConsumoLog = typeof obraConsumoLogs.$inferSelect;
