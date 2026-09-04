@@ -4493,11 +4493,7 @@ export async function registerRoutes(
   // Protegido por segredo compartilhado (não usa sessão, pois quem chama é o n8n).
   app.post("/api/webhooks/n8n/whatsapp-status", async (req, res) => {
     try {
-      const automation = await storage.getAutomationSettings();
-      const providedSecret = req.get("x-erp-webhook-secret") || req.body?.secret;
-      if (!automation.incomingSecret || providedSecret !== automation.incomingSecret) {
-        return res.status(401).json({ message: "Segredo inválido." });
-      }
+      if (!(await checkN8nWebhookSecret(req, res))) return;
       const { logId, status, errorMessage, incomingPhone, incomingMessage } = req.body;
       if (logId && status) {
         const updated = await storage.updateWhatsappSendLogStatus(Number(logId), String(status), errorMessage || null);
@@ -4516,6 +4512,87 @@ export async function registerRoutes(
         return res.json({ ok: true, log });
       }
       res.status(400).json({ message: "Envie logId+status para confirmação, ou incomingPhone+incomingMessage para mensagem recebida." });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  const checkN8nWebhookSecret = async (req: Request, res: Response) => {
+    const automation = await storage.getAutomationSettings();
+    const providedSecret = req.get("x-erp-webhook-secret") || req.body?.secret;
+    if (!automation.incomingSecret || providedSecret !== automation.incomingSecret) {
+      res.status(401).json({ message: "Segredo inválido." });
+      return false;
+    }
+    return true;
+  };
+
+  // Chamado pelo n8n (fluxo de primeiro contato) para saber se um telefone já é conhecido do
+  // ERP antes de decidir se manda a saudação de boas-vindas. Não fica sob /api/leads porque
+  // essa rota exige sessão de usuário logado — quem chama aqui é o n8n, sem sessão.
+  app.post("/api/webhooks/n8n/lookup-contact", async (req, res) => {
+    try {
+      if (!(await checkN8nWebhookSecret(req, res))) return;
+      const phoneDigits = String(req.body?.phone || "").replace(/\D/g, "");
+      if (!phoneDigits) return res.status(400).json({ message: "phone obrigatório." });
+
+      const [leads, clients] = await Promise.all([storage.getLeads(), storage.getClients()]);
+      const lead = leads.find(l => String(l.phone || "").replace(/\D/g, "") === phoneDigits);
+      if (lead) return res.json({ isNew: false, leadId: lead.id, name: lead.name, status: lead.status });
+
+      const client = clients.find(c => String(c.phone || "").replace(/\D/g, "") === phoneDigits);
+      if (client) return res.json({ isNew: false, name: client.name });
+
+      res.json({ isNew: true });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Chamado pelo n8n (fluxo de primeiro contato) para registrar uma mensagem recebida no
+  // WhatsApp: cria o lead automaticamente se for um contato novo, e guarda a interação
+  // (incluindo qual botão o cliente escolheu, se veio um).
+  app.post("/api/webhooks/n8n/inbound-message", async (req, res) => {
+    try {
+      if (!(await checkN8nWebhookSecret(req, res))) return;
+      const phoneDigits = String(req.body?.phone || "").replace(/\D/g, "");
+      if (!phoneDigits) return res.status(400).json({ message: "phone obrigatório." });
+      const { name, buttonId, freeText } = req.body || {};
+
+      const leads = await storage.getLeads();
+      let lead = leads.find(l => String(l.phone || "").replace(/\D/g, "") === phoneDigits);
+      let isNew = false;
+      if (!lead) {
+        lead = await storage.createLead({
+          name: name || `WhatsApp ${phoneDigits}`,
+          phone: req.body?.phone || phoneDigits,
+          source: "WhatsApp - Primeiro Contato",
+          status: "New Lead",
+          notes: "Criado automaticamente pela saudação de primeiro contato do WhatsApp.",
+        } as any);
+        isNew = true;
+      }
+
+      const choice = String(buttonId || freeText || "").trim();
+      const summary = choice ? `Cliente respondeu no WhatsApp: "${choice}"` : "Cliente mandou mensagem no WhatsApp.";
+      await storage.createCompleteTableRow("crmInteractions", {
+        leadId: lead.id,
+        channel: "whatsapp",
+        direction: "entrada",
+        summary,
+        status: lead.status,
+        createdByUsername: "n8n",
+      });
+
+      // Palavra-chave reconhecida no texto livre, caso o aparelho do cliente não mostre os
+      // botões reais (fallback documentado — ver Fase 4 do plano).
+      const normalizedChoice = choice
+        .normalize("NFD")
+        .replace(new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g"), "")
+        .toLowerCase();
+      let nextAction: string | undefined;
+      if (normalizedChoice.includes("orcamento")) nextAction = "Cliente quer orçamento — iniciar atendimento.";
+      else if (normalizedChoice.includes("atendente")) nextAction = "Cliente pediu para falar com atendente.";
+      else if (normalizedChoice.includes("duvida")) nextAction = "Cliente tem dúvida técnica.";
+      if (nextAction) await storage.updateLead(lead.id, { nextAction } as any);
+
+      res.json({ ok: true, isNew, leadId: lead.id });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
