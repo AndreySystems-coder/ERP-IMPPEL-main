@@ -1,7 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
-import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -4281,19 +4280,6 @@ export async function registerRoutes(
       });
       res.json({ ok: true, log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  // TEMPORÁRIO: roda a migração 0009 (coluna leads.status_locked) + backfill de leads
-  // faltantes a partir de clientes/orçamentos já existentes. Remover depois de rodar uma vez.
-  app.post("/api/admin/run-migration-0009", async (_req, res) => {
-    try {
-      await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS status_locked boolean NOT NULL DEFAULT false;`);
-      const { runCrmLeadsBackfill } = await import("../script/backfill-crm-leads");
-      const summary = await runCrmLeadsBackfill();
-      res.json({ ok: true, summary });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
   });
 
   // ─── Automação (n8n) ──────────────────────────────────────────────────────────
