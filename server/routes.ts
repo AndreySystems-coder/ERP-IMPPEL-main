@@ -4580,16 +4580,18 @@ export async function registerRoutes(
         createdByUsername: "n8n",
       });
 
-      // Palavra-chave reconhecida no texto livre, caso o aparelho do cliente não mostre os
-      // botões reais (fallback documentado — ver Fase 4 do plano).
+      // Palavra-chave (ou número da opção) reconhecida no texto livre — o voto em si da
+      // enquete do WhatsApp não chega decifrado até aqui, então esse é o sinal real que o
+      // sistema consegue usar (a mensagem de saudação já pede pra responder com o número).
       const normalizedChoice = choice
         .normalize("NFD")
         .replace(new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g"), "")
+        .trim()
         .toLowerCase();
       let nextAction: string | undefined;
-      if (normalizedChoice.includes("orcamento")) nextAction = "Cliente quer orçamento — iniciar atendimento.";
-      else if (normalizedChoice.includes("atendente")) nextAction = "Cliente pediu para falar com atendente.";
-      else if (normalizedChoice.includes("duvida")) nextAction = "Cliente tem dúvida técnica.";
+      if (normalizedChoice.includes("orcamento") || normalizedChoice === "1") nextAction = "Cliente quer orçamento — iniciar atendimento.";
+      else if (normalizedChoice.includes("atendente") || normalizedChoice === "2") nextAction = "Cliente pediu para falar com atendente.";
+      else if (normalizedChoice.includes("duvida") || normalizedChoice === "3") nextAction = "Cliente tem dúvida técnica.";
       if (nextAction) await storage.updateLead(lead.id, { nextAction } as any);
 
       res.json({ ok: true, isNew, leadId: lead.id });
