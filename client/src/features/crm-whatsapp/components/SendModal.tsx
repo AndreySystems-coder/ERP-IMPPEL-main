@@ -45,7 +45,15 @@ export function SendModal({ open, onClose, target }: SendModalProps) {
   const handleSend = async () => {
     if (!canSend) return;
     try {
-      const result = await sendMutation.mutateAsync({ phone: phoneDigits, message: customMessage, flowId: target?.flowId, flowName: target?.flowName || "Envio Manual" });
+      const pollOptions = target?.pollOptions || [];
+      const result = await sendMutation.mutateAsync({
+        phone: phoneDigits,
+        message: customMessage,
+        flowId: target?.flowId,
+        flowName: target?.flowName || "Envio Manual",
+        isPoll: pollOptions.length > 0,
+        pollOptions,
+      });
       toast({
         title: result.ok ? "Mensagem enviada!" : "Falha no envio",
         description: result.ok ? "Enviada direto pelo WhatsApp da empresa." : (result.log?.errorMessage || "Verifique a configuração da Evolution API em Automação."),
@@ -67,7 +75,16 @@ export function SendModal({ open, onClose, target }: SendModalProps) {
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          {target && <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500 dark:bg-gray-800">Template: <span className="font-medium text-gray-700 dark:text-gray-300">{target.flowName || target.templateName}</span></div>}
+          {target && (
+            <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500 dark:bg-gray-800">
+              Template: <span className="font-medium text-gray-700 dark:text-gray-300">{target.flowName || target.templateName}</span>
+              {(target.pollOptions?.length || 0) > 0 && (
+                <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                  Enquete com {target.pollOptions!.length} opções
+                </span>
+              )}
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Número do WhatsApp *</Label>
             <div className="relative">

@@ -2749,20 +2749,28 @@ export async function registerRoutes(
 
       const jobs = await storage.getJobs();
       const latestJob = jobs.filter(j => Number(j.leadId) === lead.id).sort((a, b) => Number(b.id) - Number(a.id))[0];
+      // Mesmas variáveis usadas nos templates de mensagem (banner "Variáveis suportadas").
       const message = substituteMessageVariables(flow.message, {
-        cliente: lead.name?.split(" ")[0] || "Cliente",
-        ...(latestJob ? { numero: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0") } : {}),
+        nome_cliente: lead.name?.split(" ")[0] || "Cliente",
+        ...(latestJob ? {
+          numero_orcamento: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0"),
+          tipo_servico: latestJob.serviceType || "",
+          valor_orcamento: latestJob.realPriceSold ? Number(latestJob.realPriceSold).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
+        } : {}),
       });
 
+      // Manda como enquete sempre que o fluxo tiver opções cadastradas (mesmo fluxos antigos
+      // marcados como "botões" — botões não renderizam de forma confiável no WhatsApp, então
+      // qualquer opção cadastrada vira enquete de verdade).
       let pollOptions: string[] = [];
-      if (flow.messageType === "poll" && flow.buttons) {
+      if (flow.buttons) {
         try { pollOptions = (JSON.parse(flow.buttons as string) as any[]).map(b => b.text).filter(Boolean); } catch {}
       }
 
       const result = await sendViaEvolution({
         phone: lead.phone,
         message,
-        isPoll: flow.messageType === "poll",
+        isPoll: pollOptions.length > 0,
         pollOptions,
         flowId: flow.id,
         flowName: flow.name,
@@ -4636,9 +4644,9 @@ export async function registerRoutes(
   // texto pré-preenchido": o ERP manda a mensagem sozinho, sem precisar de clique manual.
   app.post("/api/whatsapp/send-direct", requireAdmin, async (req, res) => {
     try {
-      const { phone, message, flowId, flowName } = req.body;
+      const { phone, message, flowId, flowName, isPoll, pollOptions } = req.body;
       if (!phone || !message) return res.status(400).json({ message: "phone e message obrigatórios" });
-      const result = await sendViaEvolution({ phone, message, flowId, flowName });
+      const result = await sendViaEvolution({ phone, message, flowId, flowName, isPoll: Boolean(isPoll), pollOptions: Array.isArray(pollOptions) ? pollOptions : [] });
       if (!result.log) return res.status(400).json({ message: result.message });
       res.json({ ok: result.ok, log: result.log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }

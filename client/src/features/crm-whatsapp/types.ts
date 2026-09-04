@@ -40,6 +40,7 @@ export interface SendTarget {
   phone?: string | null;
   templateId?: number | null;
   templateName?: string;
+  pollOptions?: string[];
 }
 
 export interface CrmLeadQuoteLink {

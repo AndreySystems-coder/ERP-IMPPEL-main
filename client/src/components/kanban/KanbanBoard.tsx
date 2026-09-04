@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -10,7 +10,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 export type KanbanColumn = {
   id: string;
@@ -31,6 +31,8 @@ type KanbanBoardProps<T> = {
   emptyLabel?: string;
   emptyIcon?: ReactNode;
 };
+
+const VISIBLE_STEP = 3;
 
 function KanbanCard({
   id,
@@ -53,16 +55,29 @@ function KanbanCard({
   );
 }
 
-function KanbanColumnDroppable({
+function KanbanColumnDroppable<T>({
   column,
-  count,
-  children,
+  items,
+  getItemId,
+  renderCard,
+  activeId,
+  emptyLabel,
+  emptyIcon,
 }: {
   column: KanbanColumn;
-  count: number;
-  children: ReactNode;
+  items: T[];
+  getItemId: (item: T) => string | number;
+  renderCard: (item: T, isDragging: boolean) => ReactNode;
+  activeId: string | null;
+  emptyLabel: string;
+  emptyIcon?: ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+  // Colunas com muitos itens ficam gigantes verticalmente — mostra só os primeiros e
+  // deixa expandir sob demanda em vez de listar tudo de uma vez.
+  const [visibleCount, setVisibleCount] = useState(VISIBLE_STEP);
+  const visibleItems = items.slice(0, visibleCount);
+  const remaining = items.length - visibleItems.length;
 
   return (
     <div
@@ -76,10 +91,32 @@ function KanbanColumnDroppable({
           {column.description ? <p className="text-xs text-slate-500">{column.description}</p> : null}
         </div>
         <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-xs font-bold text-slate-600 shadow-sm dark:bg-slate-900 dark:text-slate-300">
-          {count}
+          {items.length}
         </span>
       </div>
-      <div className="min-h-[60px] space-y-2">{children}</div>
+      <div className="min-h-[60px] space-y-2">
+        {items.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 bg-white/70 px-3 py-6 text-center text-xs text-slate-400 dark:border-slate-800 dark:bg-slate-950/60">
+            {emptyIcon}
+            {emptyLabel}
+          </div>
+        ) : (
+          visibleItems.map(item => (
+            <KanbanCard key={String(getItemId(item))} id={String(getItemId(item))}>
+              {renderCard(item, String(getItemId(item)) === activeId)}
+            </KanbanCard>
+          ))
+        )}
+        {remaining > 0 && (
+          <button
+            type="button"
+            onClick={() => setVisibleCount(count => count + VISIBLE_STEP)}
+            className="w-full rounded-lg border border-dashed border-slate-300 py-1.5 text-xs font-semibold text-slate-500 hover:bg-white dark:border-slate-700 dark:hover:bg-slate-900"
+          >
+            Ver mais (+{remaining})
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -98,6 +135,7 @@ export function KanbanBoard<T>({
   emptyIcon,
 }: KanbanBoardProps<T>) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const itemsById = useMemo(() => {
@@ -129,6 +167,10 @@ export function KanbanBoard<T>({
     onDrop(item, overColumnId);
   };
 
+  const scrollByColumn = (direction: 1 | -1) => {
+    scrollRef.current?.scrollBy({ left: direction * 240, behavior: "smooth" });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-white py-16 text-sm text-slate-400 dark:border-slate-800 dark:bg-slate-950">
@@ -148,30 +190,45 @@ export function KanbanBoard<T>({
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <section className="overflow-x-auto pb-3">
-        <div
-          className="grid grid-cols-1 gap-3 xl:min-w-0"
-          style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(220px, 1fr))`, minWidth: columns.length > 1 ? `${columns.length * 220}px` : undefined }}
-        >
-          {columns.map(column => {
-            const columnItems = itemsByColumn.get(column.id) || [];
-            return (
-              <KanbanColumnDroppable key={column.id} column={column} count={columnItems.length}>
-                {columnItems.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-white/70 px-3 py-6 text-center text-xs text-slate-400 dark:border-slate-800 dark:bg-slate-950/60">
-                    {emptyIcon}
-                    {emptyLabel}
-                  </div>
-                ) : (
-                  columnItems.map(item => (
-                    <KanbanCard key={String(getItemId(item))} id={String(getItemId(item))}>
-                      {renderCard(item, String(getItemId(item)) === activeId)}
-                    </KanbanCard>
-                  ))
-                )}
-              </KanbanColumnDroppable>
-            );
-          })}
+      <section className="relative">
+        {columns.length > 3 && (
+          <div className="mb-2 flex justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => scrollByColumn(-1)}
+              className="rounded-md border border-slate-200 bg-white p-1 text-slate-500 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-900"
+              aria-label="Rolar para a esquerda"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollByColumn(1)}
+              className="rounded-md border border-slate-200 bg-white p-1 text-slate-500 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-900"
+              aria-label="Rolar para a direita"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        <div ref={scrollRef} className="overflow-x-auto pb-3">
+          <div
+            className="grid grid-cols-1 gap-3 xl:min-w-0"
+            style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(220px, 1fr))`, minWidth: columns.length > 1 ? `${columns.length * 220}px` : undefined }}
+          >
+            {columns.map(column => (
+              <KanbanColumnDroppable
+                key={column.id}
+                column={column}
+                items={itemsByColumn.get(column.id) || []}
+                getItemId={getItemId}
+                renderCard={renderCard}
+                activeId={activeId}
+                emptyLabel={emptyLabel}
+                emptyIcon={emptyIcon}
+              />
+            ))}
+          </div>
         </div>
       </section>
       <DragOverlay>{activeItem ? renderCard(activeItem, true) : null}</DragOverlay>

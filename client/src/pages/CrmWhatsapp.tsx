@@ -88,7 +88,11 @@ export default function CrmWhatsapp() {
   });
 
   const openSend = (flow: WhatsappFlow) => {
-    setSendTarget({ flowId: flow.id, flowName: flow.name, message: flow.message });
+    let pollOptions: string[] = [];
+    if (flow.buttons) {
+      try { pollOptions = (JSON.parse(flow.buttons as string) as ButtonItem[]).map(b => b.text).filter(Boolean); } catch {}
+    }
+    setSendTarget({ flowId: flow.id, flowName: flow.name, message: flow.message, pollOptions });
     setSendModalOpen(true);
   };
 
