@@ -1,10 +1,12 @@
 import { format } from "date-fns";
-import { Briefcase, CalendarClock, ClipboardList, MessageCircle, Phone, ShieldCheck, Star, StickyNote, Wrench } from "lucide-react";
+import { Briefcase, CalendarClock, ClipboardList, MessageCircle, Phone, ShieldCheck, Star, StickyNote, Trash2, Wrench } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CRM_STATUS_LABELS } from "@/features/crm-whatsapp/constants";
 import type { CrmLeadOperationalLinks } from "@/features/crm-whatsapp/types";
+import { useDeleteLead } from "@/hooks/use-leads";
+import { useToast } from "@/hooks/use-toast";
 import type { Lead } from "@shared/schema";
 
 type LeadWithOperationalLinks = Lead & { operationalLinks?: CrmLeadOperationalLinks };
@@ -16,6 +18,16 @@ type CrmLeadCardProps = {
 };
 
 export function CrmLeadCard({ lead, compact = false, onContact }: CrmLeadCardProps) {
+  const deleteLead = useDeleteLead();
+  const { toast } = useToast();
+
+  const handleDelete = () => {
+    if (!window.confirm(`Excluir "${lead.name}" da lista de contatos? Essa ação não pode ser desfeita.`)) return;
+    deleteLead.mutate(lead.id, {
+      onError: (err: any) => toast({ title: "Não foi possível excluir", description: err?.message, variant: "destructive" }),
+    });
+  };
+
   const createdAt = lead.createdAt ? format(new Date(lead.createdAt), "dd/MM/yyyy") : "Sem data";
   const nextContact = lead.nextContactDate ? format(new Date(lead.nextContactDate), "dd/MM") : null;
   const quotes = lead.operationalLinks?.quotes || [];
@@ -35,6 +47,16 @@ export function CrmLeadCard({ lead, compact = false, onContact }: CrmLeadCardPro
         <Badge variant="outline" className="shrink-0 text-[11px]">
           {CRM_STATUS_LABELS[lead.status] || lead.status}
         </Badge>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleteLead.isPending}
+          className="shrink-0 rounded-md p-1 text-slate-300 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+          title="Excluir contato"
+          data-testid={`button-delete-lead-${lead.id}`}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {!compact && lead.notes && (

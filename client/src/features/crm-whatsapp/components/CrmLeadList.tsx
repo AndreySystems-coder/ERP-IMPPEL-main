@@ -1,39 +1,39 @@
-import { Loader2, MessageCircle, Phone, UserCheck, Users } from "lucide-react";
+import { Users, Workflow } from "lucide-react";
 
 import { CrmLeadCard } from "@/features/crm-whatsapp/components/CrmLeadCard";
 import type { CrmLeadOperationalLinks } from "@/features/crm-whatsapp/types";
 import { asArray } from "@/lib/safeData";
-import type { Client, Lead, WhatsappSendLog } from "@shared/schema";
+import type { Lead, WhatsappFlow } from "@shared/schema";
 
 type LeadWithOperationalLinks = Lead & { operationalLinks?: CrmLeadOperationalLinks };
 
 type CrmLeadListProps = {
   leads: LeadWithOperationalLinks[];
-  clients: Client[];
-  logs: WhatsappSendLog[];
+  flows: WhatsappFlow[];
   isLoading?: boolean;
   onContactLead?: (lead: LeadWithOperationalLinks) => void;
 };
 
-export function CrmLeadList({ leads, clients, logs, isLoading = false, onContactLead }: CrmLeadListProps) {
+export function CrmLeadList({ leads, flows, isLoading = false, onContactLead }: CrmLeadListProps) {
   const leadsList = asArray<LeadWithOperationalLinks>(leads);
-  const clientsList = asArray<Client>(clients);
-  const logsList = asArray<WhatsappSendLog>(logs);
-  const activeConversations = logsList.filter(log => log.status !== "error").length;
-  const nextActions = leadsList.filter(lead => lead.nextContactDate || lead.operationalLinks?.nextAction || ["Contacted", "Proposal", "Lost"].includes(lead.status));
-  const contacts = leadsList.filter(lead => lead.status === "Contacted");
-  const quotes = leadsList.filter(lead => (lead.operationalLinks?.quotes.length || 0) > 0);
-  const activeClients = leadsList.filter(lead => (lead.operationalLinks?.workOrders.length || 0) > 0);
+  const activeFlows = asArray<WhatsappFlow>(flows)
+    .filter(flow => flow.active)
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+  const semFluxoCount = leadsList.filter(lead => !lead.currentFlowTrigger).length;
 
   return (
     <section className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <MetricCard icon={Users} label="Leads" value={leadsList.length} />
-        <MetricCard icon={Phone} label="Contatos" value={contacts.length} />
-        <MetricCard icon={UserCheck} label="Clientes" value={Math.max(clientsList.length, activeClients.length)} />
-        <MetricCard icon={MessageCircle} label="Conversas" value={activeConversations} />
-        <MetricCard icon={MessageCircle} label="Orçamentos" value={quotes.length} />
-        <MetricCard icon={Loader2} label="Próximas ações" value={nextActions.length} />
+        <MetricCard icon={Users} label="Total" value={leadsList.length} />
+        <MetricCard icon={Workflow} label="Sem fluxo" value={semFluxoCount} />
+        {activeFlows.slice(0, 4).map(flow => (
+          <MetricCard
+            key={flow.id}
+            icon={Workflow}
+            label={flow.name}
+            value={leadsList.filter(lead => lead.currentFlowTrigger === flow.trigger).length}
+          />
+        ))}
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">

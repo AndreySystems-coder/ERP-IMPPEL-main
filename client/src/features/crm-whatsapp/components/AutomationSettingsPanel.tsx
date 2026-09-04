@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bot, Check, Copy, KeyRound, Loader2, ShieldAlert, Zap } from "lucide-react";
+import { Bot, Check, Copy, KeyRound, Loader2, QrCode, ShieldAlert, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { WhatsAppConnectionPanel } from "@/features/crm-whatsapp/components/WhatsAppConnectionPanel";
 
 type AutomationSettings = {
   n8nWebhookUrl: string | null;
   incomingSecret: string | null;
   whatsappAutoSendEnabled: boolean;
+  evolutionApiUrl: string | null;
+  evolutionApiKey: string | null;
+  evolutionInstanceName: string | null;
 };
 
 function CopyField({ label, value }: { label: string; value: string }) {
@@ -44,18 +48,31 @@ export function AutomationSettingsPanel() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [freshSecret, setFreshSecret] = useState<string | null>(null);
+  const [evolutionApiUrl, setEvolutionApiUrl] = useState("");
+  const [evolutionApiKey, setEvolutionApiKey] = useState("");
+  const [evolutionInstanceName, setEvolutionInstanceName] = useState("imppel");
 
   useEffect(() => {
     if (data) {
       setWebhookUrl(data.n8nWebhookUrl || "");
       setEnabled(data.whatsappAutoSendEnabled);
+      setEvolutionApiUrl(data.evolutionApiUrl || "");
+      setEvolutionApiKey(data.evolutionApiKey || "");
+      setEvolutionInstanceName(data.evolutionInstanceName || "imppel");
     }
   }, [data]);
 
   const saveMutation = useMutation({
-    mutationFn: () => apiRequest("PUT", "/api/automation-settings", { n8nWebhookUrl: webhookUrl, whatsappAutoSendEnabled: enabled }),
+    mutationFn: () => apiRequest("PUT", "/api/automation-settings", {
+      n8nWebhookUrl: webhookUrl,
+      whatsappAutoSendEnabled: enabled,
+      evolutionApiUrl,
+      evolutionApiKey,
+      evolutionInstanceName,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/automation-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp/connection-status"] });
       toast({ title: "Configuração salva." });
     },
     onError: (e: any) => toast({ title: "Erro ao salvar", description: e.message, variant: "destructive" }),
@@ -93,8 +110,8 @@ export function AutomationSettingsPanel() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
             <div>
-              <p className="text-sm font-semibold text-slate-800">Ativar envio automático de WhatsApp</p>
-              <p className="text-xs text-slate-500">Quando desligado, os envios continuam manuais (abrir WhatsApp Web).</p>
+              <p className="text-sm font-semibold text-slate-800">Ativar mensagem automática ao mudar status de orçamento/obra</p>
+              <p className="text-xs text-slate-500">Controla só o envio automático quando um status marcado como "enviar automaticamente" muda. O envio manual (botão WhatsApp nos cards) usa a Evolution API abaixo, direto.</p>
             </div>
             <Switch checked={enabled} onCheckedChange={setEnabled} data-testid="switch-auto-send" />
           </div>
@@ -157,6 +174,53 @@ export function AutomationSettingsPanel() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <QrCode className="h-5 w-5 text-emerald-600" /> 3. Evolution API (conexão do WhatsApp)
+          </CardTitle>
+          <p className="text-sm text-gray-500">
+            Cole aqui a mesma URL e chave que você já usa no Manager da Evolution API — é o que permite ver o status e reconectar sem sair do ERP.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>URL da Evolution API</Label>
+            <Input
+              placeholder="https://evolution-api-production-xxxx.up.railway.app"
+              value={evolutionApiUrl}
+              onChange={event => setEvolutionApiUrl(event.target.value)}
+              data-testid="input-evolution-api-url"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Chave da API (apikey)</Label>
+            <Input
+              type="password"
+              placeholder="Cole a chave da instância"
+              value={evolutionApiKey}
+              onChange={event => setEvolutionApiKey(event.target.value)}
+              data-testid="input-evolution-api-key"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nome da instância</Label>
+            <Input
+              placeholder="imppel"
+              value={evolutionInstanceName}
+              onChange={event => setEvolutionInstanceName(event.target.value)}
+              data-testid="input-evolution-instance-name"
+            />
+          </div>
+          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="gap-2">
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            Salvar configuração
+          </Button>
+        </CardContent>
+      </Card>
+
+      <WhatsAppConnectionPanel configured={Boolean(data?.evolutionApiUrl && data?.evolutionApiKey)} />
     </div>
   );
 }

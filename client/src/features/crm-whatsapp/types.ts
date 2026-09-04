@@ -8,7 +8,7 @@ export interface FlowForm {
   name: string;
   trigger: string;
   message: string;
-  messageType: "text" | "buttons";
+  messageType: "text" | "buttons" | "poll";
   buttons: ButtonItem[];
   includePdf: boolean;
   active: boolean;

@@ -333,7 +333,7 @@ export interface IStorage {
   updateWhatsappSendLogStatus(id: number, status: string, errorMessage?: string | null): Promise<WhatsappSendLog | undefined>;
   // Automação (n8n)
   getAutomationSettings(): Promise<AutomationSettings>;
-  updateAutomationSettings(data: Partial<Pick<AutomationSettings, "n8nWebhookUrl" | "whatsappAutoSendEnabled" | "incomingSecret">>): Promise<AutomationSettings>;
+  updateAutomationSettings(data: Partial<Pick<AutomationSettings, "n8nWebhookUrl" | "whatsappAutoSendEnabled" | "incomingSecret" | "evolutionApiUrl" | "evolutionApiKey" | "evolutionInstanceName">>): Promise<AutomationSettings>;
   // WhatsApp Templates
   getWhatsappTemplates(): Promise<WhatsappTemplate[]>;
   getWhatsappTemplatesByCategory(category: string): Promise<WhatsappTemplate[]>;
@@ -1103,7 +1103,7 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db.insert(automationSettings).values({}).returning();
     return created;
   }
-  async updateAutomationSettings(data: Partial<Pick<AutomationSettings, "n8nWebhookUrl" | "whatsappAutoSendEnabled" | "incomingSecret">>): Promise<AutomationSettings> {
+  async updateAutomationSettings(data: Partial<Pick<AutomationSettings, "n8nWebhookUrl" | "whatsappAutoSendEnabled" | "incomingSecret" | "evolutionApiUrl" | "evolutionApiKey" | "evolutionInstanceName">>): Promise<AutomationSettings> {
     const current = await this.getAutomationSettings();
     const [updated] = await db.update(automationSettings).set({ ...data, updatedAt: new Date() }).where(eq(automationSettings.id, current.id)).returning();
     return updated;

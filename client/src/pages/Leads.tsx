@@ -7,6 +7,7 @@ import { Modal } from "@/components/Modal";
 import { Plus, Search, Trash2, Edit2, Phone, Mail, Clock, Users } from "lucide-react";
 import { format } from "date-fns";
 import { asArray } from "@/lib/safeData";
+import { formatBrazilPhone } from "@/lib/phone";
 import { StatusPill, type StatusPillVariant } from "@/components/ui/status-pill";
 
 export default function Leads() {
@@ -40,7 +41,7 @@ export default function Leads() {
 
   const openEdit = (lead: any) => {
     setEditingLead(lead);
-    setName(lead.name); setPhone(lead.phone || ""); setSource(lead.source || ""); 
+    setName(lead.name); setPhone(lead.phone ? formatBrazilPhone(lead.phone) : ""); setSource(lead.source || "");
     setStatus(lead.status); setNotes(lead.notes || "");
     setIsModalOpen(true);
   };
@@ -161,7 +162,7 @@ export default function Leads() {
         <form onSubmit={handleSubmit} className="space-y-5 py-2">
           <Input label="Nome Completo *" required value={name} onChange={e => setName(e.target.value)} placeholder="ex. Empresa XYZ" />
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Telefone" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 98765-4321" />
+            <Input label="Telefone" value={phone} onChange={e => setPhone(formatBrazilPhone(e.target.value))} placeholder="+55 (11) 98765-4321" />
             <Input label="Origem do Lead" value={source} onChange={e => setSource(e.target.value)} placeholder="ex. Website, Indicação" />
           </div>
           <div className="flex flex-col gap-1.5">

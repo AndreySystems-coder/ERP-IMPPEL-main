@@ -81,6 +81,7 @@ export const leads = pgTable("leads", {
   notes: text("notes"),
   nextContactDate: timestamp("next_contact_date"),
   statusLocked: boolean("status_locked").notNull().default(false),
+  currentFlowTrigger: text("current_flow_trigger"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -773,6 +774,9 @@ export const automationSettings = pgTable("automation_settings", {
   n8nWebhookUrl: text("n8n_webhook_url"),
   incomingSecret: text("incoming_secret"),
   whatsappAutoSendEnabled: boolean("whatsapp_auto_send_enabled").notNull().default(false),
+  evolutionApiUrl: text("evolution_api_url"),
+  evolutionApiKey: text("evolution_api_key"),
+  evolutionInstanceName: text("evolution_instance_name").default("imppel"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

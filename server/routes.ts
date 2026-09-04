@@ -2289,6 +2289,63 @@ export async function registerRoutes(
     return { ok: log.status === "sent", log };
   };
 
+  // Envia direto pela Evolution API (sem depender do n8n) usando as credenciais configuradas
+  // na aba Automação (Fase 6). Usado pelo envio manual (SendModal) e pelo quadro de fluxos —
+  // o cliente não precisa mais abrir o WhatsApp Web com o texto pré-preenchido.
+  const sendViaEvolution = async ({
+    phone,
+    message,
+    isPoll = false,
+    pollOptions = [],
+    flowId,
+    flowName,
+  }: {
+    phone: string;
+    message: string;
+    isPoll?: boolean;
+    pollOptions?: string[];
+    flowId?: number | string | null;
+    flowName?: string;
+  }) => {
+    const automation = await storage.getAutomationSettings();
+    if (!automation.evolutionApiUrl || !automation.evolutionApiKey) {
+      return { ok: false, log: null as any, message: "Configure a URL e a chave da Evolution API na aba Automação primeiro." };
+    }
+    const digits = phone.replace(/\D/g, "");
+    const numberWithCountry = digits.startsWith("55") ? digits : `55${digits}`;
+    const instance = automation.evolutionInstanceName || "imppel";
+    const baseUrl = automation.evolutionApiUrl.replace(/\/$/, "");
+
+    let log = await storage.createWhatsappSendLog({
+      flowId: flowId || null,
+      flowName: flowName || "Envio Manual",
+      phone: numberWithCountry,
+      message,
+      status: "enviando",
+      errorMessage: null,
+      channel: "evolution",
+    } as any);
+    try {
+      const endpoint = isPoll
+        ? `${baseUrl}/message/sendPoll/${instance}`
+        : `${baseUrl}/message/sendText/${instance}`;
+      const body = isPoll
+        ? { number: numberWithCountry, name: message, selectableCount: 1, values: pollOptions }
+        : { number: numberWithCountry, text: message };
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: automation.evolutionApiKey },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.message?.[0]?.message || data?.message || `Evolution respondeu ${response.status}`);
+      log = (await storage.updateWhatsappSendLogStatus(log.id, "sent")) || log;
+    } catch (sendError: any) {
+      log = (await storage.updateWhatsappSendLogStatus(log.id, "error", sendError.message)) || log;
+    }
+    return { ok: log.status === "sent", log };
+  };
+
   // Resolve o telefone de contato de um orçamento: cliente vinculado, lead vinculado, ou o
   // primeiro contato salvo no próprio orçamento (mesma ordem de prioridade usada manualmente
   // em Jobs.tsx:handleEnviarWhatsApp).
@@ -2676,6 +2733,43 @@ export async function registerRoutes(
   app.delete(api.leads.delete.path, async (req, res) => {
     await storage.deleteLead(Number(req.params.id));
     res.status(204).end();
+  });
+
+  // Dispara a mensagem de um fluxo (enquete ou texto) para um lead — chamado quando o card é
+  // arrastado para a coluna daquele fluxo no quadro "Fluxos em Andamento".
+  app.post("/api/leads/:id/send-flow", requireAuth, async (req, res) => {
+    try {
+      const lead = await storage.getLead(Number(req.params.id));
+      if (!lead) return res.status(404).json({ message: "Lead não encontrado." });
+      if (!lead.phone) return res.status(400).json({ message: "Este lead não tem telefone cadastrado." });
+
+      const flows = await storage.getWhatsappFlows();
+      const flow = flows.find(f => f.id === Number(req.body?.flowId));
+      if (!flow) return res.status(404).json({ message: "Fluxo não encontrado." });
+
+      const jobs = await storage.getJobs();
+      const latestJob = jobs.filter(j => Number(j.leadId) === lead.id).sort((a, b) => Number(b.id) - Number(a.id))[0];
+      const message = substituteMessageVariables(flow.message, {
+        cliente: lead.name?.split(" ")[0] || "Cliente",
+        ...(latestJob ? { numero: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0") } : {}),
+      });
+
+      let pollOptions: string[] = [];
+      if (flow.messageType === "poll" && flow.buttons) {
+        try { pollOptions = (JSON.parse(flow.buttons as string) as any[]).map(b => b.text).filter(Boolean); } catch {}
+      }
+
+      const result = await sendViaEvolution({
+        phone: lead.phone,
+        message,
+        isPoll: flow.messageType === "poll",
+        pollOptions,
+        flowId: flow.id,
+        flowName: flow.name,
+      });
+      if (!result.log) return res.status(400).json({ message: result.message });
+      res.json({ ok: result.ok, log: result.log });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   // Jobs
@@ -4449,24 +4543,38 @@ export async function registerRoutes(
   });
 
   // ─── Automação (n8n) ──────────────────────────────────────────────────────────
+  const maskAutomationSettings = (settings: any) => ({
+    ...settings,
+    incomingSecret: settings.incomingSecret ? "•".repeat(8) + settings.incomingSecret.slice(-4) : null,
+    evolutionApiKey: settings.evolutionApiKey ? "•".repeat(8) + settings.evolutionApiKey.slice(-4) : null,
+  });
+
   app.get("/api/automation-settings", requireAdmin, async (_req, res) => {
     try {
       const settings = await storage.getAutomationSettings();
-      res.json({ ...settings, incomingSecret: settings.incomingSecret ? "•".repeat(8) + settings.incomingSecret.slice(-4) : null });
+      res.json(maskAutomationSettings(settings));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
   app.put("/api/automation-settings", requireAdmin, async (req, res) => {
     try {
-      const { n8nWebhookUrl, whatsappAutoSendEnabled } = req.body;
+      const { n8nWebhookUrl, whatsappAutoSendEnabled, evolutionApiUrl, evolutionApiKey, evolutionInstanceName } = req.body;
       if (n8nWebhookUrl && !/^https?:\/\//i.test(n8nWebhookUrl)) {
         return res.status(400).json({ message: "URL do webhook n8n inválida." });
       }
+      if (evolutionApiUrl && !/^https?:\/\//i.test(evolutionApiUrl)) {
+        return res.status(400).json({ message: "URL da Evolution API inválida." });
+      }
+      const current = await storage.getAutomationSettings();
       const updated = await storage.updateAutomationSettings({
         n8nWebhookUrl: n8nWebhookUrl || null,
         whatsappAutoSendEnabled: Boolean(whatsappAutoSendEnabled),
+        evolutionApiUrl: evolutionApiUrl || null,
+        // Campo mascarado ("••••1234") voltando sem alteração não deve sobrescrever a chave real.
+        evolutionApiKey: evolutionApiKey === undefined ? current.evolutionApiKey : (evolutionApiKey?.startsWith("•") ? current.evolutionApiKey : (evolutionApiKey || null)),
+        evolutionInstanceName: evolutionInstanceName || "imppel",
       });
-      res.json({ ...updated, incomingSecret: updated.incomingSecret ? "•".repeat(8) + updated.incomingSecret.slice(-4) : null });
+      res.json(maskAutomationSettings(updated));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
@@ -4479,11 +4587,58 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // Consulta o status de conexão do WhatsApp diretamente na Evolution API, para exibir
+  // dentro do CRM e WhatsApp sem precisar abrir o Manager separado.
+  app.get("/api/whatsapp/connection-status", requireAdmin, async (_req, res) => {
+    try {
+      const settings = await storage.getAutomationSettings();
+      if (!settings.evolutionApiUrl || !settings.evolutionApiKey) {
+        return res.status(400).json({ message: "Configure a URL e a chave da Evolution API em Automação primeiro." });
+      }
+      const instance = settings.evolutionInstanceName || "imppel";
+      const response = await fetch(`${settings.evolutionApiUrl.replace(/\/$/, "")}/instance/connectionState/${instance}`, {
+        headers: { apikey: settings.evolutionApiKey },
+      });
+      const data = await response.json();
+      if (!response.ok) return res.status(response.status).json({ message: data?.message || "Falha ao consultar status." });
+      res.json({ state: data?.instance?.state || data?.state || "unknown" });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Busca o QR code atual da Evolution API para reconectar o WhatsApp sem sair do ERP.
+  app.get("/api/whatsapp/qrcode", requireAdmin, async (_req, res) => {
+    try {
+      const settings = await storage.getAutomationSettings();
+      if (!settings.evolutionApiUrl || !settings.evolutionApiKey) {
+        return res.status(400).json({ message: "Configure a URL e a chave da Evolution API em Automação primeiro." });
+      }
+      const instance = settings.evolutionInstanceName || "imppel";
+      const response = await fetch(`${settings.evolutionApiUrl.replace(/\/$/, "")}/instance/connect/${instance}`, {
+        headers: { apikey: settings.evolutionApiKey },
+      });
+      const data = await response.json();
+      if (!response.ok) return res.status(response.status).json({ message: data?.message || "Falha ao buscar QR code." });
+      res.json({ base64: data?.base64 || null, pairingCode: data?.pairingCode || null });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   app.post("/api/whatsapp/send-automatico", requireAdmin, async (req, res) => {
     try {
       const { phone, message, flowId, flowName } = req.body;
       if (!phone || !message) return res.status(400).json({ message: "phone e message obrigatórios" });
       const result = await sendWhatsappAutomatico({ phone, message, flowId, flowName });
+      if (!result.log) return res.status(400).json({ message: result.message });
+      res.json({ ok: result.ok, log: result.log });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Envio manual direto pela Evolution API — substitui o antigo "abrir WhatsApp Web com
+  // texto pré-preenchido": o ERP manda a mensagem sozinho, sem precisar de clique manual.
+  app.post("/api/whatsapp/send-direct", requireAdmin, async (req, res) => {
+    try {
+      const { phone, message, flowId, flowName } = req.body;
+      if (!phone || !message) return res.status(400).json({ message: "phone e message obrigatórios" });
+      const result = await sendViaEvolution({ phone, message, flowId, flowName });
       if (!result.log) return res.status(400).json({ message: result.message });
       res.json({ ok: result.ok, log: result.log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
@@ -4978,7 +5133,13 @@ export async function registerRoutes(
 
   // ─── WhatsApp Send Logs ───────────────────────────────────────────────────────
   app.get("/api/whatsapp-logs", requireAdmin, async (req, res) => {
-    try { res.json(await storage.getWhatsappSendLogs(50)); }
+    try {
+      // Telefones ficam gravados em formatos diferentes conforme o canal (manual vs n8n),
+      // então o agrupamento por conversa é feito no cliente por dígitos normalizados —
+      // aqui só se busca um volume maior quando a tela de conversas pedir explicitamente.
+      const wide = req.query.wide === "1";
+      res.json(await storage.getWhatsappSendLogs(wide ? 500 : 50));
+    }
     catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

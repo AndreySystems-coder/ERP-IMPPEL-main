@@ -1,20 +1,21 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bot, ClipboardList, Library, Users, Zap } from "lucide-react";
+import { Bot, ClipboardList, LayoutList, Library, MessageCircle, Users, Zap } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { asArray } from "@/lib/safeData";
 import { AutomationSettingsPanel } from "@/features/crm-whatsapp/components/AutomationSettingsPanel";
+import { ConversationViewer } from "@/features/crm-whatsapp/components/ConversationViewer";
 import { CrmContactHistory } from "@/features/crm-whatsapp/components/CrmContactHistory";
 import { CrmFilters } from "@/features/crm-whatsapp/components/CrmFilters";
 import { CrmLeadList } from "@/features/crm-whatsapp/components/CrmLeadList";
 import { CrmNextActions } from "@/features/crm-whatsapp/components/CrmNextActions";
-import { CrmPipelineBoard } from "@/features/crm-whatsapp/components/CrmPipelineBoard";
 import { CrmWhatsappHeader } from "@/features/crm-whatsapp/components/CrmWhatsappHeader";
 import { FlowLibrary } from "@/features/crm-whatsapp/components/FlowLibrary";
 import { FlowModal } from "@/features/crm-whatsapp/components/FlowModal";
+import { FlowStageBoard } from "@/features/crm-whatsapp/components/FlowStageBoard";
 import { SendModal } from "@/features/crm-whatsapp/components/SendModal";
 import { TemplateLibrary } from "@/features/crm-whatsapp/components/TemplateLibrary";
 import { TemplateModal } from "@/features/crm-whatsapp/components/TemplateModal";
@@ -37,6 +38,7 @@ export default function CrmWhatsapp() {
   const [crmSearch, setCrmSearch] = useState("");
   const [crmStatus, setCrmStatus] = useState("all");
   const [crmSource, setCrmSource] = useState("all");
+  const [logsViewMode, setLogsViewMode] = useState<"lista" | "conversa">("lista");
 
   const { data: flows = [], isLoading: flowsLoading } = useQuery<WhatsappFlow[]>({ queryKey: ["/api/whatsapp-flows"] });
   const { data: templates = [], isLoading: templatesLoading } = useQuery<WhatsappTemplate[]>({ queryKey: ["/api/whatsapp-templates"] });
@@ -52,6 +54,11 @@ export default function CrmWhatsapp() {
     enabled: tab === "logs" || tab === "kanban",
     refetchInterval: tab === "logs" ? 10000 : false,
   });
+  const { data: conversationLogs = [], isLoading: conversationLogsLoading } = useQuery<WhatsappSendLog[]>({
+    queryKey: ["/api/whatsapp-logs?wide=1"],
+    enabled: tab === "logs" && logsViewMode === "conversa",
+    refetchInterval: tab === "logs" && logsViewMode === "conversa" ? 10000 : false,
+  });
   const flowsList = asArray<WhatsappFlow>(flows);
   const templatesList = asArray<WhatsappTemplate>(templates);
   const leadsList = asArray<Lead>(leads);
@@ -60,7 +67,6 @@ export default function CrmWhatsapp() {
   const warrantiesList = asArray<Warranty>(warranties);
   const npsResponsesList = asArray<NpsResponse>(npsResponses);
   const maintenanceRemindersList = asArray<MaintenanceReminder>(maintenanceReminders);
-  const clientsList = asArray<Client>(clients);
   const logsList = asArray<WhatsappSendLog>(logs);
 
   const deleteFlowMutation = useMutation({
@@ -226,7 +232,7 @@ export default function CrmWhatsapp() {
       />
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-5 sm:max-w-xl">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 sm:max-w-3xl">
           <TabsTrigger value="mensagens" className="gap-1.5 text-xs" data-testid="tab-mensagens">
             <Library className="h-3.5 w-3.5" />
             Mensagens
@@ -276,13 +282,17 @@ export default function CrmWhatsapp() {
           />
           <CrmLeadList
             leads={filteredCrmLeads}
-            clients={clientsList}
-            logs={logsList}
+            flows={flowsList}
             isLoading={leadsLoading || clientsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading}
             onContactLead={openSendLead}
           />
           <CrmNextActions leads={filteredCrmLeads} isLoading={leadsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading} onContactLead={openSendLead} />
-          <CrmPipelineBoard leads={filteredCrmLeads} isLoading={leadsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading} onContactLead={openSendLead} />
+          <FlowStageBoard
+            leads={filteredCrmLeads}
+            flows={flowsList}
+            isLoading={leadsLoading || flowsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading}
+            onContactLead={openSendLead}
+          />
         </TabsContent>
 
         <TabsContent value="fluxos" className="mt-4">
@@ -297,8 +307,32 @@ export default function CrmWhatsapp() {
           />
         </TabsContent>
 
-        <TabsContent value="logs" className="mt-4">
-          <CrmContactHistory logs={logsList} isLoading={logsLoading} onRefresh={refreshLogs} />
+        <TabsContent value="logs" className="mt-4 space-y-3">
+          <div className="flex justify-end">
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-800 dark:bg-slate-950">
+              <button
+                type="button"
+                onClick={() => setLogsViewMode("lista")}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${logsViewMode === "lista" ? "bg-primary text-white" : "text-slate-500 hover:text-slate-700"}`}
+                data-testid="button-logs-view-lista"
+              >
+                <LayoutList className="h-4 w-4" /> Lista
+              </button>
+              <button
+                type="button"
+                onClick={() => setLogsViewMode("conversa")}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${logsViewMode === "conversa" ? "bg-primary text-white" : "text-slate-500 hover:text-slate-700"}`}
+                data-testid="button-logs-view-conversa"
+              >
+                <MessageCircle className="h-4 w-4" /> Conversa
+              </button>
+            </div>
+          </div>
+          {logsViewMode === "lista" ? (
+            <CrmContactHistory logs={logsList} isLoading={logsLoading} onRefresh={refreshLogs} />
+          ) : (
+            <ConversationViewer logs={asArray<WhatsappSendLog>(conversationLogs)} isLoading={conversationLogsLoading} />
+          )}
         </TabsContent>
 
         <TabsContent value="automacao" className="mt-4">

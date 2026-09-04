@@ -37,7 +37,7 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
         name: flow.name,
         trigger: flow.trigger,
         message: flow.message,
-        messageType: (flow.messageType as "text" | "buttons") || "text",
+        messageType: (flow.messageType as "text" | "buttons" | "poll") || "text",
         buttons: parsedButtons,
         includePdf: !!flow.includePdf,
         active: !!flow.active,
@@ -90,19 +90,26 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
             <Textarea placeholder="Mensagem enviada ao cliente..." value={form.message} onChange={event => setField("message", event.target.value)} rows={5} className="resize-none text-sm" data-testid="input-flow-message" />
           </div>
 
-          <div className="flex flex-col gap-3 rounded-lg bg-gray-50 p-3 dark:bg-gray-800 sm:flex-row sm:items-center">
-            <div className="flex-1">
-              <Label className="text-sm font-medium">Tipo de mensagem</Label>
-              <p className="mt-0.5 text-xs text-gray-400">Com opções exibe botões de resposta</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className={`text-sm ${form.messageType === "text" ? "font-semibold text-blue-600" : "text-gray-400"}`}>Texto</span>
-              <Switch checked={form.messageType === "buttons"} onCheckedChange={value => setField("messageType", value ? "buttons" : "text")} data-testid="switch-type" />
-              <span className={`text-sm ${form.messageType === "buttons" ? "font-semibold text-green-600" : "text-gray-400"}`}>Com Opções</span>
-            </div>
+          <div className="space-y-1">
+            <Label className="text-sm font-medium">Tipo de mensagem</Label>
+            <Select value={form.messageType} onValueChange={value => setField("messageType", value as FlowForm["messageType"])}>
+              <SelectTrigger data-testid="select-message-type"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="text">Texto simples</SelectItem>
+                <SelectItem value="buttons">Botões (não confiável no WhatsApp — evite)</SelectItem>
+                <SelectItem value="poll">Enquete (recomendado — funciona de verdade)</SelectItem>
+              </SelectContent>
+            </Select>
+            {form.messageType === "poll" && (
+              <p className="text-xs text-amber-600">
+                O cliente pode escolher só uma opção, mas o WhatsApp permite trocar o voto depois — isso é uma limitação do próprio WhatsApp, não dá pra travar isso por API.
+              </p>
+            )}
           </div>
 
-          {form.messageType === "buttons" && <ButtonEditor buttons={form.buttons} onChange={buttons => setField("buttons", buttons)} />}
+          {(form.messageType === "buttons" || form.messageType === "poll") && (
+            <ButtonEditor buttons={form.buttons} onChange={buttons => setField("buttons", buttons)} isPoll={form.messageType === "poll"} />
+          )}
 
           <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
             <div>
@@ -122,8 +129,8 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={() => {
             if (!form.name || !form.message) return toast({ title: "Preencha nome e mensagem", variant: "destructive" });
-            if (form.messageType === "buttons" && form.buttons.length === 0) return toast({ title: "Adicione pelo menos 1 opção", variant: "destructive" });
-            saveMutation.mutate({ ...form, buttons: form.messageType === "buttons" ? JSON.stringify(form.buttons) : null });
+            if ((form.messageType === "buttons" || form.messageType === "poll") && form.buttons.length === 0) return toast({ title: "Adicione pelo menos 1 opção", variant: "destructive" });
+            saveMutation.mutate({ ...form, buttons: (form.messageType === "buttons" || form.messageType === "poll") ? JSON.stringify(form.buttons) : null });
           }} disabled={saveMutation.isPending} className="bg-green-600 text-white hover:bg-green-700" data-testid="btn-save-flow">
             {saveMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {flow ? "Salvar" : "Criar Fluxo"}
@@ -134,7 +141,7 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
   );
 }
 
-function ButtonEditor({ buttons, onChange }: { buttons: ButtonItem[]; onChange: (buttons: ButtonItem[]) => void }) {
+function ButtonEditor({ buttons, onChange, isPoll = false }: { buttons: ButtonItem[]; onChange: (buttons: ButtonItem[]) => void; isPoll?: boolean }) {
   const add = () => {
     if (buttons.length >= 4) return;
     onChange([...buttons, { id: String(Date.now()), text: "", responseMessage: "" }]);
@@ -155,7 +162,9 @@ function ButtonEditor({ buttons, onChange }: { buttons: ButtonItem[]; onChange: 
             <button type="button" onClick={() => remove(index)} className="text-red-400 hover:text-red-600" data-testid={`btn-remove-${index}`}><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
           <Input placeholder="Texto da opção (ex: 📋 Quero um orçamento)" value={button.text} onChange={event => update(index, "text", event.target.value)} className="text-sm" data-testid={`btn-text-${index}`} />
-          <Textarea placeholder="Resposta automática ao selecionar esta opção..." value={button.responseMessage} onChange={event => update(index, "responseMessage", event.target.value)} rows={2} className="resize-none text-sm" data-testid={`btn-response-${index}`} />
+          {!isPoll && (
+            <Textarea placeholder="Resposta automática ao selecionar esta opção..." value={button.responseMessage} onChange={event => update(index, "responseMessage", event.target.value)} rows={2} className="resize-none text-sm" data-testid={`btn-response-${index}`} />
+          )}
         </div>
       ))}
       {buttons.length < 4 && (
