@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
+import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -4446,6 +4447,35 @@ export async function registerRoutes(
       });
       res.json({ ok: true, log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // TEMPORÁRIO: roda a migração 0010 (auto_send_whatsapp em job_statuses + tabela
+  // work_order_statuses semeada). Remover depois de rodar uma vez.
+  app.post("/api/admin/run-migration-0010", async (_req, res) => {
+    try {
+      await pool.query(`ALTER TABLE job_statuses ADD COLUMN IF NOT EXISTS auto_send_whatsapp boolean NOT NULL DEFAULT false;`);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS work_order_statuses (
+          id serial PRIMARY KEY,
+          name text NOT NULL,
+          message text NOT NULL DEFAULT '',
+          color text,
+          sort_order integer DEFAULT 0,
+          auto_send_whatsapp boolean NOT NULL DEFAULT false,
+          created_at timestamp DEFAULT now()
+        );
+      `);
+      await pool.query(`
+        INSERT INTO work_order_statuses (name, sort_order)
+        SELECT * FROM (VALUES
+          ('Planejada', 0), ('Agendada', 1), ('Em Andamento', 2), ('Concluída', 3), ('Recusado', 4)
+        ) AS seed(name, sort_order)
+        WHERE NOT EXISTS (SELECT 1 FROM work_order_statuses);
+      `);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // ─── Automação (n8n) ──────────────────────────────────────────────────────────
