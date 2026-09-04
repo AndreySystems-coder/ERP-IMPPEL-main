@@ -1,7 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
-import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -4541,20 +4540,6 @@ export async function registerRoutes(
       });
       res.json({ ok: true, log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  // TEMPORÁRIO: roda a migração 0011 (current_flow_trigger em leads + colunas da Evolution
-  // API em automation_settings). Remover depois de rodar uma vez.
-  app.post("/api/admin/run-migration-0011", async (_req, res) => {
-    try {
-      await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS current_flow_trigger text;`);
-      await pool.query(`ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS evolution_api_url text;`);
-      await pool.query(`ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS evolution_api_key text;`);
-      await pool.query(`ALTER TABLE automation_settings ADD COLUMN IF NOT EXISTS evolution_instance_name text DEFAULT 'imppel';`);
-      res.json({ ok: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
   });
 
   // ─── Automação (n8n) ──────────────────────────────────────────────────────────
