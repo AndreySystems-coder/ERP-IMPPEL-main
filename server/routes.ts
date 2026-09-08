@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
+import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -4586,6 +4587,20 @@ export async function registerRoutes(
       });
       res.json({ ok: true, log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // TEMPORÁRIO: roda a migração 0013 (baixa automática de estoque). Roda ANTES do deploy
+  // do código que usa essas colunas — lição do incidente da Etapa 9 (nunca deploy código
+  // que depende de coluna nova antes da coluna existir de verdade em produção).
+  // Remover depois de rodar uma vez.
+  app.post("/api/admin/run-migration-0013", async (_req, res) => {
+    try {
+      await pool.query(`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS materials_deducted boolean NOT NULL DEFAULT false;`);
+      await pool.query(`ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS materials_adjusted boolean NOT NULL DEFAULT false;`);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // ─── Automação (n8n) ──────────────────────────────────────────────────────────
