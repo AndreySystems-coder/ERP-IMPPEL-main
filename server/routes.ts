@@ -1061,6 +1061,9 @@ export async function registerRoutes(
       if (body.jobTitle !== undefined) updates.jobTitle = String(body.jobTitle || "").trim() || null;
       if (body.fullName !== undefined) updates.fullName = String(body.fullName || "").trim() || null;
       if (body.birthDate !== undefined) updates.birthDate = String(body.birthDate || "").trim() || null;
+      if (body.admissionDate !== undefined) updates.admissionDate = String(body.admissionDate || "").trim() || null;
+      if (body.department !== undefined) updates.department = String(body.department || "").trim() || null;
+      if (body.supervisorId !== undefined) updates.supervisorId = body.supervisorId ? Number(body.supervisorId) : null;
       if (body.status !== undefined) updates.status = body.status === "inativo" || body.status === "Inativo" ? "inativo" : "ativo";
       updates.mustChangePassword = false;
       const initialPassword = String(body.initialPassword || body.senhaInicial || "").replace(/\D/g, "");
@@ -1586,6 +1589,41 @@ export async function registerRoutes(
   app.patch("/api/help-articles/:id", requireAdmin, (req, res) => patchCompleteRow("helpArticles", req, res));
 
   app.get("/api/material-return-policy-audits", requireAnyPermission(["editInventory", "viewAllMaterials"]), (req, res) => listCompleteRows("materialReturnPolicyAudits", req, res));
+
+  // ─── Etapa 9: Treinamento, Contratação, Produtividade e Supervisão ───────────
+  app.get("/api/training-programs", requireAnyPermission(["viewTraining", "viewTeam"]), (req, res) => listCompleteRows("employeeTrainingPrograms", req, res));
+  app.post("/api/training-programs", requireAdmin, (req, res) => createCompleteRow("employeeTrainingPrograms", req, res));
+  app.patch("/api/training-programs/:id", requireAdmin, (req, res) => patchCompleteRow("employeeTrainingPrograms", req, res));
+
+  app.get("/api/training-records", requireAnyPermission(["viewTraining", "viewTeam"]), (req, res) => listCompleteRows("employeeTrainingRecords", req, res));
+  app.post("/api/training-records", requireAnyPermission(["viewTraining", "viewTeam"]), (req, res) => createCompleteRow("employeeTrainingRecords", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, certifiedByUserId: payload.certifiedByUserId || actor.userId, certifiedByUsername: payload.certifiedByUsername || actor.username };
+  }));
+  app.patch("/api/training-records/:id", requireAnyPermission(["viewTraining", "viewTeam"]), (req, res) => patchCompleteRow("employeeTrainingRecords", req, res));
+
+  app.get("/api/hiring-profiles", requireAnyPermission(["viewHiring", "viewTeam"]), (req, res) => listCompleteRows("hiringProfiles", req, res));
+  app.post("/api/hiring-profiles", requireAdmin, (req, res) => createCompleteRow("hiringProfiles", req, res));
+  app.patch("/api/hiring-profiles/:id", requireAdmin, (req, res) => patchCompleteRow("hiringProfiles", req, res));
+
+  app.get("/api/hiring-candidates", requireAnyPermission(["viewHiring", "viewTeam"]), (req, res) => listCompleteRows("hiringCandidates", req, res));
+  app.post("/api/hiring-candidates", requireAnyPermission(["viewHiring", "viewTeam"]), (req, res) => createCompleteRow("hiringCandidates", req, res));
+  app.patch("/api/hiring-candidates/:id", requireAnyPermission(["viewHiring", "viewTeam"]), (req, res) => patchCompleteRow("hiringCandidates", req, res));
+
+  app.get("/api/productivity-targets", requireAnyPermission(["viewProductivity", "viewTeam"]), (req, res) => listCompleteRows("productivityTargets", req, res));
+  app.post("/api/productivity-targets", requireAdmin, (req, res) => createCompleteRow("productivityTargets", req, res));
+  app.patch("/api/productivity-targets/:id", requireAdmin, (req, res) => patchCompleteRow("productivityTargets", req, res));
+
+  app.get("/api/supervision-checklist-templates", requireAnyPermission(["viewSupervision", "viewTeam"]), (req, res) => listCompleteRows("supervisionChecklistTemplates", req, res));
+  app.post("/api/supervision-checklist-templates", requireAdmin, (req, res) => createCompleteRow("supervisionChecklistTemplates", req, res));
+  app.patch("/api/supervision-checklist-templates/:id", requireAdmin, (req, res) => patchCompleteRow("supervisionChecklistTemplates", req, res));
+
+  app.get("/api/supervision-checklist-runs", requireAnyPermission(["viewSupervision", "viewTeam"]), (req, res) => listCompleteRows("supervisionChecklistRuns", req, res));
+  app.post("/api/supervision-checklist-runs", requireAnyPermission(["viewSupervision", "viewTeam"]), (req, res) => createCompleteRow("supervisionChecklistRuns", req, res, (payload) => {
+    const actor = sessionActor(req);
+    return { ...payload, supervisorUserId: payload.supervisorUserId || actor.userId, supervisorUsername: payload.supervisorUsername || actor.username };
+  }));
+  app.patch("/api/supervision-checklist-runs/:id", requireAnyPermission(["viewSupervision", "viewTeam"]), (req, res) => patchCompleteRow("supervisionChecklistRuns", req, res));
 
   app.get("/api/stage7/commercial-dashboard", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrm"]), async (_req, res) => {
     try {

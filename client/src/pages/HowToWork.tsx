@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useSearch } from "wouter";
-import { BookOpen, ExternalLink, Search, Route, Users, ShieldCheck } from "lucide-react";
+import { BookOpen, ExternalLink, Search, Route, Users, ShieldCheck, Landmark } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -201,6 +201,17 @@ const glossaryCategories = [
       ["Restauração", "Importação validada com preview e confirmação para recuperar dados."],
     ],
   },
+  {
+    category: "Equipe / RH",
+    terms: [
+      ["Admissão", "Data em que o funcionário passou a integrar a equipe."],
+      ["Supervisor", "Funcionário responsável por acompanhar e avaliar outro dentro da equipe."],
+      ["Programa de treinamento", "Conjunto de orientações que um funcionário precisa concluir para um cargo."],
+      ["Checklist de supervisão", "Lista de conferência periódica preenchida pelo encarregado/supervisor sobre a equipe ou obra."],
+      ["Meta de produtividade", "Referência esperada (ex.: m²/dia) para comparar com o produzido de verdade."],
+      ["Perfil de contratação", "Descrição do que se espera de um candidato para um cargo, usada para guiar a entrevista."],
+    ],
+  },
 ];
 
 type GuideStep = { title: string; description?: string };
@@ -223,7 +234,8 @@ export default function HowToWork() {
   const queryString = useSearch();
   const { data: articles = [] } = useQuery<any[]>({ queryKey: ["/api/help-articles"] });
   const { data: procedures = [] } = useQuery<any[]>({ queryKey: ["/api/quality/procedures"] });
-  const guides = [...baseGuides, ...articles.filter((article) => article.status !== "inativo")];
+  const guides = [...baseGuides, ...articles.filter((article) => article.status !== "inativo" && article.moduleKey !== "manual-empresa")];
+  const manualArticles = articles.filter((article) => article.moduleKey === "manual-empresa" && article.status !== "inativo");
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return guides;
@@ -372,6 +384,41 @@ export default function HowToWork() {
               </TabsContent>
             ))}
           </Tabs>
+        </CardContent>
+      </Card>
+      <Card className="border-amber-300/60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg"><Landmark className="h-5 w-5 text-amber-600" />Manual da Empresa</CardTitle>
+          <p className="text-sm text-slate-500">Missão, conduta, organograma e glossário oficial da IMPPEL. Itens marcados como rascunho ainda não foram aprovados.</p>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {manualArticles.map((article) => (
+            <div key={article.id} className="rounded-lg border p-3 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-slate-800">{article.title}</span>
+                <Badge variant={article.status === "aprovado" ? "default" : "secondary"}>{article.status === "aprovado" ? "Aprovado" : "Rascunho — aguardando revisão"}</Badge>
+              </div>
+              {article.summary && <p className="mt-1 text-slate-600">{article.summary}</p>}
+              {normalizeSteps(article.steps).length > 0 && (
+                <Accordion type="single" collapsible className="mt-2">
+                  <AccordionItem value="steps">
+                    <AccordionTrigger className="py-1.5 text-xs">Ver conteúdo</AccordionTrigger>
+                    <AccordionContent>
+                      <ol className="space-y-1.5 pl-4 text-slate-600">
+                        {normalizeSteps(article.steps).map((step) => (
+                          <li key={step.title}>
+                            <span className="font-semibold text-slate-700">{step.title}</span>
+                            {step.description && <p className="mt-0.5 text-xs text-slate-500">{step.description}</p>}
+                          </li>
+                        ))}
+                      </ol>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
+            </div>
+          ))}
+          {manualArticles.length === 0 && <p className="text-sm text-slate-500">Nenhum conteúdo do manual cadastrado ainda.</p>}
         </CardContent>
       </Card>
       <Card>

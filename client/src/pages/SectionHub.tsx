@@ -5,11 +5,13 @@ import {
   Building2,
   Calendar,
   Clipboard,
+  ClipboardCheck,
   ClipboardList,
   CreditCard,
   DollarSign,
   FileText,
   Gauge,
+  GraduationCap,
   Hash,
   Heart,
   Layers,
@@ -289,6 +291,9 @@ export function TeamHub() {
           { title: "Funcionários", description: "Atalho autorizado para cadastro de usuários e cargos.", href: "/usuarios", icon: UserCog, permission: "viewUsers", accent: accents.slate },
           { title: "Produtividade", description: "Horas, área executada e desempenho por técnico.", href: "/equipe-produtividade", icon: Gauge, permission: "viewProductivity", accent: accents.blue },
           { title: "Governança e Apuração", description: "Responsabilidade sobre ferramentas/equipamentos e apuração de descontos salariais.", href: "/equipe/governanca", icon: ShieldAlert, permission: "viewUsers", accent: accents.rose },
+          { title: "Treinamento", description: "Programas de treinamento por cargo e quem já concluiu cada um.", href: "/treinamento", icon: GraduationCap, permission: "viewTraining", accent: accents.emerald },
+          { title: "Contratação", description: "Perfis de vaga e acompanhamento de candidatos por etapa.", href: "/contratacao", icon: Briefcase, permission: "viewHiring", accent: accents.violet },
+          { title: "Supervisão", description: "Checklists periódicos de supervisão da equipe e das obras.", href: "/supervisao", icon: ClipboardCheck, permission: "viewSupervision", accent: accents.amber },
         ],
       }}
     />
