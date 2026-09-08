@@ -54,10 +54,7 @@ export type PermissionKey =
   | "uploadVisualAssets"
   | "viewVisualOriginals"
   | "generateVisualMaterials"
-  | "publishVisualMaterials"
-  | "viewTraining"
-  | "viewHiring"
-  | "viewSupervision";
+  | "publishVisualMaterials";
 
 const COMPATIBILITY: Partial<Record<PermissionKey, PermissionKey[]>> = {
   viewCrm: ["viewCommercialSystem", "viewLeads", "viewCrmWhatsapp", "viewClients", "viewMarketingContent"],
@@ -68,7 +65,7 @@ const COMPATIBILITY: Partial<Record<PermissionKey, PermissionKey[]>> = {
   viewInventory: ["viewInventoryCurrent", "viewInventoryCount", "viewInventoryMovements"],
   viewInventoryCurrent: ["viewInventory"],
   viewInventoryMovements: ["viewInventory"],
-  viewTeam: ["viewProductivity", "registrarMaterials", "viewMaterialSales", "viewWarranties", "viewPostSale", "viewTraining", "viewHiring", "viewSupervision"],
+  viewTeam: ["viewProductivity", "registrarMaterials", "viewMaterialSales", "viewWarranties", "viewPostSale"],
   viewMaterialSales: ["createMaterialSales", "approveMaterialSales"],
   viewFinancials: ["viewPayments", "viewCashFlow", "viewFinancialSettings"],
   viewCashFlow: ["viewFinancials"],
@@ -130,12 +127,9 @@ const PATH_PERMISSIONS: Array<{ path: string; permissions: PermissionKey[] }> = 
   { path: "/financials", permissions: ["viewFinancials", "viewCashFlow"] },
   { path: "/pagamentos-config", permissions: ["viewFinancialSettings"] },
   { path: "/relatorios", permissions: ["viewFinancials"] },
-  { path: "/equipe", permissions: ["viewTeam", "viewProductivity", "registrarMaterials", "viewMaterialSales", "viewWarranties", "viewPostSale", "viewTraining", "viewHiring", "viewSupervision"] },
+  { path: "/equipe", permissions: ["viewTeam", "viewProductivity", "registrarMaterials", "viewMaterialSales", "viewWarranties", "viewPostSale"] },
   { path: "/equipe-produtividade", permissions: ["viewProductivity"] },
   { path: "/equipe/governanca", permissions: ["viewUsers"] },
-  { path: "/treinamento", permissions: ["viewTraining"] },
-  { path: "/contratacao", permissions: ["viewHiring"] },
-  { path: "/supervisao", permissions: ["viewSupervision"] },
   { path: "/controle-materiais", permissions: ["registrarMaterials"] },
   { path: "/vendas-materiais", permissions: ["viewMaterialSales", "createMaterialSales", "approveMaterialSales"] },
   { path: "/garantias", permissions: ["viewWarranties"] },

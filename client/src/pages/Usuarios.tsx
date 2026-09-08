@@ -26,8 +26,6 @@ interface UserItem {
   jobTitle: string | null;
   fullName: string | null;
   birthDate: string | null;
-  admissionDate: string | null;
-  department: string | null;
   status: string;
   mustChangePassword: boolean;
   roleName: string | null;
@@ -105,9 +103,6 @@ const PERMISSION_GROUPS = [
       { key: "approveMaterialSales", label: "Aprovar vendas e baixar estoque" },
       { key: "viewWarranties", label: "Garantias" },
       { key: "viewPostSale", label: "Pós-venda" },
-      { key: "viewTraining", label: "Treinamento" },
-      { key: "viewHiring", label: "Contratação" },
-      { key: "viewSupervision", label: "Supervisão" },
     ],
   },
   {
@@ -183,8 +178,6 @@ export default function Usuarios() {
     username: "",
     fullName: "",
     birthDate: "",
-    admissionDate: "",
-    department: "",
     status: "ativo",
     role: "funcionario" as "admin" | "funcionario",
     roleId: "none",
@@ -257,7 +250,7 @@ export default function Usuarios() {
     onSuccess: () => {
       refreshUsersAndSession();
       setEditingUserId(null);
-      setUserDraft({ username: "", fullName: "", birthDate: "", admissionDate: "", department: "", status: "ativo", role: "funcionario", roleId: "none", jobTitle: "", mustChangePassword: false, initialPassword: "" });
+      setUserDraft({ username: "", fullName: "", birthDate: "", status: "ativo", role: "funcionario", roleId: "none", jobTitle: "", mustChangePassword: false, initialPassword: "" });
       toast({ title: "Usuário atualizado!" });
     },
     onError: async (err: any) => toast({ title: err.message || "Erro ao atualizar usuário", variant: "destructive" }),
@@ -320,8 +313,6 @@ export default function Usuarios() {
       username: user.username,
       fullName: user.fullName || "",
       birthDate: user.birthDate || "",
-      admissionDate: user.admissionDate || "",
-      department: user.department || "",
       status: user.status || "ativo",
       role: user.role,
       roleId: user.roleId ? String(user.roleId) : "none",
@@ -527,14 +518,6 @@ export default function Usuarios() {
                                   <div className="space-y-1.5">
                                     <Label>Data de nascimento</Label>
                                     <Input value={userDraft.birthDate} onChange={e => setUserDraft(prev => ({ ...prev, birthDate: e.target.value }))} placeholder="DD/MM/AAAA" data-testid={`input-edit-birthdate-${u.id}`} />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <Label>Data de admissão</Label>
-                                    <Input value={userDraft.admissionDate} onChange={e => setUserDraft(prev => ({ ...prev, admissionDate: e.target.value }))} placeholder="DD/MM/AAAA" data-testid={`input-edit-admissiondate-${u.id}`} />
-                                  </div>
-                                  <div className="space-y-1.5">
-                                    <Label>Setor/Departamento</Label>
-                                    <Input value={userDraft.department} onChange={e => setUserDraft(prev => ({ ...prev, department: e.target.value }))} placeholder="Ex: Execução, Comercial" data-testid={`input-edit-department-${u.id}`} />
                                   </div>
                                   <div className="space-y-1.5">
                                     <Label>Status</Label>

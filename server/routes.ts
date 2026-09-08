@@ -1,7 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
-import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -1061,9 +1060,6 @@ export async function registerRoutes(
       if (body.jobTitle !== undefined) updates.jobTitle = String(body.jobTitle || "").trim() || null;
       if (body.fullName !== undefined) updates.fullName = String(body.fullName || "").trim() || null;
       if (body.birthDate !== undefined) updates.birthDate = String(body.birthDate || "").trim() || null;
-      if (body.admissionDate !== undefined) updates.admissionDate = String(body.admissionDate || "").trim() || null;
-      if (body.department !== undefined) updates.department = String(body.department || "").trim() || null;
-      if (body.supervisorId !== undefined) updates.supervisorId = body.supervisorId ? Number(body.supervisorId) : null;
       if (body.status !== undefined) updates.status = body.status === "inativo" || body.status === "Inativo" ? "inativo" : "ativo";
       updates.mustChangePassword = false;
       const initialPassword = String(body.initialPassword || body.senhaInicial || "").replace(/\D/g, "");
@@ -1589,41 +1585,6 @@ export async function registerRoutes(
   app.patch("/api/help-articles/:id", requireAdmin, (req, res) => patchCompleteRow("helpArticles", req, res));
 
   app.get("/api/material-return-policy-audits", requireAnyPermission(["editInventory", "viewAllMaterials"]), (req, res) => listCompleteRows("materialReturnPolicyAudits", req, res));
-
-  // ─── Etapa 9: Treinamento, Contratação, Produtividade e Supervisão ───────────
-  app.get("/api/training-programs", requireAnyPermission(["viewTraining", "viewTeam"]), (req, res) => listCompleteRows("employeeTrainingPrograms", req, res));
-  app.post("/api/training-programs", requireAdmin, (req, res) => createCompleteRow("employeeTrainingPrograms", req, res));
-  app.patch("/api/training-programs/:id", requireAdmin, (req, res) => patchCompleteRow("employeeTrainingPrograms", req, res));
-
-  app.get("/api/training-records", requireAnyPermission(["viewTraining", "viewTeam"]), (req, res) => listCompleteRows("employeeTrainingRecords", req, res));
-  app.post("/api/training-records", requireAnyPermission(["viewTraining", "viewTeam"]), (req, res) => createCompleteRow("employeeTrainingRecords", req, res, (payload) => {
-    const actor = sessionActor(req);
-    return { ...payload, certifiedByUserId: payload.certifiedByUserId || actor.userId, certifiedByUsername: payload.certifiedByUsername || actor.username };
-  }));
-  app.patch("/api/training-records/:id", requireAnyPermission(["viewTraining", "viewTeam"]), (req, res) => patchCompleteRow("employeeTrainingRecords", req, res));
-
-  app.get("/api/hiring-profiles", requireAnyPermission(["viewHiring", "viewTeam"]), (req, res) => listCompleteRows("hiringProfiles", req, res));
-  app.post("/api/hiring-profiles", requireAdmin, (req, res) => createCompleteRow("hiringProfiles", req, res));
-  app.patch("/api/hiring-profiles/:id", requireAdmin, (req, res) => patchCompleteRow("hiringProfiles", req, res));
-
-  app.get("/api/hiring-candidates", requireAnyPermission(["viewHiring", "viewTeam"]), (req, res) => listCompleteRows("hiringCandidates", req, res));
-  app.post("/api/hiring-candidates", requireAnyPermission(["viewHiring", "viewTeam"]), (req, res) => createCompleteRow("hiringCandidates", req, res));
-  app.patch("/api/hiring-candidates/:id", requireAnyPermission(["viewHiring", "viewTeam"]), (req, res) => patchCompleteRow("hiringCandidates", req, res));
-
-  app.get("/api/productivity-targets", requireAnyPermission(["viewProductivity", "viewTeam"]), (req, res) => listCompleteRows("productivityTargets", req, res));
-  app.post("/api/productivity-targets", requireAdmin, (req, res) => createCompleteRow("productivityTargets", req, res));
-  app.patch("/api/productivity-targets/:id", requireAdmin, (req, res) => patchCompleteRow("productivityTargets", req, res));
-
-  app.get("/api/supervision-checklist-templates", requireAnyPermission(["viewSupervision", "viewTeam"]), (req, res) => listCompleteRows("supervisionChecklistTemplates", req, res));
-  app.post("/api/supervision-checklist-templates", requireAdmin, (req, res) => createCompleteRow("supervisionChecklistTemplates", req, res));
-  app.patch("/api/supervision-checklist-templates/:id", requireAdmin, (req, res) => patchCompleteRow("supervisionChecklistTemplates", req, res));
-
-  app.get("/api/supervision-checklist-runs", requireAnyPermission(["viewSupervision", "viewTeam"]), (req, res) => listCompleteRows("supervisionChecklistRuns", req, res));
-  app.post("/api/supervision-checklist-runs", requireAnyPermission(["viewSupervision", "viewTeam"]), (req, res) => createCompleteRow("supervisionChecklistRuns", req, res, (payload) => {
-    const actor = sessionActor(req);
-    return { ...payload, supervisorUserId: payload.supervisorUserId || actor.userId, supervisorUsername: payload.supervisorUsername || actor.username };
-  }));
-  app.patch("/api/supervision-checklist-runs/:id", requireAnyPermission(["viewSupervision", "viewTeam"]), (req, res) => patchCompleteRow("supervisionChecklistRuns", req, res));
 
   app.get("/api/stage7/commercial-dashboard", requireAnyPermission(["viewCommercialSystem", "viewLeads", "viewCrm"]), async (_req, res) => {
     try {
@@ -4587,70 +4548,6 @@ export async function registerRoutes(
       });
       res.json({ ok: true, log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
-  });
-
-  // TEMPORÁRIO: roda a migração 0012 (Etapa 9 — treinamento, contratação, produtividade,
-  // supervisão e campos de RH em users). Remover depois de rodar uma vez.
-  app.post("/api/admin/run-migration-0012", async (_req, res) => {
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS employee_training_programs (
-          id serial PRIMARY KEY, name text NOT NULL, target_role text, description text,
-          required_frequency_days integer, active boolean NOT NULL DEFAULT true,
-          audit_trail text DEFAULT '[]', created_at timestamp DEFAULT now()
-        );
-      `);
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS employee_training_records (
-          id serial PRIMARY KEY, user_id integer NOT NULL, program_id integer NOT NULL,
-          status text NOT NULL DEFAULT 'concluido', completed_at timestamp,
-          certified_by_user_id integer, certified_by_username text, notes text,
-          audit_trail text DEFAULT '[]', created_at timestamp DEFAULT now()
-        );
-      `);
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS hiring_profiles (
-          id serial PRIMARY KEY, role_name text NOT NULL, ideal_profile text, requirements text,
-          interview_script text, active boolean NOT NULL DEFAULT true,
-          audit_trail text DEFAULT '[]', created_at timestamp DEFAULT now()
-        );
-      `);
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS hiring_candidates (
-          id serial PRIMARY KEY, name text NOT NULL, role_name text, phone text, email text,
-          stage text NOT NULL DEFAULT 'triagem', notes text, applied_at timestamp DEFAULT now(),
-          audit_trail text DEFAULT '[]', created_at timestamp DEFAULT now(), updated_at timestamp DEFAULT now()
-        );
-      `);
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS productivity_targets (
-          id serial PRIMARY KEY, label text NOT NULL, service_type text, target_value real NOT NULL,
-          unit text NOT NULL DEFAULT 'm²/dia', active boolean NOT NULL DEFAULT true,
-          audit_trail text DEFAULT '[]', created_at timestamp DEFAULT now()
-        );
-      `);
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS supervision_checklist_templates (
-          id serial PRIMARY KEY, name text NOT NULL, target_role text, frequency text NOT NULL DEFAULT 'diario',
-          items text DEFAULT '[]', active boolean NOT NULL DEFAULT true,
-          audit_trail text DEFAULT '[]', created_at timestamp DEFAULT now()
-        );
-      `);
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS supervision_checklist_runs (
-          id serial PRIMARY KEY, template_id integer NOT NULL, supervisor_user_id integer,
-          supervisor_username text, employee_user_id integer, work_order_id integer,
-          run_date timestamp DEFAULT now(), responses text DEFAULT '{}', pending_count integer NOT NULL DEFAULT 0,
-          notes text, audit_trail text DEFAULT '[]', created_at timestamp DEFAULT now()
-        );
-      `);
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admission_date text;`);
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS department text;`);
-      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS supervisor_id integer;`);
-      res.json({ ok: true });
-    } catch (err: any) {
-      res.status(500).json({ message: err.message });
-    }
   });
 
   // ─── Automação (n8n) ──────────────────────────────────────────────────────────

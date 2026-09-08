@@ -39,9 +39,6 @@ import StatusPersonalizados from "@/pages/StatusPersonalizados";
 import StatusObras from "@/pages/StatusObras";
 import TeamProductivity from "@/pages/TeamProductivity";
 import TeamGovernance from "@/pages/TeamGovernance";
-import Treinamento from "@/pages/Treinamento";
-import Contratacao from "@/pages/Contratacao";
-import Supervisao from "@/pages/Supervisao";
 import ToolsAndEquipment from "@/pages/ToolsAndEquipment";
 import Usuarios from "@/pages/Usuarios";
 import VisualIdentity from "@/pages/VisualIdentity";
@@ -132,9 +129,6 @@ export const adminRoutes: AppRoute[] = [
   { path: "/relatorios", component: Reports, access: "admin", withLayout: true },
   { path: "/equipe-produtividade", component: TeamProductivity, access: "admin", withLayout: true },
   { path: "/equipe/governanca", component: TeamGovernance, access: "admin", withLayout: true },
-  { path: "/treinamento", component: Treinamento, access: "admin", withLayout: true },
-  { path: "/contratacao", component: Contratacao, access: "admin", withLayout: true },
-  { path: "/supervisao", component: Supervisao, access: "admin", withLayout: true },
   { path: "/pos-venda", component: PostSale, access: "admin", withLayout: true },
   { path: "/contagem-fisica", component: ContageEmFisica, access: "admin", withLayout: true },
   { path: "/quote-templates", component: QuoteTemplates, access: "admin", withLayout: true },
