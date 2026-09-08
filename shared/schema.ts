@@ -22,6 +22,9 @@ export const users = pgTable("users", {
   birthDate: text("birth_date"),
   status: text("status").notNull().default('ativo'),
   mustChangePassword: boolean("must_change_password").notNull().default(false),
+  admissionDate: text("admission_date"),
+  department: text("department"),
+  supervisorId: integer("supervisor_id"),
 });
 
 export const clients = pgTable("clients", {
@@ -1513,3 +1516,118 @@ export type WhatsappSendLog = typeof whatsappSendLogs.$inferSelect;
 export const insertRoleSchema = createInsertSchema(roles).omit({ id: true, createdAt: true });
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type Role = typeof roles.$inferSelect;
+
+// ─── Etapa 9: Treinamento, Contratação, Produtividade e Supervisão ────────────
+export const employeeTrainingPrograms = pgTable("employee_training_programs", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  targetRole: text("target_role"),
+  description: text("description"),
+  requiredFrequencyDays: integer("required_frequency_days"),
+  active: boolean("active").notNull().default(true),
+  auditTrail: text("audit_trail").default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const employeeTrainingRecords = pgTable("employee_training_records", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  programId: integer("program_id").notNull(),
+  status: text("status").notNull().default("concluido"),
+  completedAt: timestamp("completed_at"),
+  certifiedByUserId: integer("certified_by_user_id"),
+  certifiedByUsername: text("certified_by_username"),
+  notes: text("notes"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const hiringProfiles = pgTable("hiring_profiles", {
+  id: serial("id").primaryKey(),
+  roleName: text("role_name").notNull(),
+  idealProfile: text("ideal_profile"),
+  requirements: text("requirements"),
+  interviewScript: text("interview_script"),
+  active: boolean("active").notNull().default(true),
+  auditTrail: text("audit_trail").default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const hiringCandidates = pgTable("hiring_candidates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  roleName: text("role_name"),
+  phone: text("phone"),
+  email: text("email"),
+  stage: text("stage").notNull().default("triagem"),
+  notes: text("notes"),
+  appliedAt: timestamp("applied_at").defaultNow(),
+  auditTrail: text("audit_trail").default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const productivityTargets = pgTable("productivity_targets", {
+  id: serial("id").primaryKey(),
+  label: text("label").notNull(),
+  serviceType: text("service_type"),
+  targetValue: real("target_value").notNull(),
+  unit: text("unit").notNull().default("m²/dia"),
+  active: boolean("active").notNull().default(true),
+  auditTrail: text("audit_trail").default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const supervisionChecklistTemplates = pgTable("supervision_checklist_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  targetRole: text("target_role"),
+  frequency: text("frequency").notNull().default("diario"),
+  items: text("items").default("[]"),
+  active: boolean("active").notNull().default(true),
+  auditTrail: text("audit_trail").default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const supervisionChecklistRuns = pgTable("supervision_checklist_runs", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull(),
+  supervisorUserId: integer("supervisor_user_id"),
+  supervisorUsername: text("supervisor_username"),
+  employeeUserId: integer("employee_user_id"),
+  workOrderId: integer("work_order_id"),
+  runDate: timestamp("run_date").defaultNow(),
+  responses: text("responses").default("{}"),
+  pendingCount: integer("pending_count").notNull().default(0),
+  notes: text("notes"),
+  auditTrail: text("audit_trail").default("[]"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertEmployeeTrainingProgramSchema = createInsertSchema(employeeTrainingPrograms).omit({ id: true, createdAt: true });
+export type InsertEmployeeTrainingProgram = z.infer<typeof insertEmployeeTrainingProgramSchema>;
+export type EmployeeTrainingProgram = typeof employeeTrainingPrograms.$inferSelect;
+
+export const insertEmployeeTrainingRecordSchema = createInsertSchema(employeeTrainingRecords).omit({ id: true, createdAt: true });
+export type InsertEmployeeTrainingRecord = z.infer<typeof insertEmployeeTrainingRecordSchema>;
+export type EmployeeTrainingRecord = typeof employeeTrainingRecords.$inferSelect;
+
+export const insertHiringProfileSchema = createInsertSchema(hiringProfiles).omit({ id: true, createdAt: true });
+export type InsertHiringProfile = z.infer<typeof insertHiringProfileSchema>;
+export type HiringProfile = typeof hiringProfiles.$inferSelect;
+
+export const insertHiringCandidateSchema = createInsertSchema(hiringCandidates).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertHiringCandidate = z.infer<typeof insertHiringCandidateSchema>;
+export type HiringCandidate = typeof hiringCandidates.$inferSelect;
+
+export const insertProductivityTargetSchema = createInsertSchema(productivityTargets).omit({ id: true, createdAt: true });
+export type InsertProductivityTarget = z.infer<typeof insertProductivityTargetSchema>;
+export type ProductivityTarget = typeof productivityTargets.$inferSelect;
+
+export const insertSupervisionChecklistTemplateSchema = createInsertSchema(supervisionChecklistTemplates).omit({ id: true, createdAt: true });
+export type InsertSupervisionChecklistTemplate = z.infer<typeof insertSupervisionChecklistTemplateSchema>;
+export type SupervisionChecklistTemplate = typeof supervisionChecklistTemplates.$inferSelect;
+
+export const insertSupervisionChecklistRunSchema = createInsertSchema(supervisionChecklistRuns).omit({ id: true, createdAt: true });
+export type InsertSupervisionChecklistRun = z.infer<typeof insertSupervisionChecklistRunSchema>;
+export type SupervisionChecklistRun = typeof supervisionChecklistRuns.$inferSelect;

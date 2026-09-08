@@ -10,6 +10,7 @@ import {
   visualBrandKits, visualMediaStandards, visualMediaAuthorizations, visualAssets, visualTemplates, visualCompositions,
   commercialPolicies, discountRequests, commissionRecords, logisticsRecords, quoteVersions, scopeChangeRequests,
   technicalProcedures, checklistTemplates, workOrderQualityRuns, qualityEvents,
+  employeeTrainingPrograms, employeeTrainingRecords, hiringProfiles, hiringCandidates, productivityTargets, supervisionChecklistTemplates, supervisionChecklistRuns,
   roles,
   type Role, type InsertRole,
   type User, type Client, type Service, type Lead, type Job, type WorkOrder, type Inventory, type InventoryMovement, type Payment, type Product, type JobTracking, type PriorityRules, type Transaction, type Setting, type CostConfig, type InsertCostConfig, type ObraRegistro, type InsertObraRegistro,
@@ -67,6 +68,7 @@ export const COMPLETE_BACKUP_MODULE_TABLES = {
   centralAjuda: ["helpArticles"],
   identidadeVisual: ["visualBrandKits", "visualMediaStandards", "visualMediaAuthorizations", "visualAssets", "visualTemplates", "visualCompositions"],
   auditoriaMateriais: ["materialReturnPolicyAudits"],
+  equipeTreinamento: ["employeeTrainingPrograms", "employeeTrainingRecords", "hiringProfiles", "hiringCandidates", "productivityTargets", "supervisionChecklistTemplates", "supervisionChecklistRuns"],
 } as const;
 
 export type CompleteBackupModule = keyof typeof COMPLETE_BACKUP_MODULE_TABLES;
@@ -142,6 +144,13 @@ const COMPLETE_TABLES: Record<string, { table: any; dbName: string }> = {
   visualTemplates: { table: visualTemplates, dbName: "visual_templates" },
   visualCompositions: { table: visualCompositions, dbName: "visual_compositions" },
   materialReturnPolicyAudits: { table: materialReturnPolicyAudits, dbName: "material_return_policy_audits" },
+  employeeTrainingPrograms: { table: employeeTrainingPrograms, dbName: "employee_training_programs" },
+  employeeTrainingRecords: { table: employeeTrainingRecords, dbName: "employee_training_records" },
+  hiringProfiles: { table: hiringProfiles, dbName: "hiring_profiles" },
+  hiringCandidates: { table: hiringCandidates, dbName: "hiring_candidates" },
+  productivityTargets: { table: productivityTargets, dbName: "productivity_targets" },
+  supervisionChecklistTemplates: { table: supervisionChecklistTemplates, dbName: "supervision_checklist_templates" },
+  supervisionChecklistRuns: { table: supervisionChecklistRuns, dbName: "supervision_checklist_runs" },
 };
 
 function normalizeCompleteTableRow(tableKey: string, row: any) {
@@ -1454,6 +1463,13 @@ export function createMemoryStorage(): IStorage {
     visualTemplates: [],
     visualCompositions: [],
     materialReturnPolicyAudits: [],
+    employeeTrainingPrograms: [],
+    employeeTrainingRecords: [],
+    hiringProfiles: [],
+    hiringCandidates: [],
+    productivityTargets: [],
+    supervisionChecklistTemplates: [],
+    supervisionChecklistRuns: [],
   };
 
   const ids: Record<string, number> = Object.fromEntries(Object.keys(data).map(key => [key, 1]));

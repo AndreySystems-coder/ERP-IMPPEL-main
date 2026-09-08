@@ -25,11 +25,15 @@ type ProductionLog = {
 
 const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
 
+type ProductivityTarget = { id: number; label: string; serviceType?: string | null; targetValue: number; unit: string; active: boolean };
+
 export default function TeamProductivity() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: logs = [], isLoading } = useQuery<ProductionLog[]>({ queryKey: ["/api/production-logs"] });
+  const { data: targets = [] } = useQuery<ProductivityTarget[]>({ queryKey: ["/api/productivity-targets"] });
   const logsList = asArray<ProductionLog>(logs);
+  const targetsList = asArray<ProductivityTarget>(targets).filter(t => t.active);
 
   const [tab, setTab]   = useState<"registros" | "resumo">("registros");
   const [isModal, setModal] = useState(false);
@@ -110,6 +114,12 @@ export default function TeamProductivity() {
   });
 
   const techList = Object.entries(summary).sort((a, b) => b[1].m2 - a[1].m2);
+  const targetForServices = (services: Set<string>) => targetsList.find(t => t.serviceType && services.has(t.serviceType));
+  // A meta pode ser por dia ou por hora — compara com a métrica certa em vez de misturar unidades.
+  const actualForTarget = (data: TechSummary, target: ProductivityTarget) => {
+    if (target.unit.toLowerCase().includes("dia")) return data.days.size > 0 ? data.m2 / data.days.size : null;
+    return data.hours > 0 ? data.m2 / data.hours : null;
+  };
   const totalM2    = logsList.reduce((s, l) => s + (l.squareMeters || 0), 0);
   const totalHours = logsList.reduce((s, l) => s + (l.hoursWorked || 0), 0);
   const avgM2h     = totalHours > 0 ? (totalM2 / totalHours).toFixed(2) : "—";
@@ -219,7 +229,10 @@ export default function TeamProductivity() {
           ) : (
             <div className="divide-y divide-slate-100">
               {techList.map(([name, data]) => {
-                const m2h = data.hours > 0 ? (data.m2 / data.hours).toFixed(2) : "—";
+                const m2h = data.hours > 0 ? data.m2 / data.hours : null;
+                const target = targetForServices(data.services);
+                const actual = target ? actualForTarget(data, target) : null;
+                const aboveTarget = target && actual != null ? actual >= target.targetValue : null;
                 return (
                   <div key={name} className="flex items-center gap-4 px-6 py-5">
                     <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
@@ -239,8 +252,13 @@ export default function TeamProductivity() {
                         <p className="text-xs text-slate-400 font-medium">horas</p>
                       </div>
                       <div>
-                        <p className="text-xl font-bold text-green-600">{m2h}</p>
+                        <p className="text-xl font-bold text-green-600">{m2h != null ? m2h.toFixed(2) : "—"}</p>
                         <p className="text-xs text-slate-400 font-medium">m²/h</p>
+                        {target && actual != null && (
+                          <p className={`mt-0.5 text-[11px] font-semibold ${aboveTarget ? "text-green-600" : "text-red-600"}`}>
+                            {aboveTarget ? "Acima da meta" : "Abaixo da meta"}: {actual.toFixed(1)}/{target.targetValue} {target.unit}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
