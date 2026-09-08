@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bot, ClipboardList, LayoutList, Library, MessageCircle, Users, Zap } from "lucide-react";
+import { Bot, ClipboardList, LayoutList, MessageCircle, Users, Zap } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -11,37 +11,29 @@ import { ConversationViewer } from "@/features/crm-whatsapp/components/Conversat
 import { CrmContactHistory } from "@/features/crm-whatsapp/components/CrmContactHistory";
 import { CrmFilters } from "@/features/crm-whatsapp/components/CrmFilters";
 import { CrmLeadList } from "@/features/crm-whatsapp/components/CrmLeadList";
-import { CrmNextActions } from "@/features/crm-whatsapp/components/CrmNextActions";
 import { CrmWhatsappHeader } from "@/features/crm-whatsapp/components/CrmWhatsappHeader";
 import { FlowLibrary } from "@/features/crm-whatsapp/components/FlowLibrary";
 import { FlowModal } from "@/features/crm-whatsapp/components/FlowModal";
 import { FlowStageBoard } from "@/features/crm-whatsapp/components/FlowStageBoard";
 import { SendModal } from "@/features/crm-whatsapp/components/SendModal";
-import { TemplateLibrary } from "@/features/crm-whatsapp/components/TemplateLibrary";
-import { TemplateModal } from "@/features/crm-whatsapp/components/TemplateModal";
-import type { ButtonItem, CrmLeadOperationalLinks, SendTarget, WhatsappTemplate } from "@/features/crm-whatsapp/types";
+import type { ButtonItem, CrmLeadOperationalLinks, SendTarget } from "@/features/crm-whatsapp/types";
 import type { Client, Job, Lead, MaintenanceReminder, NpsResponse, Warranty, WhatsappFlow, WhatsappSendLog, WorkOrder } from "@shared/schema";
 
 type CrmLeadWithLinks = Lead & { operationalLinks?: CrmLeadOperationalLinks };
 
 export default function CrmWhatsapp() {
   const { toast } = useToast();
-  const [tab, setTab] = useState("mensagens");
+  const [tab, setTab] = useState("kanban");
   const [flowModalOpen, setFlowModalOpen] = useState(false);
   const [editFlow, setEditFlow] = useState<WhatsappFlow | null>(null);
-  const [templateModalOpen, setTemplateModalOpen] = useState(false);
-  const [editTemplate, setEditTemplate] = useState<WhatsappTemplate | null>(null);
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [sendTarget, setSendTarget] = useState<SendTarget | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [copiedId, setCopiedId] = useState<number | null>(null);
   const [crmSearch, setCrmSearch] = useState("");
   const [crmStatus, setCrmStatus] = useState("all");
   const [crmSource, setCrmSource] = useState("all");
   const [logsViewMode, setLogsViewMode] = useState<"lista" | "conversa">("lista");
 
   const { data: flows = [], isLoading: flowsLoading } = useQuery<WhatsappFlow[]>({ queryKey: ["/api/whatsapp-flows"] });
-  const { data: templates = [], isLoading: templatesLoading } = useQuery<WhatsappTemplate[]>({ queryKey: ["/api/whatsapp-templates"] });
   const { data: leads = [], isLoading: leadsLoading } = useQuery<Lead[]>({ queryKey: ["/api/leads"] });
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
   const { data: workOrders = [], isLoading: workOrdersLoading } = useQuery<WorkOrder[]>({ queryKey: ["/api/work-orders"] });
@@ -60,7 +52,6 @@ export default function CrmWhatsapp() {
     refetchInterval: tab === "logs" && logsViewMode === "conversa" ? 10000 : false,
   });
   const flowsList = asArray<WhatsappFlow>(flows);
-  const templatesList = asArray<WhatsappTemplate>(templates);
   const leadsList = asArray<Lead>(leads);
   const jobsList = asArray<Job>(jobs);
   const workOrdersList = asArray<WorkOrder>(workOrders);
@@ -74,15 +65,6 @@ export default function CrmWhatsapp() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/whatsapp-flows"] });
       toast({ title: "Fluxo removido." });
-    },
-    onError: (e: any) => toast({ title: "Erro ao remover", description: e.message, variant: "destructive" }),
-  });
-
-  const deleteTemplateMutation = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/api/whatsapp-templates/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/whatsapp-templates"] });
-      toast({ title: "Template removido." });
     },
     onError: (e: any) => toast({ title: "Erro ao remover", description: e.message, variant: "destructive" }),
   });
@@ -101,11 +83,6 @@ export default function CrmWhatsapp() {
     setSendModalOpen(true);
   };
 
-  const openSendTemplate = (tpl: WhatsappTemplate) => {
-    setSendTarget({ templateId: tpl.id, templateName: tpl.name, flowName: tpl.name, message: tpl.message });
-    setSendModalOpen(true);
-  };
-
   const openSendLead = (lead: CrmLeadWithLinks) => {
     setSendTarget({
       flowName: `Lead - ${lead.name}`,
@@ -120,8 +97,6 @@ export default function CrmWhatsapp() {
     if (b.trigger === "atendimento_inicial") return 1;
     return (a.sortOrder || 0) - (b.sortOrder || 0);
   });
-
-  const filteredTemplates = categoryFilter === "all" ? templatesList : templatesList.filter(t => t.category === categoryFilter);
 
   const crmSources = useMemo(() => {
     return Array.from(new Set(leadsList.map(lead => lead.source).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b));
@@ -213,34 +188,18 @@ export default function CrmWhatsapp() {
     });
   }, [crmLeads, crmSearch, crmSource, crmStatus]);
 
-  const copyTemplate = async (tpl: WhatsappTemplate) => {
-    try {
-      await navigator.clipboard.writeText(tpl.message);
-      setCopiedId(tpl.id);
-      setTimeout(() => setCopiedId(null), 2000);
-      toast({ title: "Copiado!", description: "Mensagem copiada para a área de transferência." });
-    } catch (error: any) {
-      toast({ title: "Não foi possível copiar", description: error?.message, variant: "destructive" });
-    }
-  };
-
   const refreshLogs = () => queryClient.invalidateQueries({ queryKey: ["/api/whatsapp-logs"] });
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-4 sm:p-6">
       <CrmWhatsappHeader
         tab={tab}
-        onNewTemplate={() => { setEditTemplate(null); setTemplateModalOpen(true); }}
         onNewFlow={() => { setEditFlow(null); setFlowModalOpen(true); }}
         onRefreshLogs={refreshLogs}
       />
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 sm:max-w-3xl">
-          <TabsTrigger value="mensagens" className="gap-1.5 text-xs" data-testid="tab-mensagens">
-            <Library className="h-3.5 w-3.5" />
-            Mensagens
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 sm:max-w-3xl">
           <TabsTrigger value="kanban" className="gap-1.5 text-xs" data-testid="tab-kanban">
             <Users className="h-3.5 w-3.5" />
             Pipeline
@@ -259,21 +218,6 @@ export default function CrmWhatsapp() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="mensagens" className="mt-4 space-y-4">
-          <TemplateLibrary
-            templates={filteredTemplates}
-            isLoading={templatesLoading}
-            categoryFilter={categoryFilter}
-            copiedId={copiedId}
-            onCategoryChange={setCategoryFilter}
-            onCreate={() => { setEditTemplate(null); setTemplateModalOpen(true); }}
-            onEdit={template => { setEditTemplate(template); setTemplateModalOpen(true); }}
-            onDelete={template => deleteTemplateMutation.mutate(template.id)}
-            onCopy={copyTemplate}
-            onSend={openSendTemplate}
-          />
-        </TabsContent>
-
         <TabsContent value="kanban" className="mt-4 space-y-4">
           <CrmFilters
             search={crmSearch}
@@ -290,7 +234,6 @@ export default function CrmWhatsapp() {
             isLoading={leadsLoading || clientsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading}
             onContactLead={openSendLead}
           />
-          <CrmNextActions leads={filteredCrmLeads} isLoading={leadsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading} onContactLead={openSendLead} />
           <FlowStageBoard
             leads={filteredCrmLeads}
             flows={flowsList}
@@ -344,7 +287,6 @@ export default function CrmWhatsapp() {
         </TabsContent>
       </Tabs>
 
-      <TemplateModal open={templateModalOpen} onClose={() => { setTemplateModalOpen(false); setEditTemplate(null); }} template={editTemplate} />
       <FlowModal open={flowModalOpen} onClose={() => { setFlowModalOpen(false); setEditFlow(null); }} flow={editFlow} />
       <SendModal open={sendModalOpen} onClose={() => { setSendModalOpen(false); setSendTarget(null); }} target={sendTarget} />
     </div>
