@@ -100,17 +100,21 @@ export default function TeamProductivity() {
   };
 
   // ─── Summary per technician ───────────────────────────────────────────────
-  type TechSummary = { hours: number; m2: number; days: Set<string>; services: Set<string>; count: number };
+  type TechSummary = { hours: number; m2: number; days: Set<string>; services: Set<string>; count: number; byDay: Record<string, { m2: number; hours: number }> };
   const summary: Record<string, TechSummary> = {};
   logsList.forEach(log => {
     if (!summary[log.technicianName]) {
-      summary[log.technicianName] = { hours: 0, m2: 0, days: new Set(), services: new Set(), count: 0 };
+      summary[log.technicianName] = { hours: 0, m2: 0, days: new Set(), services: new Set(), count: 0, byDay: {} };
     }
     summary[log.technicianName].hours += log.hoursWorked || 0;
     summary[log.technicianName].m2    += log.squareMeters || 0;
     summary[log.technicianName].days.add(log.date);
     if (log.serviceType) summary[log.technicianName].services.add(log.serviceType);
     summary[log.technicianName].count++;
+    const day = summary[log.technicianName].byDay[log.date] || { m2: 0, hours: 0 };
+    day.m2 += log.squareMeters || 0;
+    day.hours += log.hoursWorked || 0;
+    summary[log.technicianName].byDay[log.date] = day;
   });
 
   const techList = Object.entries(summary).sort((a, b) => b[1].m2 - a[1].m2);
@@ -234,13 +238,16 @@ export default function TeamProductivity() {
                 const actual = target ? actualForTarget(data, target) : null;
                 const aboveTarget = target && actual != null ? actual >= target.targetValue : null;
                 return (
-                  <div key={name} className="flex items-center gap-4 px-6 py-5">
-                    <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
-                      <span className="text-primary font-bold text-lg">{name.charAt(0).toUpperCase()}</span>
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-bold text-slate-800">{name}</p>
-                      <p className="text-xs text-slate-400">{data.days.size} dia(s) trabalhado(s) · {data.count} registro(s)</p>
+                  <div key={name} className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center">
+                    <div className="flex flex-1 items-center gap-4">
+                      <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
+                        <span className="text-primary font-bold text-lg">{name.charAt(0).toUpperCase()}</span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-slate-800">{name}</p>
+                        <p className="text-xs text-slate-400">{data.days.size} dia(s) trabalhado(s) · {data.count} registro(s)</p>
+                        <StreakGrid byDay={data.byDay} target={target} actualForDay={(day) => target?.unit.toLowerCase().includes("dia") ? day.m2 : (day.hours > 0 ? day.m2 / day.hours : null)} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-6 text-center">
                       <div>
@@ -321,6 +328,42 @@ export default function TeamProductivity() {
           </div>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+// Mapa de streak (tipo "quadradinhos" de hábito): um quadrado por dia dos últimos 60 dias,
+// colorido conforme bateu ou não a meta aplicável naquele dia.
+function StreakGrid({
+  byDay,
+  target,
+  actualForDay,
+}: {
+  byDay: Record<string, { m2: number; hours: number }>;
+  target?: ProductivityTarget;
+  actualForDay: (day: { m2: number; hours: number }) => number | null;
+}) {
+  const days: { date: string; state: "empty" | "miss" | "hit" }[] = [];
+  const today = new Date();
+  for (let i = 59; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const key = date.toISOString().slice(0, 10);
+    const day = byDay[key];
+    if (!day) { days.push({ date: key, state: "empty" }); continue; }
+    if (!target) { days.push({ date: key, state: "hit" }); continue; }
+    const actual = actualForDay(day);
+    days.push({ date: key, state: actual != null && actual >= target.targetValue ? "hit" : "miss" });
+  }
+
+  const colorFor = (state: "empty" | "miss" | "hit") =>
+    state === "hit" ? "bg-green-500" : state === "miss" ? "bg-amber-400" : "bg-slate-100";
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-0.5" title="Últimos 60 dias">
+      {days.map(day => (
+        <div key={day.date} className={`h-2.5 w-2.5 rounded-sm ${colorFor(day.state)}`} title={`${day.date}${day.state === "empty" ? " — sem registro" : day.state === "hit" ? " — bateu a meta" : " — abaixo da meta"}`} />
+      ))}
     </div>
   );
 }

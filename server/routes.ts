@@ -2634,6 +2634,32 @@ export async function registerRoutes(
       : storage.createObraRegistro(data);
   };
 
+  // Baixa automática de estoque: roda uma única vez, na criação da OS, usando os materiais
+  // previstos no orçamento. Não trava se faltar estoque (allowNegativeStock) — só fica visível
+  // que aquele material precisa ser reposto.
+  const deductMaterialsAutomatically = async (order: any, materialsNeeded: any[]) => {
+    const today = new Date().toISOString().split("T")[0];
+    const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const month = monthNames[new Date().getMonth()];
+    for (const material of materialsNeeded) {
+      if (!material.inventoryId || !(material.quantity > 0)) continue;
+      try {
+        await storage.createInventoryMovement({
+          inventoryId: Number(material.inventoryId),
+          productName: material.name,
+          type: "SAÍDA",
+          quantity: material.quantity,
+          date: today,
+          month,
+          notes: `Origem: BAIXA_AUTOMATICA_OS | OS #${order.id} | Material: ${material.name} | Quantidade: ${material.quantity}`,
+        }, { allowNegativeStock: true });
+      } catch (err: any) {
+        console.error(`Falha na baixa automática de estoque (OS #${order.id}, material ${material.name}):`, err?.message || err);
+      }
+    }
+    await storage.updateWorkOrder(order.id, { materialsDeducted: true } as any);
+  };
+
   const ensureWorkOrderFlowForJob = async (job: any) => {
     const normalizedStatus = normalizeFlowText(job?.status);
     const statusConfig = (await storage.getJobStatuses()).find(status =>
@@ -2662,6 +2688,12 @@ export async function registerRoutes(
       ? await storage.updateWorkOrder(existingOrder.id, orderInput)
       : await storage.createWorkOrder(orderInput);
     if (!order) return null;
+
+    // Roda tanto pra OS nova quanto pra uma OS que já existia mas nunca teve a baixa feita
+    // (ex.: criada direto por POST /api/work-orders antes deste fluxo rodar por cima).
+    if (!(order as any).materialsDeducted && materialsNeeded.length > 0) {
+      await deductMaterialsAutomatically(order, materialsNeeded);
+    }
 
     const obraRecords = await storage.getObraRegistros();
     const existingObra = obraRecords.find(record =>
@@ -3097,6 +3129,13 @@ export async function registerRoutes(
 
       // 1. Mark as Concluída
       await storage.updateWorkOrder(woId, { status: "Concluída" });
+
+      // 1.5. Ajustar estoque: previsto (baixado automaticamente na criação) x consumido de verdade
+      try {
+        await adjustMaterialsOnCompletion(wo);
+      } catch (adjustErr: any) {
+        console.error(`Falha ao ajustar materiais na conclusão da OS #${woId}:`, adjustErr?.message || adjustErr);
+      }
 
       const today = new Date();
       const startDate = today.toISOString().split("T")[0];
@@ -4180,6 +4219,20 @@ export async function registerRoutes(
       }
     }
 
+    // Baixa automática feita na criação da OS conta como "já retirado" pra não ser
+    // descontada de novo quando o consumo real for lançado (mesma conta que a retirada
+    // formal de material já usa acima).
+    const autoDeductionTag = `BAIXA_AUTOMATICA_OS | OS #${workOrderId} `;
+    const allMovements = await storage.getInventoryMovements();
+    for (const movement of allMovements) {
+      if (movement.type !== "SAÍDA" || !String(movement.notes || "").includes(autoDeductionTag)) continue;
+      addMaterialAmount(buckets, {
+        inventoryId: movement.inventoryId,
+        productName: movement.productName,
+        quantity: movement.quantity,
+      }, "withdrawn");
+    }
+
     const logs = await storage.getObraConsumoLogs(workOrderId);
     for (const log of logs) {
       addMaterialAmount(buckets, {
@@ -4228,6 +4281,37 @@ export async function registerRoutes(
       hasDirectConsumption: items.some(item => item.directConsumed > 0),
       generatedAt: new Date().toISOString(),
     };
+  };
+
+  // Ao concluir a OS, compara previsto (o que foi baixado automaticamente na criação) com o
+  // que foi de fato consumido (Lançar Consumo) e ajusta o estoque sozinho: devolve a sobra ou
+  // desconta o excesso. Roda uma única vez por OS.
+  const adjustMaterialsOnCompletion = async (workOrder: any) => {
+    if (workOrder.materialsAdjusted) return;
+    const reconciliation = await buildWorkOrderMaterialReconciliation(Number(workOrder.id));
+    if (!reconciliation) return;
+    const today = new Date().toISOString().split("T")[0];
+    const monthNames = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const month = monthNames[new Date().getMonth()];
+    for (const item of reconciliation.items) {
+      if (!item.inventoryId) continue;
+      const diff = item.consumed - item.planned;
+      if (diff === 0) continue;
+      try {
+        await storage.createInventoryMovement({
+          inventoryId: Number(item.inventoryId),
+          productName: item.name,
+          type: diff > 0 ? "SAÍDA" : "ENTRADA",
+          quantity: Math.abs(diff),
+          date: today,
+          month,
+          notes: `Origem: AJUSTE_BAIXA_AUTOMATICA | OS #${workOrder.id} | Material: ${item.name} | Previsto: ${item.planned} | Consumido: ${item.consumed}`,
+        }, { allowNegativeStock: true });
+      } catch (err: any) {
+        console.error(`Falha no ajuste de estoque na conclusão (OS #${workOrder.id}, material ${item.name}):`, err?.message || err);
+      }
+    }
+    await storage.updateWorkOrder(workOrder.id, { materialsAdjusted: true } as any);
   };
 
   const getMaterialCoverageBeforeConsumption = async (workOrderId: number, inventoryId: any, materialName: string) => {

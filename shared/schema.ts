@@ -145,6 +145,8 @@ export const workOrders = pgTable("work_orders", {
   serviceProgress: text("service_progress"), // JSON: [{serviceName, started, startDate, endDate, finished, realMaterials: [{name, inventoryId, plannedQty, realQty}], observations}]
   obraObservations: text("obra_observations"), // General observations for the whole OS
   checklistDone: text("checklist_done"), // JSON: {[itemKey: string]: boolean} — checklist técnico da obra
+  materialsDeducted: boolean("materials_deducted").notNull().default(false), // baixa automática já feita na criação?
+  materialsAdjusted: boolean("materials_adjusted").notNull().default(false), // ajuste previsto x real já feito na conclusão?
   createdAt: timestamp("created_at").defaultNow(),
 });
 
