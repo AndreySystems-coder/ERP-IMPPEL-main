@@ -1796,6 +1796,13 @@ export function createMemoryStorage(): IStorage {
       items.forEach(item => updateById("materialWithdrawalItems", item.id, item));
     },
     getMobileImportHistoryByHash: async (hash: string) => data.mobileImportHistory.find(row => row.hash === hash),
+    // Nome/assinatura customizados (não seguem o padrão update<Entidade>(id, dados) que o
+    // fallback genérico do Proxy abaixo entende) — precisam de implementação própria aqui,
+    // senão o Proxy tenta atualizar uma tabela "WhatsappSendLogStatus" que não existe.
+    getWhatsappSendLogs: async (limit = 100) => [...data.whatsappSendLogs].sort((a, b) => b.id - a.id).slice(0, limit),
+    createWhatsappSendLog: async (row: any) => insert("whatsappSendLogs", row),
+    updateWhatsappSendLogStatus: async (id: number, status: string, errorMessage?: string | null) =>
+      updateById("whatsappSendLogs", id, { status, errorMessage: errorMessage ?? null }),
   };
 
   return new Proxy(storageTarget, {
