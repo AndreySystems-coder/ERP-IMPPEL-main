@@ -2433,10 +2433,19 @@ export async function registerRoutes(
         : isPoll
           ? `${baseUrl}/message/sendPoll/${instance}`
           : `${baseUrl}/message/sendText/${instance}`;
+      // O voto nativo da enquete do WhatsApp não chega decifrado de volta pro ERP (nem a
+      // Evolution API nem o n8n confirmam repassar esse evento) — só uma resposta de TEXTO
+      // (dígito ou palavra-chave) é reconhecida hoje em /api/webhooks/n8n/inbound-message.
+      // Por isso toda enquete sai com a lista numerada e o pedido explícito pra responder
+      // digitando o número, garantindo que o cliente tenha um jeito que funciona de verdade,
+      // mesmo que ele só toque na opção e a gente nunca saiba qual foi.
+      const pollInstruction = isPoll && pollOptions.length > 0
+        ? `\n\n${pollOptions.map((opt, i) => `${i + 1}. ${opt}`).join("\n")}\n\n_Toque em uma opção acima ou responda esta mensagem digitando o número._`
+        : "";
       const body = media
         ? { number: numberWithCountry, mediatype: "document", mimetype: "application/pdf", media: media.base64, fileName: media.fileName, caption: message }
         : isPoll
-          ? { number: numberWithCountry, name: message, selectableCount: 1, values: pollOptions }
+          ? { number: numberWithCountry, name: `${message}${pollInstruction}`, selectableCount: 1, values: pollOptions }
           : { number: numberWithCountry, text: message };
       const response = await fetch(endpoint, {
         method: "POST",
