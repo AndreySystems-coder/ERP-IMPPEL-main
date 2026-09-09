@@ -14,6 +14,7 @@ import { SiWhatsapp } from "react-icons/si";
 import { gerarOrcamentoPDF, mergeQuoteTemplateConfig } from "@/lib/orcamentoPDF";
 import type { MaterialDisplayMode, QuoteTemplateConfig } from "@/lib/orcamentoPDF";
 import { asArray } from "@/lib/safeData";
+import { formatBrazilPhone } from "@/lib/phone";
 import { useJobStatuses } from "@/hooks/use-job-statuses";
 import { QuoteClientSection } from "@/features/quotes/components/QuoteClientSection";
 import { QuoteFinancialAnalysis } from "@/features/quotes/components/QuoteFinancialAnalysis";
@@ -1034,8 +1035,8 @@ export default function Jobs() {
                   <input
                     type="text"
                     value={resp.telefone}
-                    onChange={e => setResponsaveis(prev => prev.map(r => r._id === resp._id ? { ...r, telefone: e.target.value } : r))}
-                    placeholder="Telefone"
+                    onChange={e => setResponsaveis(prev => prev.map(r => r._id === resp._id ? { ...r, telefone: formatBrazilPhone(e.target.value) } : r))}
+                    placeholder="+55 (11) 99999-9999"
                     className="w-full px-2 py-2 text-sm rounded-lg bg-white border border-slate-200 focus:outline-none focus:border-primary transition-all sm:py-1.5"
                     data-testid={`input-responsavel-telefone-${idx}`}
                   />

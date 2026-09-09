@@ -7,6 +7,7 @@ import { Modal } from "@/components/Modal";
 import { Plus, Search, Trash2, Edit2, Users, Phone, Mail } from "lucide-react";
 import { WhatsAppButton, WhatsAppTemplates } from "@/components/WhatsAppButton";
 import { useUser } from "@/hooks/use-auth";
+import { formatBrazilPhone, formatCpfCnpj } from "@/lib/phone";
 
 export default function Clients() {
   const { data: currentUser } = useUser();
@@ -171,12 +172,12 @@ export default function Clients() {
           <Input label="Nome Completo *" required value={name} onChange={e => setName(e.target.value)} placeholder="Ex. João Silva" data-testid="input-client-name" />
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Telefone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 99999-9999" data-testid="input-client-phone" />
+            <Input label="Telefone" type="tel" value={phone} onChange={e => setPhone(formatBrazilPhone(e.target.value))} placeholder="+55 (11) 99999-9999" data-testid="input-client-phone" />
             <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="nome@email.com" data-testid="input-client-email" />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="CPF/CNPJ" value={cpfCnpj} onChange={e => setCpfCnpj(e.target.value)} placeholder="000.000.000-00 ou 00.000.000/0000-00" data-testid="input-client-cpf" />
+            <Input label="CPF/CNPJ" value={cpfCnpj} onChange={e => setCpfCnpj(formatCpfCnpj(e.target.value))} placeholder="000.000.000-00 ou 00.000.000/0000-00" data-testid="input-client-cpf" />
             <Input label="UF" value={state} onChange={e => setState(e.target.value)} placeholder="SP" data-testid="input-client-state" maxLength={2} />
           </div>
 

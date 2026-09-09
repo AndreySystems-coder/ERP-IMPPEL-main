@@ -1,4 +1,5 @@
 import { Briefcase, Plus, X } from "lucide-react";
+import { formatBrazilPhone } from "@/lib/phone";
 
 export interface QuoteClientForm {
   _id: string;
@@ -121,8 +122,8 @@ export function QuoteClientSection({
               <input
                 type="text"
                 value={client.telefone}
-                onChange={(event) => updateClient(client._id, { telefone: event.target.value })}
-                placeholder="Telefone"
+                onChange={(event) => updateClient(client._id, { telefone: formatBrazilPhone(event.target.value) })}
+                placeholder="+55 (11) 99999-9999"
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition-all focus:border-primary focus:outline-none"
                 data-testid={`input-cliente-telefone-${index}`}
               />
