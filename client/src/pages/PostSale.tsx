@@ -98,6 +98,7 @@ export default function PostSale() {
 
   // Reminder state
   const [isRemModal, setRemModal] = useState(false);
+  const [editingRemId, setEditingRemId] = useState<number | null>(null);
   const [remForm, setRemForm] = useState({ clientName: "", clientPhone: "", serviceType: "", completedDate: "", notes: "" });
 
   const invNps = () => qc.invalidateQueries({ queryKey: ["/api/nps-responses"] });
@@ -121,6 +122,11 @@ export default function PostSale() {
   const createRem = useMutation({
     mutationFn: (d: any) => apiRequest("POST", "/api/maintenance-reminders", d),
     onSuccess: () => { invRem(); toast({ title: "Lembrete criado!" }); setRemModal(false); },
+    onError: (e: any) => toast({ title: `Erro: ${e.message}`, variant: "destructive" }),
+  });
+  const updateRem = useMutation({
+    mutationFn: ({ id, ...d }: any) => apiRequest("PUT", `/api/maintenance-reminders/${id}`, d),
+    onSuccess: () => { invRem(); toast({ title: "Lembrete atualizado!" }); setRemModal(false); setEditingRemId(null); },
     onError: (e: any) => toast({ title: `Erro: ${e.message}`, variant: "destructive" }),
   });
   const markRem = useMutation({
@@ -253,7 +259,7 @@ export default function PostSale() {
       {tab === "lembretes" && (
         <div className="space-y-6">
           <div className="flex justify-end">
-            <Button onClick={() => { setRemForm({ clientName: "", clientPhone: "", serviceType: "", completedDate: new Date().toISOString().split("T")[0], notes: "" }); setRemModal(true); }} data-testid="button-new-reminder">
+            <Button onClick={() => { setEditingRemId(null); setRemForm({ clientName: "", clientPhone: "", serviceType: "", completedDate: new Date().toISOString().split("T")[0], notes: "" }); setRemModal(true); }} data-testid="button-new-reminder">
               <Plus className="w-4 h-4 mr-2" /> Novo Lembrete
             </Button>
           </div>
@@ -303,11 +309,11 @@ export default function PostSale() {
                           <span className="text-xs font-medium text-slate-500 w-16">12 meses:</span>
                           {r.reminder12SentAt ? (
                             <span className="text-xs text-green-600 font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" />Enviado {fmtDate(r.reminder12SentAt)}</span>
-                          ) : next12 < 0 ? (
-                            <span className="text-xs text-slate-400">Venceu</span>
                           ) : (
                             <div className="flex items-center gap-1">
-                              <span className={`text-xs font-semibold ${next12 <= 30 ? "text-amber-600" : "text-slate-400"}`}>{next12} dias</span>
+                              <span className={`text-xs font-semibold ${next12 < 0 ? "text-red-500" : next12 <= 30 ? "text-amber-600" : "text-slate-400"}`}>
+                                {next12 < 0 ? `Venceu há ${Math.abs(next12)}d` : `${next12} dias`}
+                              </span>
                               {r.clientPhone && (
                                 <a href={whatsappLink(r.clientPhone, msg12)} target="_blank" rel="noreferrer"
                                   className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium hover:bg-green-200 flex items-center gap-1">
@@ -326,11 +332,11 @@ export default function PostSale() {
                           <span className="text-xs font-medium text-slate-500 w-16">24 meses:</span>
                           {r.reminder24SentAt ? (
                             <span className="text-xs text-green-600 font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" />Enviado {fmtDate(r.reminder24SentAt)}</span>
-                          ) : next24 < 0 ? (
-                            <span className="text-xs text-slate-400">Venceu</span>
                           ) : (
                             <div className="flex items-center gap-1">
-                              <span className={`text-xs font-semibold ${next24 <= 30 ? "text-amber-600" : "text-slate-400"}`}>{next24} dias</span>
+                              <span className={`text-xs font-semibold ${next24 < 0 ? "text-red-500" : next24 <= 30 ? "text-amber-600" : "text-slate-400"}`}>
+                                {next24 < 0 ? `Venceu há ${Math.abs(next24)}d` : `${next24} dias`}
+                              </span>
                               {r.clientPhone && (
                                 <a href={whatsappLink(r.clientPhone, msg24)} target="_blank" rel="noreferrer"
                                   className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium hover:bg-green-200 flex items-center gap-1">
@@ -345,6 +351,23 @@ export default function PostSale() {
                           )}
                         </div>
                       </div>
+                      <button
+                        onClick={() => {
+                          setEditingRemId(r.id);
+                          setRemForm({
+                            clientName: r.clientName || "",
+                            clientPhone: r.clientPhone || "",
+                            serviceType: r.serviceType || "",
+                            completedDate: r.completedDate ? r.completedDate.split("T")[0] : "",
+                            notes: r.notes || "",
+                          });
+                          setRemModal(true);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-primary hover:bg-slate-100 rounded-lg mt-1"
+                        title="Editar data de conclusão (ajustar quanto tempo já passou)"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       <button onClick={() => !confirm("Excluir este lembrete?") || removeRem.mutate(r.id)}
                         className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg mt-1">
                         <Trash2 className="w-4 h-4" />
@@ -421,9 +444,9 @@ export default function PostSale() {
         </form>
       </Modal>
 
-      {/* Reminder Create Modal */}
-      <Modal isOpen={isRemModal} onClose={() => setRemModal(false)} title="Novo Lembrete de Manutenção">
-        <form onSubmit={e => { e.preventDefault(); createRem.mutate(remForm); }} className="space-y-4">
+      {/* Reminder Create/Edit Modal */}
+      <Modal isOpen={isRemModal} onClose={() => { setRemModal(false); setEditingRemId(null); }} title={editingRemId ? "Editar Lembrete de Manutenção" : "Novo Lembrete de Manutenção"}>
+        <form onSubmit={e => { e.preventDefault(); editingRemId ? updateRem.mutate({ id: editingRemId, ...remForm }) : createRem.mutate(remForm); }} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="text-sm font-semibold text-slate-700 block mb-1">Nome do Cliente *</label>
@@ -447,7 +470,11 @@ export default function PostSale() {
               <label className="text-sm font-semibold text-slate-700 block mb-1">Data de Conclusão da Obra *</label>
               <input type="date" value={remForm.completedDate} onChange={e => setRemForm(f => ({ ...f, completedDate: e.target.value }))} required
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50" data-testid="input-rem-date" />
-              <p className="text-xs text-slate-400 mt-1">O sistema calculará automaticamente as datas dos lembretes de 12 e 24 meses.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {editingRemId
+                  ? "Ajuste esta data pra corrigir quanto tempo já se passou (ex: se a garantia já está com 6 meses, coloque a data de conclusão 6 meses atrás)."
+                  : "O sistema calculará automaticamente as datas dos lembretes de 12 e 24 meses."}
+              </p>
             </div>
             <div className="col-span-2">
               <label className="text-sm font-semibold text-slate-700 block mb-1">Observações</label>
@@ -456,8 +483,10 @@ export default function PostSale() {
             </div>
           </div>
           <div className="flex gap-3 pt-2">
-            <Button type="button" variant="ghost" className="flex-1" onClick={() => setRemModal(false)}>Cancelar</Button>
-            <Button type="submit" isLoading={createRem.isPending} className="flex-1" data-testid="button-save-reminder">Criar Lembrete</Button>
+            <Button type="button" variant="ghost" className="flex-1" onClick={() => { setRemModal(false); setEditingRemId(null); }}>Cancelar</Button>
+            <Button type="submit" isLoading={editingRemId ? updateRem.isPending : createRem.isPending} className="flex-1" data-testid="button-save-reminder">
+              {editingRemId ? "Salvar Alterações" : "Criar Lembrete"}
+            </Button>
           </div>
         </form>
       </Modal>

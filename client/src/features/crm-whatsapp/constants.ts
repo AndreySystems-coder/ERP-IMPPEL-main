@@ -21,6 +21,7 @@ export const VARIABLES_HELP = [
 
 export const TRIGGER_OPTIONS = [
   { value: "atendimento_inicial", label: "Atendimento Inicial (Novo Contato)" },
+  { value: "menu_geral", label: "Menu Geral (após qualquer resposta)" },
   { value: "orcamento_enviado", label: "Orçamento Enviado" },
   { value: "orcamento_aprovado", label: "Orçamento Aprovado" },
   { value: "followup_2d", label: "Follow-up 2 Dias" },
@@ -32,6 +33,7 @@ export const TRIGGER_OPTIONS = [
 
 export const TRIGGER_ICON: Record<string, string> = {
   atendimento_inicial: "💬",
+  menu_geral: "📎",
   orcamento_enviado: "📋",
   orcamento_aprovado: "✅",
   followup_2d: "🔔",
@@ -43,6 +45,7 @@ export const TRIGGER_ICON: Record<string, string> = {
 
 export const TRIGGER_LABEL: Record<string, string> = {
   atendimento_inicial: "Atendimento Inicial",
+  menu_geral: "Menu Geral",
   orcamento_enviado: "Orçamento Enviado",
   orcamento_aprovado: "Orçamento Aprovado",
   followup_2d: "Follow-up 2 Dias",

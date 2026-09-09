@@ -2,6 +2,9 @@ export interface ButtonItem {
   id: string;
   text: string;
   responseMessage: string;
+  // Gatilho de outro fluxo pra continuar a conversa sozinho depois que o cliente escolher esta
+  // opção. Vazio = usa o menu geral automático ("menu_geral") como próximo passo.
+  nextFlowTrigger?: string;
 }
 
 export interface FlowForm {

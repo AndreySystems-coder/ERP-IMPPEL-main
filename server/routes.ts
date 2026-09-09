@@ -2500,11 +2500,15 @@ export async function registerRoutes(
 
   // Mesma convenção de placeholders usada manualmente em Jobs.tsx:handleEnviarWhatsApp
   // ({cliente}, {numero}), case-insensitive.
-  const substituteMessageVariables = (template: string, vars: Record<string, string>) =>
-    Object.entries(vars).reduce(
+  const substituteMessageVariables = (template: string, vars: Record<string, string>) => {
+    const substituted = Object.entries(vars).reduce(
       (text, [key, value]) => text.replace(new RegExp(`\\{${key}\\}`, "gi"), value),
       template
     );
+    // Nenhuma variável sem valor (ex.: orçamento sem lead/job vinculado) deve vazar como texto
+    // cru "{numero_orcamento}" pro cliente — troca qualquer placeholder restante por vazio.
+    return substituted.replace(/\{[a-z_]+\}/gi, "");
+  };
 
   const ensureJobCustomerRelations = async (input: any) => {
     const result = { ...input };
@@ -2984,6 +2988,10 @@ export async function registerRoutes(
               const message = substituteMessageVariables(statusConfig.message, {
                 cliente: job.clientName?.split(" ")[0] || "Cliente",
                 numero: String(job.orcamentoNumero ?? job.id).padStart(4, "0"),
+                nome_cliente: job.clientName?.split(" ")[0] || "Cliente",
+                numero_orcamento: String(job.orcamentoNumero ?? job.id).padStart(4, "0"),
+                tipo_servico: job.serviceType || "",
+                valor_orcamento: job.realPriceSold ? Number(job.realPriceSold).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
               });
               await sendWhatsappAutomatico({ phone, message, flowName: `Status do orçamento: ${job.status}` });
             }
@@ -3079,6 +3087,8 @@ export async function registerRoutes(
             const message = substituteMessageVariables(statusConfig.message, {
               cliente: order.clientName?.split(" ")[0] || "Cliente",
               os: String(order.id).padStart(4, "0"),
+              nome_cliente: order.clientName?.split(" ")[0] || "Cliente",
+              tipo_servico: order.serviceType || "",
             });
             await sendWhatsappAutomatico({ phone, message, flowName: `Status da obra: ${order.status}` });
           }
@@ -4674,6 +4684,95 @@ export async function registerRoutes(
     catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // Chamado 1x/dia pelo cron do Vercel (vercel.json) — os fluxos "Follow-up 2/5 Dias" e
+  // "Lembrete de Manutenção (12 meses)" existiam como modelo mas nada os disparava sozinho até
+  // aqui. Protegido pelo mesmo segredo da aba Automação, passado como ?secret= porque o cron do
+  // Vercel só chama uma URL fixa, sem cabeçalho customizado.
+  app.get("/api/cron/daily-followups", async (req, res) => {
+    try {
+      // Vercel Cron manda "Authorization: Bearer $CRON_SECRET" sozinho (env var configurada no
+      // projeto). ?secret= continua valendo pra você testar manualmente pelo navegador, usando o
+      // mesmo segredo já mostrado na aba Automação.
+      const automation = await storage.getAutomationSettings();
+      const authHeader = req.get("authorization") || "";
+      const bearerOk = Boolean(process.env.CRON_SECRET) && authHeader === `Bearer ${process.env.CRON_SECRET}`;
+      const querySecretOk = Boolean(automation.incomingSecret) && String(req.query?.secret || "") === automation.incomingSecret;
+      if (!bearerOk && !querySecretOk) {
+        return res.status(401).json({ message: "Segredo inválido." });
+      }
+      const results = { maintenance12m: 0, followup2d: 0, followup5d: 0, errors: [] as string[] };
+      const flows = await storage.getWhatsappFlows();
+      const flowByTrigger = new Map(flows.map(f => [f.trigger, f]));
+
+      // 1) Lembrete de manutenção 12 meses: completedDate + 12 meses já passou e nunca foi enviado.
+      const maintenanceFlow = flowByTrigger.get("manutencao_12m");
+      if (maintenanceFlow?.active) {
+        const reminders = await storage.getMaintenanceReminders();
+        const now = Date.now();
+        for (const r of reminders) {
+          if (r.reminder12SentAt || !r.clientPhone || !r.completedDate) continue;
+          const due = new Date(r.completedDate);
+          due.setMonth(due.getMonth() + 12);
+          if (due.getTime() > now) continue;
+          try {
+            const message = substituteMessageVariables(maintenanceFlow.message, {
+              nome_cliente: r.clientName?.split(" ")[0] || "Cliente",
+              tipo_servico: r.serviceType || "",
+            });
+            await sendFlowMessage({ phone: r.clientPhone, flow: { ...maintenanceFlow, message }, flowNameOverride: "Lembrete de Manutenção (12 meses) — automático" });
+            await storage.updateMaintenanceReminder(r.id, { reminder12SentAt: new Date() } as any);
+            results.maintenance12m++;
+          } catch (e: any) { results.errors.push(`manutencao#${r.id}: ${e.message}`); }
+        }
+      }
+
+      // 2) Follow-up 2/5 dias: lead ainda parado em "orcamento_enviado" (nunca avançou de
+      // etapa) X dias depois do último envio do orçamento, e ainda não recebeu esse follow-up
+      // específico desde então.
+      const orcamentoFlow = flowByTrigger.get("orcamento_enviado");
+      const followup2Flow = flowByTrigger.get("followup_2d");
+      const followup5Flow = flowByTrigger.get("followup_5d");
+      if (orcamentoFlow && (followup2Flow?.active || followup5Flow?.active)) {
+        const [leads, logs, jobs] = await Promise.all([
+          storage.getLeads(), storage.getWhatsappSendLogs(500), storage.getJobs(),
+        ]);
+        const digits = (p: unknown) => String(p || "").replace(/\D/g, "");
+        const logTime = (l: { createdAt: Date | string | null }) => (l.createdAt ? new Date(l.createdAt).getTime() : 0);
+        for (const lead of leads) {
+          if (lead.currentFlowTrigger !== "orcamento_enviado" || !lead.phone) continue;
+          const phoneDigits = digits(lead.phone);
+          const sentLogs = logs.filter(l => l.flowId === orcamentoFlow.id && digits(l.phone) === phoneDigits && l.status === "sent");
+          if (!sentLogs.length) continue;
+          const lastSent = sentLogs.reduce((a, b) => logTime(a) > logTime(b) ? a : b);
+          const daysSince = (Date.now() - logTime(lastSent)) / 86400000;
+          const alreadySentSince = (flowId: number) => logs.some(l => l.flowId === flowId && digits(l.phone) === phoneDigits && logTime(l) > logTime(lastSent));
+          const latestJob = jobs.filter(j => Number(j.leadId) === lead.id).sort((a, b) => Number(b.id) - Number(a.id))[0];
+          const vars = {
+            nome_cliente: lead.name?.split(" ")[0] || "Cliente",
+            ...(latestJob ? {
+              numero_orcamento: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0"),
+              tipo_servico: latestJob.serviceType || "",
+              valor_orcamento: latestJob.realPriceSold ? Number(latestJob.realPriceSold).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
+            } : {}),
+          };
+          try {
+            if (followup5Flow?.active && daysSince >= 5 && !alreadySentSince(followup5Flow.id)) {
+              const message = substituteMessageVariables(followup5Flow.message, vars);
+              await sendFlowMessage({ phone: lead.phone, flow: { ...followup5Flow, message } });
+              results.followup5d++;
+            } else if (followup2Flow?.active && daysSince >= 2 && !alreadySentSince(followup2Flow.id)) {
+              const message = substituteMessageVariables(followup2Flow.message, vars);
+              await sendFlowMessage({ phone: lead.phone, flow: { ...followup2Flow, message } });
+              results.followup2d++;
+            }
+          } catch (e: any) { results.errors.push(`lead#${lead.id}: ${e.message}`); }
+        }
+      }
+
+      res.json({ ok: true, ...results });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
   // ─── Quote PDF Templates CRUD ────────────────────────────────────────────────
   app.get("/api/quote-templates", requireAdmin, async (req, res) => {
     try { res.json(await storage.getQuoteTemplates()); }
@@ -4986,15 +5085,15 @@ export async function registerRoutes(
     const normalizedChoice = stripAccents(choice).trim().toLowerCase();
 
     let nextAction: string | undefined;
-    let matchedOption: { text: string; responseMessage?: string } | undefined;
+    let matchedOption: { text: string; responseMessage?: string; nextFlowTrigger?: string } | undefined;
     let matchedFlowName: string | undefined;
+    const flows = await storage.getWhatsappFlows();
 
     if (lead.currentFlowTrigger && normalizedChoice) {
-      const flows = await storage.getWhatsappFlows();
       const activeFlow = flows.find(f => f.trigger === lead!.currentFlowTrigger);
       if (activeFlow?.buttons) {
         try {
-          const options = JSON.parse(activeFlow.buttons as string) as { text: string; responseMessage?: string }[];
+          const options = JSON.parse(activeFlow.buttons as string) as { text: string; responseMessage?: string; nextFlowTrigger?: string }[];
           const byVote = pollVoteOption ? options.find(opt => opt.text === pollVoteOption) : undefined;
           const byPosition = byVote ? undefined : (/^[1-9]$/.test(normalizedChoice) ? options[Number(normalizedChoice) - 1] : undefined);
           const byKeyword = (byVote || byPosition) ? undefined : options.find(opt => {
@@ -5014,18 +5113,33 @@ export async function registerRoutes(
     else if (normalizedChoice.includes("duvida") || normalizedChoice === "3") nextAction = "Cliente tem dúvida técnica.";
     if (nextAction) await storage.updateLead(lead.id, { nextAction } as any);
 
+    const jobs = matchedOption ? await storage.getJobs() : [];
+    const latestJob = matchedOption ? jobs.filter(j => Number(j.leadId) === lead!.id).sort((a, b) => Number(b.id) - Number(a.id))[0] : undefined;
+    const replyVars = {
+      nome_cliente: lead.name?.split(" ")[0] || "Cliente",
+      ...(latestJob ? {
+        numero_orcamento: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0"),
+        tipo_servico: latestJob.serviceType || "",
+        valor_orcamento: latestJob.realPriceSold ? Number(latestJob.realPriceSold).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
+      } : {}),
+    };
+
     if (matchedOption?.responseMessage && lead.phone) {
-      const jobs = await storage.getJobs();
-      const latestJob = jobs.filter(j => Number(j.leadId) === lead!.id).sort((a, b) => Number(b.id) - Number(a.id))[0];
-      const replyMessage = substituteMessageVariables(matchedOption.responseMessage, {
-        nome_cliente: lead.name?.split(" ")[0] || "Cliente",
-        ...(latestJob ? {
-          numero_orcamento: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0"),
-          tipo_servico: latestJob.serviceType || "",
-          valor_orcamento: latestJob.realPriceSold ? Number(latestJob.realPriceSold).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
-        } : {}),
-      });
+      const replyMessage = substituteMessageVariables(matchedOption.responseMessage, replyVars);
       await sendViaEvolution({ phone: lead.phone, message: replyMessage, flowName: `${matchedFlowName || "Fluxo"} — resposta da opção` });
+    }
+
+    // Depois de qualquer opção respondida, avança o lead sozinho pro próximo fluxo — o
+    // configurado no botão (nextFlowTrigger), ou o "menu_geral" por padrão — pra manter a
+    // conversa automática sem depender do cliente digitar algo.
+    if (matchedOption && lead.phone) {
+      const nextTrigger = matchedOption.nextFlowTrigger || "menu_geral";
+      const nextFlow = flows.find(f => f.trigger === nextTrigger && f.active !== false);
+      if (nextFlow && nextFlow.trigger !== lead.currentFlowTrigger) {
+        const nextMessage = substituteMessageVariables(nextFlow.message, replyVars);
+        await sendFlowMessage({ phone: lead.phone, flow: { ...nextFlow, message: nextMessage } });
+        await storage.updateLead(lead.id, { currentFlowTrigger: nextFlow.trigger } as any);
+      }
     }
 
     return { isNew, leadId: lead.id };

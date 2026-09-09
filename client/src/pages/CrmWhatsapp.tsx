@@ -287,7 +287,7 @@ export default function CrmWhatsapp() {
         </TabsContent>
       </Tabs>
 
-      <FlowModal open={flowModalOpen} onClose={() => { setFlowModalOpen(false); setEditFlow(null); }} flow={editFlow} />
+      <FlowModal open={flowModalOpen} onClose={() => { setFlowModalOpen(false); setEditFlow(null); }} flow={editFlow} flows={flowsList} />
       <SendModal open={sendModalOpen} onClose={() => { setSendModalOpen(false); setSendTarget(null); }} target={sendTarget} />
     </div>
   );

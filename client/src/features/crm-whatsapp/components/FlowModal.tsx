@@ -20,9 +20,10 @@ type FlowModalProps = {
   open: boolean;
   onClose: () => void;
   flow: WhatsappFlow | null;
+  flows?: WhatsappFlow[];
 };
 
-export function FlowModal({ open, onClose, flow }: FlowModalProps) {
+export function FlowModal({ open, onClose, flow, flows = [] }: FlowModalProps) {
   const { toast } = useToast();
   const [form, setForm] = useState<FlowForm>(emptyFlowForm());
 
@@ -109,7 +110,7 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
           </div>
 
           {form.messageType === "poll" && (
-            <ButtonEditor buttons={form.buttons} onChange={buttons => setField("buttons", buttons)} />
+            <ButtonEditor buttons={form.buttons} onChange={buttons => setField("buttons", buttons)} flows={flows} currentTrigger={form.trigger} />
           )}
 
           <div className="flex items-center justify-between rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
@@ -142,10 +143,10 @@ export function FlowModal({ open, onClose, flow }: FlowModalProps) {
   );
 }
 
-function ButtonEditor({ buttons, onChange }: { buttons: ButtonItem[]; onChange: (buttons: ButtonItem[]) => void }) {
+function ButtonEditor({ buttons, onChange, flows, currentTrigger }: { buttons: ButtonItem[]; onChange: (buttons: ButtonItem[]) => void; flows: WhatsappFlow[]; currentTrigger: string }) {
   const add = () => {
     if (buttons.length >= 4) return;
-    onChange([...buttons, { id: String(Date.now()), text: "", responseMessage: "" }]);
+    onChange([...buttons, { id: String(Date.now()), text: "", responseMessage: "", nextFlowTrigger: "" }]);
   };
   const remove = (index: number) => onChange(buttons.filter((_, itemIndex) => itemIndex !== index));
   const update = (index: number, field: keyof ButtonItem, value: string) => {
@@ -153,6 +154,10 @@ function ButtonEditor({ buttons, onChange }: { buttons: ButtonItem[]; onChange: 
     copy[index] = { ...copy[index], [field]: value };
     onChange(copy);
   };
+
+  // Fluxos que podem servir de "próximo passo" — qualquer fluxo ativo que não seja este mesmo,
+  // pra evitar a opção de um fluxo apontar pra si mesmo em loop.
+  const nextFlowOptions = flows.filter(f => f.trigger !== currentTrigger && f.active !== false);
 
   return (
     <div className="space-y-3">
@@ -164,6 +169,16 @@ function ButtonEditor({ buttons, onChange }: { buttons: ButtonItem[]; onChange: 
           </div>
           <Input placeholder="Texto da opção (ex: 📋 Quero um orçamento)" value={button.text} onChange={event => update(index, "text", event.target.value)} className="text-sm" data-testid={`btn-text-${index}`} />
           <Textarea placeholder="Resposta automática ao escolher esta opção (enviada quando o cliente responder com o número ou o nome dela)..." value={button.responseMessage} onChange={event => update(index, "responseMessage", event.target.value)} rows={2} className="resize-none text-sm" data-testid={`btn-response-${index}`} />
+          <div className="space-y-1">
+            <Label className="text-xs text-gray-500">Depois dessa resposta, continuar automaticamente com:</Label>
+            <Select value={button.nextFlowTrigger || "__menu_geral__"} onValueChange={value => update(index, "nextFlowTrigger", value === "__menu_geral__" ? "" : value)}>
+              <SelectTrigger className="h-9 text-xs" data-testid={`select-next-flow-${index}`}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__menu_geral__">Menu geral (padrão automático)</SelectItem>
+                {nextFlowOptions.map(f => <SelectItem key={f.id} value={f.trigger}>{f.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       ))}
       {buttons.length < 4 && (
