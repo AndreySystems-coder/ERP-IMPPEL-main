@@ -2910,6 +2910,11 @@ export async function registerRoutes(
         flowName: flow.name,
       });
       if (!result.log) return res.status(400).json({ message: result.message });
+      // Move o lead pra coluna do fluxo enviado no quadro da aba Pipeline — sem isso, mandar um
+      // fluxo manual não refletia em qual etapa de atendimento o lead está de verdade.
+      if (result.ok && lead.currentFlowTrigger !== flow.trigger) {
+        await storage.updateLead(lead.id, { currentFlowTrigger: flow.trigger } as any);
+      }
       res.json({ ok: result.ok, log: result.log });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
