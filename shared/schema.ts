@@ -25,6 +25,13 @@ export const users = pgTable("users", {
   admissionDate: text("admission_date"),
   department: text("department"),
   supervisorId: integer("supervisor_id"),
+  // Bloqueio de login por tentativas: 5 erros -> bloqueio temporário de 1h; mais 5 erros
+  // após o bloqueio temporário (10 no total) -> bloqueio permanente até o admin desbloquear.
+  failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until"),
+  loginLockStage: integer("login_lock_stage").notNull().default(0), // 0 = normal, 1 = já usou o bloqueio temporário de 1h
+  permanentlyLocked: boolean("permanently_locked").notNull().default(false),
+  lastFailedLoginAt: timestamp("last_failed_login_at"),
 });
 
 export const clients = pgTable("clients", {

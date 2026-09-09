@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { asArray } from "@/lib/safeData";
 import { isMaterialWithdrawalPending } from "@shared/materialReturnPolicy";
+import { useUser } from "@/hooks/use-auth";
 
 const apiGet = async (path: string) => {
   const response = await fetch(path, { credentials: "include" });
@@ -65,6 +66,13 @@ function MiniList({ title, rows, empty }: { title: string; rows: { name: string;
 }
 
 export default function Dashboard() {
+  const { data: currentUser } = useUser();
+  const isAdmin = (currentUser as any)?.role === "admin";
+  const { data: allUsers } = useQuery({
+    queryKey: ["/api/users"],
+    queryFn: () => apiGet("/api/users"),
+    enabled: isAdmin,
+  });
   const { data: metrics } = useQuery({
     queryKey: ["/api/dashboard/metrics"],
     queryFn: () => apiGet("/api/dashboard/metrics"),
@@ -187,6 +195,10 @@ export default function Dashboard() {
     if (previous <= 0) return null;
     return ((current - previous) / previous) * 100;
   }, [revenueTrend]);
+
+  const lockedAccounts = asArray<any>(allUsers).filter(
+    (u: any) => u.permanentlyLocked || (u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now())
+  );
 
   const worksDistribution = [
     { name: "Em andamento", value: runningWorks.length, color: "#2563eb" },
@@ -313,6 +325,18 @@ export default function Dashboard() {
           <p className="text-xs text-slate-500">{formattedDate}</p>
         </div>
       </div>
+
+      {/* ── Alerta de contas bloqueadas por tentativas de login ───────────────── */}
+      {isAdmin && lockedAccounts.length > 0 && (
+        <Link href="/usuarios">
+          <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 cursor-pointer hover:bg-red-100 transition-colors" data-testid="alert-locked-accounts">
+            <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+            <p className="text-sm text-red-700">
+              <span className="font-bold">{lockedAccounts.length} conta(s) bloqueada(s)</span> por excesso de tentativas de login — {lockedAccounts.map((u: any) => u.username).join(", ")}. Clique para gerenciar em Usuários.
+            </p>
+          </div>
+        </Link>
+      )}
 
       {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">

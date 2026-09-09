@@ -822,6 +822,12 @@ export async function registerRoutes(
     return (await storage.getUsers()).find(user => user.username.trim().toLocaleLowerCase("pt-BR") === normalized);
   };
 
+  // Bloqueio de login por tentativas: 5 erros -> bloqueio temporário de 1h; mais 5 erros
+  // após o bloqueio temporário (10 no total) -> bloqueio permanente até o admin desbloquear
+  // manualmente (POST /api/users/:id/unlock).
+  const LOGIN_LOCK_THRESHOLD = 5;
+  const LOGIN_LOCK_DURATION_MS = 60 * 60 * 1000; // 1 hora
+
   // Auth
   app.post(api.auth.login.path, async (req, res) => {
     try {
@@ -830,8 +836,23 @@ export async function registerRoutes(
       if (!user) {
         return res.status(401).json({ message: "Usuário ou senha inválidos" });
       }
-      if ((user as any).status === "inativo") {
+      const uAny = user as any;
+      if (uAny.status === "inativo") {
         return res.status(403).json({ message: "Usuário inativo. Procure a administração." });
+      }
+      if (uAny.permanentlyLocked) {
+        return res.status(403).json({ message: "Conta bloqueada por excesso de tentativas. Fale com o administrador para liberar o acesso." });
+      }
+      const lockedUntil = uAny.lockedUntil ? new Date(uAny.lockedUntil) : null;
+      if (lockedUntil && lockedUntil.getTime() > Date.now()) {
+        const minutesLeft = Math.ceil((lockedUntil.getTime() - Date.now()) / 60000);
+        return res.status(403).json({ message: `Conta temporariamente bloqueada por excesso de tentativas. Tente novamente em ${minutesLeft} minuto(s).` });
+      }
+      // Se o bloqueio temporário já expirou, libera a tentativa (mantém o estágio para saber
+      // que já usou o bloqueio de 1h e a próxima sequência de 5 erros é definitiva).
+      if (lockedUntil && lockedUntil.getTime() <= Date.now()) {
+        await storage.updateUser(user.id, { lockedUntil: null, failedLoginAttempts: 0 } as any);
+        uAny.failedLoginAttempts = 0;
       }
       // Support both bcrypt-hashed passwords (start with $2) and legacy plaintext
       const isHashed = user.password.startsWith("$2");
@@ -839,10 +860,32 @@ export async function registerRoutes(
         ? await bcrypt.compare(input.password, user.password)
         : input.password === user.password;
       if (!passwordValid) {
+        const attempts = (Number(uAny.failedLoginAttempts) || 0) + 1;
+        if (attempts >= LOGIN_LOCK_THRESHOLD) {
+          if ((Number(uAny.loginLockStage) || 0) === 0) {
+            await storage.updateUser(user.id, {
+              failedLoginAttempts: 0,
+              lockedUntil: new Date(Date.now() + LOGIN_LOCK_DURATION_MS),
+              loginLockStage: 1,
+              lastFailedLoginAt: new Date(),
+            } as any);
+            return res.status(403).json({ message: "Muitas tentativas erradas. Conta bloqueada por 1 hora." });
+          }
+          await storage.updateUser(user.id, {
+            failedLoginAttempts: attempts,
+            permanentlyLocked: true,
+            lastFailedLoginAt: new Date(),
+          } as any);
+          return res.status(403).json({ message: "Muitas tentativas erradas novamente. Conta bloqueada até um administrador liberar o acesso." });
+        }
+        await storage.updateUser(user.id, { failedLoginAttempts: attempts, lastFailedLoginAt: new Date() } as any);
         return res.status(401).json({ message: "Usuário ou senha inválidos" });
       }
       if (!isHashed) {
         await storage.updateUserPassword(user.id, await bcrypt.hash(input.password, BCRYPT_ROUNDS));
+      }
+      if (Number(uAny.failedLoginAttempts) > 0 || Number(uAny.loginLockStage) > 0) {
+        await storage.updateUser(user.id, { failedLoginAttempts: 0, loginLockStage: 0, lockedUntil: null } as any);
       }
       req.session.userId = user.id;
       req.session.userRole = user.role;
@@ -916,6 +959,10 @@ export async function registerRoutes(
           mustChangePassword: Boolean(uAny.mustChangePassword),
           roleName: customRole?.name || null,
           roleLabel: customRole?.label || null,
+          failedLoginAttempts: uAny.failedLoginAttempts || 0,
+          lockedUntil: uAny.lockedUntil || null,
+          permanentlyLocked: Boolean(uAny.permanentlyLocked),
+          lastFailedLoginAt: uAny.lastFailedLoginAt || null,
         };
       }));
     } catch {
@@ -1124,6 +1171,20 @@ export async function registerRoutes(
       const updated = await storage.updateUserJobTitle(Number(req.params.id), jobTitle || "");
       if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
       res.json({ message: "Título atualizado" });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // Libera uma conta bloqueada (temporária ou permanentemente) por excesso de tentativas de login.
+  app.post("/api/users/:id/unlock", requireAdmin, async (req, res) => {
+    try {
+      const updated = await storage.updateUser(Number(req.params.id), {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        loginLockStage: 0,
+        permanentlyLocked: false,
+      } as any);
+      if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
+      res.json({ message: "Conta desbloqueada" });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 

@@ -32,6 +32,10 @@ interface UserItem {
   mustChangePassword: boolean;
   roleName: string | null;
   roleLabel: string | null;
+  failedLoginAttempts?: number;
+  lockedUntil?: string | null;
+  permanentlyLocked?: boolean;
+  lastFailedLoginAt?: string | null;
 }
 
 interface Role {
@@ -269,6 +273,12 @@ export default function Usuarios() {
     onError: async (err: any) => toast({ title: err.message || "Erro ao excluir", variant: "destructive" }),
   });
 
+  const unlockMutation = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/api/users/${id}/unlock`, {}),
+    onSuccess: () => { refreshUsersAndSession(); toast({ title: "Conta desbloqueada!" }); },
+    onError: async (err: any) => toast({ title: err.message || "Erro ao desbloquear", variant: "destructive" }),
+  });
+
   // ── Role mutations ────────────────────────────────────────────────────────────
   const createRoleMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/roles", data),
@@ -492,10 +502,27 @@ export default function Usuarios() {
                         {u.fullName && (
                           <p className="text-xs text-gray-500 mt-0.5" data-testid={`text-fullname-${u.id}`}>{u.fullName}</p>
                         )}
-                        <div className="mt-2 flex flex-wrap gap-1.5">
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           <Badge variant="outline" className={u.status === "inativo" ? "border-red-200 bg-red-50 text-red-700 text-xs" : "border-emerald-200 bg-emerald-50 text-emerald-700 text-xs"}>
                             {u.status === "inativo" ? "Inativo" : "Ativo"}
                           </Badge>
+                          {u.permanentlyLocked ? (
+                            <>
+                              <Badge className="bg-red-600 text-white border-red-700 text-xs">Bloqueado — excesso de tentativas</Badge>
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => unlockMutation.mutate(u.id)} disabled={unlockMutation.isPending} data-testid={`button-unlock-${u.id}`}>
+                                Desbloquear
+                              </Button>
+                            </>
+                          ) : u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() ? (
+                            <>
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">
+                                Bloqueado até {new Date(u.lockedUntil).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                              </Badge>
+                              <Button size="sm" variant="outline" className="h-6 px-2 text-xs" onClick={() => unlockMutation.mutate(u.id)} disabled={unlockMutation.isPending} data-testid={`button-unlock-${u.id}`}>
+                                Liberar agora
+                              </Button>
+                            </>
+                          ) : null}
                         </div>
 
                         {/* Expand/collapse controls */}
