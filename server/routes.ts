@@ -2391,6 +2391,19 @@ export async function registerRoutes(
   // Envia direto pela Evolution API (sem depender do n8n) usando as credenciais configuradas
   // na aba Automação (Fase 6). Usado pelo envio manual (SendModal) e pelo quadro de fluxos —
   // o cliente não precisa mais abrir o WhatsApp Web com o texto pré-preenchido.
+  // O voto nativo da enquete do WhatsApp não chega decifrado de volta pro ERP (nem a
+  // Evolution API nem o n8n confirmam repassar esse evento) — só uma resposta de TEXTO
+  // (dígito ou palavra-chave) é reconhecida hoje em /api/webhooks/n8n/inbound-message.
+  // Por isso toda enquete sai com a lista numerada e o pedido explícito pra responder
+  // digitando o número, garantindo que o cliente tenha um jeito que funciona de verdade,
+  // mesmo que ele só toque na opção e a gente nunca saiba qual foi. Usado tanto pelo envio
+  // direto (sendViaEvolution) quanto pelo endpoint que o n8n consulta para a saudação inicial.
+  const buildPollDisplayName = (message: string, pollOptions: string[]) => {
+    if (!pollOptions.length) return message;
+    const instruction = `\n\n${pollOptions.map((opt, i) => `${i + 1}. ${opt}`).join("\n")}\n\n_Toque em uma opção acima ou responda esta mensagem digitando o número._`;
+    return `${message}${instruction}`;
+  };
+
   const sendViaEvolution = async ({
     phone,
     message,
@@ -2433,19 +2446,10 @@ export async function registerRoutes(
         : isPoll
           ? `${baseUrl}/message/sendPoll/${instance}`
           : `${baseUrl}/message/sendText/${instance}`;
-      // O voto nativo da enquete do WhatsApp não chega decifrado de volta pro ERP (nem a
-      // Evolution API nem o n8n confirmam repassar esse evento) — só uma resposta de TEXTO
-      // (dígito ou palavra-chave) é reconhecida hoje em /api/webhooks/n8n/inbound-message.
-      // Por isso toda enquete sai com a lista numerada e o pedido explícito pra responder
-      // digitando o número, garantindo que o cliente tenha um jeito que funciona de verdade,
-      // mesmo que ele só toque na opção e a gente nunca saiba qual foi.
-      const pollInstruction = isPoll && pollOptions.length > 0
-        ? `\n\n${pollOptions.map((opt, i) => `${i + 1}. ${opt}`).join("\n")}\n\n_Toque em uma opção acima ou responda esta mensagem digitando o número._`
-        : "";
       const body = media
         ? { number: numberWithCountry, mediatype: "document", mimetype: "application/pdf", media: media.base64, fileName: media.fileName, caption: message }
         : isPoll
-          ? { number: numberWithCountry, name: `${message}${pollInstruction}`, selectableCount: 1, values: pollOptions }
+          ? { number: numberWithCountry, name: buildPollDisplayName(message, pollOptions), selectableCount: 1, values: pollOptions }
           : { number: numberWithCountry, text: message };
       const response = await fetch(endpoint, {
         method: "POST",
@@ -4911,6 +4915,37 @@ export async function registerRoutes(
     }
     return true;
   };
+
+  // Chamado pelo n8n (fluxo de primeiro contato) para buscar o conteúdo REAL do fluxo
+  // configurado no ERP (aba Fluxos) em vez de ter a mensagem/opções fixas escritas dentro do
+  // próprio workflow do n8n — assim, editar o fluxo no ERP passa a valer de verdade pra
+  // saudação automática, sem precisar editar o n8n também. Já devolve o texto da enquete
+  // pronto (com a lista numerada + pedido de resposta por número), pra o n8n só repassar pra
+  // Evolution API sem duplicar essa lógica lá.
+  app.post("/api/webhooks/n8n/flow-content", async (req, res) => {
+    try {
+      if (!(await checkN8nWebhookSecret(req, res))) return;
+      const trigger = String(req.body?.trigger || "").trim();
+      if (!trigger) return res.status(400).json({ message: "trigger obrigatório." });
+      const flows = await storage.getWhatsappFlows();
+      const flow = flows.find(f => f.trigger === trigger && f.active !== false);
+      if (!flow) return res.status(404).json({ message: `Nenhum fluxo ativo encontrado para o gatilho "${trigger}".` });
+      let pollOptions: string[] = [];
+      if (flow.buttons) {
+        try { pollOptions = (JSON.parse(flow.buttons as string) as any[]).map(b => b.text).filter(Boolean); } catch {}
+      }
+      const isPoll = pollOptions.length > 0;
+      res.json({
+        flowId: flow.id,
+        flowName: flow.name,
+        message: flow.message,
+        isPoll,
+        pollOptions,
+        pollDisplayName: isPoll ? buildPollDisplayName(flow.message, pollOptions) : flow.message,
+        includePdf: flow.includePdf !== false,
+      });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
 
   // Chamado pelo n8n (fluxo de primeiro contato) para saber se um telefone já é conhecido do
   // ERP antes de decidir se manda a saudação de boas-vindas. Não fica sob /api/leads porque
