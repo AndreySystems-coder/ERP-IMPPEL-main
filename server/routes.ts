@@ -2398,6 +2398,7 @@ export async function registerRoutes(
     pollOptions = [],
     flowId,
     flowName,
+    media,
   }: {
     phone: string;
     message: string;
@@ -2405,6 +2406,8 @@ export async function registerRoutes(
     pollOptions?: string[];
     flowId?: number | string | null;
     flowName?: string;
+    // Documento (ex.: PDF do orçamento) enviado junto com a mensagem, em vez de texto puro.
+    media?: { base64: string; fileName: string };
   }) => {
     const automation = await storage.getAutomationSettings();
     if (!automation.evolutionApiUrl || !automation.evolutionApiKey) {
@@ -2425,12 +2428,16 @@ export async function registerRoutes(
       channel: "evolution",
     } as any);
     try {
-      const endpoint = isPoll
-        ? `${baseUrl}/message/sendPoll/${instance}`
-        : `${baseUrl}/message/sendText/${instance}`;
-      const body = isPoll
-        ? { number: numberWithCountry, name: message, selectableCount: 1, values: pollOptions }
-        : { number: numberWithCountry, text: message };
+      const endpoint = media
+        ? `${baseUrl}/message/sendMedia/${instance}`
+        : isPoll
+          ? `${baseUrl}/message/sendPoll/${instance}`
+          : `${baseUrl}/message/sendText/${instance}`;
+      const body = media
+        ? { number: numberWithCountry, mediatype: "document", mimetype: "application/pdf", media: media.base64, fileName: media.fileName, caption: message }
+        : isPoll
+          ? { number: numberWithCountry, name: message, selectableCount: 1, values: pollOptions }
+          : { number: numberWithCountry, text: message };
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: automation.evolutionApiKey },
@@ -2991,6 +2998,31 @@ export async function registerRoutes(
     await storage.deleteJob(Number(req.params.id));
     if (job?.leadId) await reconcileLeadOperationalStatus(Number(job.leadId));
     res.status(204).end();
+  });
+
+  // Envio manual "Enviar por WhatsApp" do orçamento — substitui o antigo fluxo de abrir
+  // wa.me e anexar o PDF na mão: envia de verdade pela Evolution API, com o PDF (gerado no
+  // cliente) como anexo. O telefone e a mensagem já vêm resolvidos do cliente (mesma prévia
+  // mostrada antes de confirmar); aqui só valida e efetua o envio.
+  app.post("/api/jobs/:id/send-whatsapp", requireAuth, async (req, res) => {
+    try {
+      const job = await storage.getJob(Number(req.params.id));
+      if (!job) return res.status(404).json({ message: "Orçamento não encontrado" });
+      const phone = String(req.body?.phone || "").trim();
+      const message = String(req.body?.message || "").trim();
+      if (!phone || !message) return res.status(400).json({ message: "Telefone e mensagem são obrigatórios." });
+      const pdfBase64 = typeof req.body?.pdfBase64 === "string" ? req.body.pdfBase64 : undefined;
+      const pdfFileName = typeof req.body?.pdfFileName === "string" ? req.body.pdfFileName : "orcamento.pdf";
+      const result = await sendViaEvolution({
+        phone,
+        message,
+        flowName: `Orçamento #${String(job.orcamentoNumero ?? job.id).padStart(4, "0")} — envio manual`,
+        media: pdfBase64 ? { base64: pdfBase64, fileName: pdfFileName } : undefined,
+      });
+      res.json({ ok: result.ok, message: result.ok ? "Enviado" : (result as any).message || result.log?.errorMessage || "Falha ao enviar." });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // Work Orders

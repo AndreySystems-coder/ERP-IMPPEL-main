@@ -145,7 +145,11 @@ const OBSERVACOES_PADRAO = [
   "PROPOSTA VÁLIDA POR 30 DIAS.",
 ];
 
-export function gerarOrcamentoPDF(data: OrcamentoPDFData, templateConfig?: QuoteTemplateConfig) {
+export function gerarOrcamentoPDF(
+  data: OrcamentoPDFData,
+  templateConfig?: QuoteTemplateConfig,
+  options?: { download?: boolean },
+): { doc: jsPDF; fileName: string } {
   const cfg = templateConfig ?? DEFAULT_PDF_CONFIG;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageW   = doc.internal.pageSize.getWidth();
@@ -821,7 +825,9 @@ export function gerarOrcamentoPDF(data: OrcamentoPDFData, templateConfig?: Quote
   }
 
   const nomeCliente = data.cliente.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 20);
-  doc.save(`IMPPEL_Orcamento_${data.id ? String(data.id).padStart(4, "0") + "_" : ""}${nomeCliente}_${dataFormatada.replace(/\//g, "-")}.pdf`);
+  const fileName = `IMPPEL_Orcamento_${data.id ? String(data.id).padStart(4, "0") + "_" : ""}${nomeCliente}_${dataFormatada.replace(/\//g, "-")}.pdf`;
+  if (options?.download !== false) doc.save(fileName);
+  return { doc, fileName };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

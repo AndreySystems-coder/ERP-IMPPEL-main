@@ -6,13 +6,14 @@ import { useJobScoring } from "@/hooks/use-job-scoring";
 import { useCostConfig } from "@/hooks/use-cost-config";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { Plus, Search, Briefcase, FileText, X, Users, Hash, CreditCard, LayoutList, LayoutGrid } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import { gerarOrcamentoPDF, mergeQuoteTemplateConfig } from "@/lib/orcamentoPDF";
-import type { MaterialDisplayMode, QuoteTemplateConfig } from "@/lib/orcamentoPDF";
+import type { MaterialDisplayMode, QuoteTemplateConfig, OrcamentoPDFData } from "@/lib/orcamentoPDF";
 import { asArray } from "@/lib/safeData";
 import { formatBrazilPhone } from "@/lib/phone";
 import { useJobStatuses } from "@/hooks/use-job-statuses";
@@ -114,16 +115,18 @@ export default function Jobs() {
   const [materialDisplayMode, setMaterialDisplayMode] = useState<MaterialDisplayMode>("material_mdo");
   const [showMaterialsToClient, setShowMaterialsToClient] = useState(true);
 
-  // WhatsApp confirmation modal state
+  // WhatsApp confirmation modal state — confirma antes de enviar de verdade (não é mais um
+  // link wa.me pra abrir manualmente, é envio automático via Evolution API).
   const [waModal, setWaModal] = useState<{
     open: boolean;
-    waUrl: string;
+    job: any;
+    phone: string;
     message: string;
     clientName: string;
     statusName: string;
     pdfIncluded: boolean;
     pdfFileName: string;
-  }>({ open: false, waUrl: "", message: "", clientName: "", statusName: "", pdfIncluded: false, pdfFileName: "" });
+  }>({ open: false, job: null, phone: "", message: "", clientName: "", statusName: "", pdfIncluded: false, pdfFileName: "" });
 
   // Form State
   const [clientId, setClientId] = useState(""); // optional CRM FK link
@@ -437,7 +440,10 @@ export default function Jobs() {
     setIsModalOpen(false);
   };
 
-  const handleGerarPDF = async (job: any) => {
+  // Monta os dados do PDF do orçamento a partir da OS/job — reaproveitado tanto pelo botão
+  // "Gerar PDF" (download) quanto pelo envio por WhatsApp (anexo), pra não duplicar a lógica
+  // de cálculo de custo/margem e montagem de clientes/responsáveis em dois lugares.
+  const buildOrcamentoPDFData = async (job: any) => {
     // Fetch the default template config
     let templateConfig: QuoteTemplateConfig = mergeQuoteTemplateConfig();
     try {
@@ -548,7 +554,7 @@ export default function Jobs() {
       jobShowMaterialsToClient = opts.showMaterialsToClient !== false;
     } catch { /* use defaults */ }
 
-    gerarOrcamentoPDF({
+    const data: OrcamentoPDFData = {
       id: job.id,
       orcamentoNumero: job.orcamentoNumero ?? undefined,
       cliente: job.clientName,
@@ -574,9 +580,19 @@ export default function Jobs() {
       paymentConditions: paymentConditionsPDF,
       materialDisplayMode: jobMaterialDisplayMode,
       showMaterialsToClient: jobShowMaterialsToClient,
-    }, templateConfig);
+    };
+    return { data, templateConfig };
   };
 
+  const handleGerarPDF = async (job: any) => {
+    const { data, templateConfig } = await buildOrcamentoPDFData(job);
+    gerarOrcamentoPDF(data, templateConfig);
+  };
+
+  const [sendingWhatsAppId, setSendingWhatsAppId] = useState<number | null>(null);
+
+  // Monta a prévia (telefone, mensagem do status, se leva PDF) e abre o modal de confirmação.
+  // O envio de fato só acontece quando o usuário confirma (handleConfirmEnviarWhatsApp).
   const handleEnviarWhatsApp = async (job: any) => {
     let phone = "";
     let clientFirstName = job.clientName?.split(" ")[0] || "Cliente";
@@ -601,9 +617,6 @@ export default function Jobs() {
       return;
     }
 
-    const digits = phone.replace(/\D/g, "");
-    const intlPhone = digits.startsWith("55") && digits.length >= 12 ? digits : `55${digits}`;
-
     const displayNum = job.orcamentoNumero ?? job.id;
     const numFormatted = String(displayNum).padStart(4, "0");
 
@@ -619,53 +632,64 @@ export default function Jobs() {
       (sc: any) => sc.name?.toLowerCase() === (job.status || "").toLowerCase()
     );
 
-    let rawMessage = "";
-    if (statusConfig?.message) {
-      rawMessage = statusConfig.message;
-    } else {
-      rawMessage = "Olá {cliente}! Segue o orçamento solicitado da IMPPEL. Qualquer dúvida estou à disposição.\n\n Orçamento Nº {numero} — IMPPEL Impermeabilizações";
-    }
+    const rawMessage = statusConfig?.message
+      || "Olá {cliente}! Segue o orçamento solicitado da IMPPEL. Qualquer dúvida estou à disposição.\n\n Orçamento Nº {numero} — IMPPEL Impermeabilizações";
 
     const msg = rawMessage
       .replace(/\{cliente\}/gi, clientFirstName)
       .replace(/\{numero\}/gi, numFormatted);
 
-    // 6. Determine if PDF should be included (default = true)
     const shouldIncludePdf = statusConfig ? statusConfig.includePdf !== false : true;
-
-    // 7. Generate PDF first (doc.save triggers browser download)
-    if (shouldIncludePdf) {
-      handleGerarPDF(job);
-    }
-
-    // 8. Download extra file if configured
-    if (statusConfig?.extraFileData && statusConfig?.extraFileName) {
-      const link = document.createElement("a");
-      link.href = statusConfig.extraFileData;
-      link.download = statusConfig.extraFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    // 9. Build PDF filename reference
-    const dataHoje = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
     const nomeArquivo = (job.clientName || "cliente").replace(/[^a-zA-Z0-9]/g, "_").substring(0, 20);
-    const pdfFileName = `IMPPEL_Orcamento_${numFormatted}_${nomeArquivo}_${dataHoje}.pdf`;
+    const pdfFileName = `IMPPEL_Orcamento_${numFormatted}_${nomeArquivo}.pdf`;
 
-    // 10. Build WhatsApp URL
-    const waUrl = `https://wa.me/${intlPhone}?text=${encodeURIComponent(msg)}`;
-
-    // 11. Open modal for user to confirm and open WhatsApp
     setWaModal({
       open: true,
-      waUrl,
+      job,
+      phone,
       message: msg,
       clientName: clientFirstName,
       statusName: job.status || "",
       pdfIncluded: shouldIncludePdf,
       pdfFileName,
     });
+  };
+
+  // Confirma o envio: gera o PDF (se aplicável) direto em memória — sem baixar arquivo nenhum
+  // — extrai o base64 e manda pro servidor, que envia de verdade pela Evolution API já com o
+  // anexo. Nada aqui abre WhatsApp Web nem depende do usuário anexar nada manualmente.
+  const handleConfirmEnviarWhatsApp = async () => {
+    const { job, phone, message, pdfIncluded, pdfFileName } = waModal;
+    if (!job) return;
+    setSendingWhatsAppId(job.id);
+    try {
+      let pdfBase64: string | undefined;
+      if (pdfIncluded) {
+        const { data, templateConfig } = await buildOrcamentoPDFData(job);
+        // download:false — aqui o PDF vira só o anexo enviado pelo WhatsApp, sem baixar
+        // uma cópia local (isso continua sendo o que o botão "Gerar PDF" faz).
+        const { doc } = gerarOrcamentoPDF(data, templateConfig, { download: false });
+        const dataUri = doc.output("datauristring");
+        pdfBase64 = dataUri.split(",")[1] || undefined;
+      }
+      const res = await apiRequest("POST", `/api/jobs/${job.id}/send-whatsapp`, {
+        phone,
+        message,
+        pdfBase64,
+        pdfFileName: pdfIncluded ? pdfFileName : undefined,
+      });
+      const result = await res.json();
+      if (result.ok) {
+        toast({ title: "Mensagem enviada!", description: `Enviado para ${waModal.clientName} via WhatsApp.` });
+        setWaModal(m => ({ ...m, open: false }));
+      } else {
+        toast({ title: "Não foi possível enviar", description: result.message || "Verifique a configuração da Evolution API em Automação.", variant: "destructive" });
+      }
+    } catch (err: any) {
+      toast({ title: "Erro ao enviar", description: err.message, variant: "destructive" });
+    } finally {
+      setSendingWhatsAppId(null);
+    }
   };
 
   const handleInlineStatusChange = async (job: any, newStatus: string) => {
@@ -1110,13 +1134,20 @@ export default function Jobs() {
             </div>
 
             <div className="p-6 space-y-4">
+              <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                  <SiWhatsapp className="w-4 h-4 text-slate-500" />
+                </div>
+                <p className="text-slate-600 text-sm">Enviar para <strong>{waModal.phone}</strong></p>
+              </div>
+
               {waModal.pdfIncluded && (
                 <div className="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
                   <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
                     <FileText className="w-4 h-4 text-blue-600" />
                   </div>
                   <div>
-                    <p className="font-semibold text-blue-800 text-sm">PDF gerado e baixado com sucesso!</p>
+                    <p className="font-semibold text-blue-800 text-sm">PDF será anexado automaticamente</p>
                     <p className="text-blue-600 text-xs mt-0.5 font-mono">{waModal.pdfFileName}</p>
                   </div>
                 </div>
@@ -1128,19 +1159,6 @@ export default function Jobs() {
                   <p className="text-slate-800 text-sm whitespace-pre-wrap leading-relaxed">{waModal.message}</p>
                 </div>
               </div>
-
-              {/* Attach instruction */}
-              {waModal.pdfIncluded && (
-                <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                  <span className="text-xl shrink-0">Anexo</span>
-                  <div>
-                    <p className="font-semibold text-amber-800 text-sm">Como anexar o PDF no WhatsApp:</p>
-                    <p className="text-amber-700 text-xs mt-1">
-                      Após o WhatsApp abrir, clique no ícone de <strong>clipe / anexo</strong> e selecione o arquivo <strong>{waModal.pdfFileName}</strong> que foi salvo na sua pasta Downloads.
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Footer Buttons */}
@@ -1149,19 +1167,18 @@ export default function Jobs() {
                 onClick={() => setWaModal(m => ({ ...m, open: false }))}
                 className="flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 transition-colors"
                 data-testid="button-wa-cancel"
+                disabled={sendingWhatsAppId === waModal.job?.id}
               >
                 Cancelar
               </button>
               <button
-                onClick={() => {
-                  window.open(waModal.waUrl, "_blank", "noopener,noreferrer");
-                  setWaModal(m => ({ ...m, open: false }));
-                }}
-                className="flex-1 px-4 py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-bold text-base flex items-center justify-center gap-2 transition-colors shadow-lg shadow-green-500/30"
+                onClick={handleConfirmEnviarWhatsApp}
+                disabled={sendingWhatsAppId === waModal.job?.id}
+                className="flex-1 px-4 py-3 rounded-xl bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white font-bold text-base flex items-center justify-center gap-2 transition-colors shadow-lg shadow-green-500/30"
                 data-testid="button-wa-open"
               >
                 <SiWhatsapp className="w-5 h-5" />
-                Abrir WhatsApp agora
+                {sendingWhatsAppId === waModal.job?.id ? "Enviando..." : "Confirmar e enviar"}
               </button>
             </div>
           </div>
