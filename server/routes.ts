@@ -2350,6 +2350,9 @@ export async function registerRoutes(
   // Envia uma mensagem via n8n reutilizando o mesmo caminho do botão manual "Enviar automático"
   // (SendModal). Usado tanto pela rota HTTP quanto pelo disparo automático ao mudar status de
   // orçamento/obra — para não duplicar a lógica de log e chamada do webhook em dois lugares.
+  // Envio automático (disparado por mudança de status de orçamento/OS) — respeita o
+  // interruptor "Ativar mensagem automática" independente do envio manual, mas manda direto
+  // pela Evolution API (sendViaEvolution) em vez de depender de um webhook do n8n.
   const sendWhatsappAutomatico = async ({
     phone,
     message,
@@ -2362,30 +2365,10 @@ export async function registerRoutes(
     flowName?: string;
   }) => {
     const automation = await storage.getAutomationSettings();
-    if (!automation.whatsappAutoSendEnabled || !automation.n8nWebhookUrl) {
-      return { ok: false, log: null as any, message: "Envio automático não está configurado. Configure o webhook do n8n primeiro." };
+    if (!automation.whatsappAutoSendEnabled) {
+      return { ok: false, log: null as any, message: "Envio automático está desativado. Ative em Automação." };
     }
-    let log = await storage.createWhatsappSendLog({
-      flowId: flowId || null,
-      flowName: flowName || "Envio Automático",
-      phone,
-      message,
-      status: "enviando",
-      errorMessage: null,
-      channel: "n8n",
-    } as any);
-    try {
-      const response = await fetch(automation.n8nWebhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, message, logId: log.id }),
-      });
-      if (!response.ok) throw new Error(`n8n respondeu ${response.status}`);
-      log = (await storage.updateWhatsappSendLogStatus(log.id, "sent")) || log;
-    } catch (sendError: any) {
-      log = (await storage.updateWhatsappSendLogStatus(log.id, "error", sendError.message)) || log;
-    }
-    return { ok: log.status === "sent", log };
+    return sendViaEvolution({ phone, message, flowId, flowName: flowName || "Envio Automático" });
   };
 
   // Envia direto pela Evolution API (sem depender do n8n) usando as credenciais configuradas
@@ -4906,15 +4889,161 @@ export async function registerRoutes(
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
+  // Aceita o segredo por header (n8n), corpo (n8n) ou query string — a Evolution API (e outros
+  // serviços de webhook de terceiros) muitas vezes só permite configurar a URL de callback, sem
+  // cabeçalho customizado, então o segredo viaja como ?secret=... nesse caso.
   const checkN8nWebhookSecret = async (req: Request, res: Response) => {
     const automation = await storage.getAutomationSettings();
-    const providedSecret = req.get("x-erp-webhook-secret") || req.body?.secret;
+    const providedSecret = req.get("x-erp-webhook-secret") || req.body?.secret || req.query?.secret;
     if (!automation.incomingSecret || providedSecret !== automation.incomingSecret) {
       res.status(401).json({ message: "Segredo inválido." });
       return false;
     }
     return true;
   };
+
+  // Extrai telefone/nome/opção do payload BRUTO da Evolution API (messages.upsert) — mesma
+  // decodificação que antes vivia dentro do node "Normalizar Dados" no n8n. Usado pelo
+  // endpoint que a própria Evolution API chama direto, sem n8n no meio.
+  const parseEvolutionInboundPayload = (body: any) => {
+    const data = body?.data || {};
+    const fromMe = Boolean(data?.key?.fromMe);
+    const remoteJid = String(data?.key?.remoteJid || "");
+    const phone = remoteJid.split("@")[0] || "";
+    const isGroup = remoteJid.includes("@g.us");
+    const pushName = String(data?.pushName || "");
+    const buttonId = String(data?.message?.buttonsResponseMessage?.selectedButtonId || "");
+    const freeText = String(data?.message?.conversation || data?.message?.extendedTextMessage?.text || "");
+    return { fromMe, isGroup, phone, pushName, buttonId, freeText };
+  };
+
+  // Núcleo do processamento de uma mensagem recebida no WhatsApp: cria/encontra o lead, manda
+  // a saudação de primeiro contato se for um lead novo, registra a interação no CRM e — se a
+  // resposta bater com uma opção do fluxo ativo — manda a resposta automática configurada.
+  // Compartilhado entre o endpoint direto da Evolution API e o antigo endpoint via n8n.
+  const handleInboundWhatsappMessage = async ({
+    phone, name, buttonId, freeText,
+  }: { phone: string; name?: string; buttonId?: string; freeText?: string }) => {
+    const leads = await storage.getLeads();
+    let lead = leads.find(l => String(l.phone || "").replace(/\D/g, "") === phone);
+    let isNew = false;
+    if (!lead) {
+      lead = await storage.createLead({
+        name: name || `WhatsApp ${phone}`,
+        phone,
+        source: "WhatsApp - Primeiro Contato",
+        status: "New Lead",
+        notes: "Criado automaticamente pela saudação de primeiro contato do WhatsApp.",
+        currentFlowTrigger: "atendimento_inicial",
+      } as any);
+      isNew = true;
+    }
+
+    if (isNew && lead.phone) {
+      try {
+        const flows = await storage.getWhatsappFlows();
+        const greetingFlow = flows.find(f => f.trigger === "atendimento_inicial" && f.active !== false);
+        if (greetingFlow) {
+          let pollOptions: string[] = [];
+          if (greetingFlow.buttons) {
+            try { pollOptions = (JSON.parse(greetingFlow.buttons as string) as any[]).map((b: any) => b.text).filter(Boolean); } catch {}
+          }
+          await sendViaEvolution({
+            phone: lead.phone,
+            message: greetingFlow.message,
+            isPoll: pollOptions.length > 0,
+            pollOptions,
+            flowId: greetingFlow.id,
+            flowName: greetingFlow.name,
+          });
+        }
+      } catch (greetErr: any) {
+        console.error("Falha ao enviar saudação automática de primeiro contato:", greetErr?.message || greetErr);
+      }
+    }
+
+    const choice = String(buttonId || freeText || "").trim();
+    const summary = choice ? `Cliente respondeu no WhatsApp: "${choice}"` : "Cliente mandou mensagem no WhatsApp.";
+    await storage.createCompleteTableRow("crmInteractions", {
+      leadId: lead.id,
+      channel: "whatsapp",
+      direction: "entrada",
+      summary,
+      status: lead.status,
+      createdByUsername: "sistema",
+    });
+
+    // Palavra-chave (ou número da opção) reconhecida no texto livre — o voto em si da
+    // enquete do WhatsApp não chega decifrado até aqui, então esse é o sinal real que o
+    // sistema consegue usar (a mensagem do fluxo já pede pra responder com o número).
+    const stripAccents = (text: string) => text.normalize("NFD").replace(new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g"), "");
+    const normalizedChoice = stripAccents(choice).trim().toLowerCase();
+
+    let nextAction: string | undefined;
+    let matchedOption: { text: string; responseMessage?: string } | undefined;
+    let matchedFlowName: string | undefined;
+
+    if (lead.currentFlowTrigger && normalizedChoice) {
+      const flows = await storage.getWhatsappFlows();
+      const activeFlow = flows.find(f => f.trigger === lead!.currentFlowTrigger);
+      if (activeFlow?.buttons) {
+        try {
+          const options = JSON.parse(activeFlow.buttons as string) as { text: string; responseMessage?: string }[];
+          const byPosition = /^[1-9]$/.test(normalizedChoice) ? options[Number(normalizedChoice) - 1] : undefined;
+          const byKeyword = byPosition ? undefined : options.find(opt => {
+            const keyword = stripAccents(opt.text).toLowerCase().replace(/^[^a-z]+/, "").split(/\s+/).find(word => word.length > 3);
+            return keyword ? normalizedChoice.includes(keyword) : false;
+          });
+          matchedOption = byPosition || byKeyword;
+          matchedFlowName = activeFlow.name;
+        } catch {}
+      }
+    }
+
+    if (matchedOption) {
+      nextAction = `Cliente escolheu: "${matchedOption.text}"`;
+    } else if (normalizedChoice.includes("orcamento") || normalizedChoice === "1") nextAction = "Cliente quer orçamento — iniciar atendimento.";
+    else if (normalizedChoice.includes("atendente") || normalizedChoice === "2") nextAction = "Cliente pediu para falar com atendente.";
+    else if (normalizedChoice.includes("duvida") || normalizedChoice === "3") nextAction = "Cliente tem dúvida técnica.";
+    if (nextAction) await storage.updateLead(lead.id, { nextAction } as any);
+
+    if (matchedOption?.responseMessage && lead.phone) {
+      const jobs = await storage.getJobs();
+      const latestJob = jobs.filter(j => Number(j.leadId) === lead!.id).sort((a, b) => Number(b.id) - Number(a.id))[0];
+      const replyMessage = substituteMessageVariables(matchedOption.responseMessage, {
+        nome_cliente: lead.name?.split(" ")[0] || "Cliente",
+        ...(latestJob ? {
+          numero_orcamento: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0"),
+          tipo_servico: latestJob.serviceType || "",
+          valor_orcamento: latestJob.realPriceSold ? Number(latestJob.realPriceSold).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
+        } : {}),
+      });
+      await sendViaEvolution({ phone: lead.phone, message: replyMessage, flowName: `${matchedFlowName || "Fluxo"} — resposta da opção` });
+    }
+
+    return { isNew, leadId: lead.id };
+  };
+
+  // Endpoint chamado DIRETO pela Evolution API (configurar em Settings > Webhook da instância,
+  // evento MESSAGES_UPSERT, apontando pra esta URL com ?secret=<segredo da aba Automação>) —
+  // sem depender de n8n. Filtra mensagens próprias e de grupo, e processa com a mesma lógica
+  // de saudação de primeiro contato + resposta automática.
+  app.post("/api/webhooks/evolution/inbound", async (req, res) => {
+    try {
+      if (!(await checkN8nWebhookSecret(req, res))) return;
+      const parsed = parseEvolutionInboundPayload(req.body);
+      if (parsed.fromMe || parsed.isGroup || !parsed.phone) {
+        return res.json({ ok: true, skipped: true });
+      }
+      const result = await handleInboundWhatsappMessage({
+        phone: parsed.phone,
+        name: parsed.pushName,
+        buttonId: parsed.buttonId,
+        freeText: parsed.freeText,
+      });
+      res.json({ ok: true, ...result });
+    } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
 
   // Chamado pelo n8n (fluxo de primeiro contato) para buscar o conteúdo REAL do fluxo
   // configurado no ERP (aba Fluxos) em vez de ter a mensagem/opções fixas escritas dentro do
@@ -4970,88 +5099,18 @@ export async function registerRoutes(
   // Chamado pelo n8n (fluxo de primeiro contato) para registrar uma mensagem recebida no
   // WhatsApp: cria o lead automaticamente se for um contato novo, e guarda a interação
   // (incluindo qual botão o cliente escolheu, se veio um).
+  // LEGADO: mantido por compatibilidade caso o n8n volte a ser usado no futuro. O caminho
+  // atual é o endpoint direto da Evolution API acima (/api/webhooks/evolution/inbound), que
+  // já cobre saudação de primeiro contato — este aqui não mandava a saudação sozinho (quem
+  // decidia isso era um passo separado no n8n).
   app.post("/api/webhooks/n8n/inbound-message", async (req, res) => {
     try {
       if (!(await checkN8nWebhookSecret(req, res))) return;
       const phoneDigits = String(req.body?.phone || "").replace(/\D/g, "");
       if (!phoneDigits) return res.status(400).json({ message: "phone obrigatório." });
       const { name, buttonId, freeText } = req.body || {};
-
-      const leads = await storage.getLeads();
-      let lead = leads.find(l => String(l.phone || "").replace(/\D/g, "") === phoneDigits);
-      let isNew = false;
-      if (!lead) {
-        lead = await storage.createLead({
-          name: name || `WhatsApp ${phoneDigits}`,
-          phone: req.body?.phone || phoneDigits,
-          source: "WhatsApp - Primeiro Contato",
-          status: "New Lead",
-          notes: "Criado automaticamente pela saudação de primeiro contato do WhatsApp.",
-          currentFlowTrigger: "atendimento_inicial",
-        } as any);
-        isNew = true;
-      }
-
-      const choice = String(buttonId || freeText || "").trim();
-      const summary = choice ? `Cliente respondeu no WhatsApp: "${choice}"` : "Cliente mandou mensagem no WhatsApp.";
-      await storage.createCompleteTableRow("crmInteractions", {
-        leadId: lead.id,
-        channel: "whatsapp",
-        direction: "entrada",
-        summary,
-        status: lead.status,
-        createdByUsername: "n8n",
-      });
-
-      // Palavra-chave (ou número da opção) reconhecida no texto livre — o voto em si da
-      // enquete do WhatsApp não chega decifrado até aqui, então esse é o sinal real que o
-      // sistema consegue usar (a mensagem do fluxo já pede pra responder com o número).
-      const stripAccents = (text: string) => text.normalize("NFD").replace(new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g"), "");
-      const normalizedChoice = stripAccents(choice).trim().toLowerCase();
-
-      let nextAction: string | undefined;
-      let matchedOption: { text: string; responseMessage?: string } | undefined;
-      let matchedFlowName: string | undefined;
-
-      if (lead.currentFlowTrigger && normalizedChoice) {
-        const flows = await storage.getWhatsappFlows();
-        const activeFlow = flows.find(f => f.trigger === lead!.currentFlowTrigger);
-        if (activeFlow?.buttons) {
-          try {
-            const options = JSON.parse(activeFlow.buttons as string) as { text: string; responseMessage?: string }[];
-            const byPosition = /^[1-9]$/.test(normalizedChoice) ? options[Number(normalizedChoice) - 1] : undefined;
-            const byKeyword = byPosition ? undefined : options.find(opt => {
-              const keyword = stripAccents(opt.text).toLowerCase().replace(/^[^a-z]+/, "").split(/\s+/).find(word => word.length > 3);
-              return keyword ? normalizedChoice.includes(keyword) : false;
-            });
-            matchedOption = byPosition || byKeyword;
-            matchedFlowName = activeFlow.name;
-          } catch {}
-        }
-      }
-
-      if (matchedOption) {
-        nextAction = `Cliente escolheu: "${matchedOption.text}"`;
-      } else if (normalizedChoice.includes("orcamento") || normalizedChoice === "1") nextAction = "Cliente quer orçamento — iniciar atendimento.";
-      else if (normalizedChoice.includes("atendente") || normalizedChoice === "2") nextAction = "Cliente pediu para falar com atendente.";
-      else if (normalizedChoice.includes("duvida") || normalizedChoice === "3") nextAction = "Cliente tem dúvida técnica.";
-      if (nextAction) await storage.updateLead(lead.id, { nextAction } as any);
-
-      if (matchedOption?.responseMessage && lead.phone) {
-        const jobs = await storage.getJobs();
-        const latestJob = jobs.filter(j => Number(j.leadId) === lead!.id).sort((a, b) => Number(b.id) - Number(a.id))[0];
-        const replyMessage = substituteMessageVariables(matchedOption.responseMessage, {
-          nome_cliente: lead.name?.split(" ")[0] || "Cliente",
-          ...(latestJob ? {
-            numero_orcamento: String(latestJob.orcamentoNumero ?? latestJob.id).padStart(4, "0"),
-            tipo_servico: latestJob.serviceType || "",
-            valor_orcamento: latestJob.realPriceSold ? Number(latestJob.realPriceSold).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "",
-          } : {}),
-        });
-        await sendViaEvolution({ phone: lead.phone, message: replyMessage, flowName: `${matchedFlowName || "Fluxo"} — resposta da opção` });
-      }
-
-      res.json({ ok: true, isNew, leadId: lead.id });
+      const result = await handleInboundWhatsappMessage({ phone: phoneDigits, name, buttonId, freeText });
+      res.json({ ok: true, ...result });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
   });
 
