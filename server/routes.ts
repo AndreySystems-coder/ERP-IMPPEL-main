@@ -2374,18 +2374,10 @@ export async function registerRoutes(
   // Envia direto pela Evolution API (sem depender do n8n) usando as credenciais configuradas
   // na aba Automação (Fase 6). Usado pelo envio manual (SendModal) e pelo quadro de fluxos —
   // o cliente não precisa mais abrir o WhatsApp Web com o texto pré-preenchido.
-  // O voto nativo da enquete do WhatsApp não chega decifrado de volta pro ERP (nem a
-  // Evolution API nem o n8n confirmam repassar esse evento) — só uma resposta de TEXTO
-  // (dígito ou palavra-chave) é reconhecida hoje em /api/webhooks/n8n/inbound-message.
-  // Por isso toda enquete sai com a lista numerada e o pedido explícito pra responder
-  // digitando o número, garantindo que o cliente tenha um jeito que funciona de verdade,
-  // mesmo que ele só toque na opção e a gente nunca saiba qual foi. Usado tanto pelo envio
-  // direto (sendViaEvolution) quanto pelo endpoint que o n8n consulta para a saudação inicial.
-  const buildPollDisplayName = (message: string, pollOptions: string[]) => {
-    if (!pollOptions.length) return message;
-    const instruction = `\n\n${pollOptions.map((opt, i) => `${i + 1}. ${opt}`).join("\n")}\n\n_Toque em uma opção acima ou responda esta mensagem digitando o número._`;
-    return `${message}${instruction}`;
-  };
+  // O voto da enquete chega decifrado em data.message.pollUpdateMessage.vote.selectedOptions
+  // (confirmado inspecionando um payload real) — não precisa de lista numerada nem de pedir
+  // pra responder digitando o número, o toque na opção já basta.
+  const buildPollDisplayName = (message: string, _pollOptions: string[]) => message;
 
   const sendViaEvolution = async ({
     phone,
@@ -4936,7 +4928,11 @@ export async function registerRoutes(
     const pushName = String(data?.pushName || "");
     const buttonId = String(data?.message?.buttonsResponseMessage?.selectedButtonId || "");
     const freeText = String(data?.message?.conversation || data?.message?.extendedTextMessage?.text || "");
-    return { fromMe, isGroup, phone, pushName, buttonId, freeText };
+    // Voto de enquete: a Evolution API já entrega decifrado em vote.selectedOptions, com o texto
+    // exato da opção (o mesmo texto mandado em "values" ao criar a enquete) — confirmado
+    // inspecionando um payload real de voto, não documentação.
+    const pollVoteOption = String(data?.message?.pollUpdateMessage?.vote?.selectedOptions?.[0] || "");
+    return { fromMe, isGroup, phone, pushName, buttonId, freeText, pollVoteOption };
   };
 
   // Núcleo do processamento de uma mensagem recebida no WhatsApp: cria/encontra o lead, manda
@@ -4944,8 +4940,8 @@ export async function registerRoutes(
   // resposta bater com uma opção do fluxo ativo — manda a resposta automática configurada.
   // Compartilhado entre o endpoint direto da Evolution API e o antigo endpoint via n8n.
   const handleInboundWhatsappMessage = async ({
-    phone, name, buttonId, freeText,
-  }: { phone: string; name?: string; buttonId?: string; freeText?: string }) => {
+    phone, name, buttonId, freeText, pollVoteOption,
+  }: { phone: string; name?: string; buttonId?: string; freeText?: string; pollVoteOption?: string }) => {
     const leads = await storage.getLeads();
     let lead = leads.find(l => String(l.phone || "").replace(/\D/g, "") === phone);
     let isNew = false;
@@ -4973,7 +4969,7 @@ export async function registerRoutes(
       }
     }
 
-    const choice = String(buttonId || freeText || "").trim();
+    const choice = String(pollVoteOption || buttonId || freeText || "").trim();
     const summary = choice ? `Cliente respondeu no WhatsApp: "${choice}"` : "Cliente mandou mensagem no WhatsApp.";
     await storage.createCompleteTableRow("crmInteractions", {
       leadId: lead.id,
@@ -4984,9 +4980,8 @@ export async function registerRoutes(
       createdByUsername: "sistema",
     });
 
-    // Palavra-chave (ou número da opção) reconhecida no texto livre — o voto em si da
-    // enquete do WhatsApp não chega decifrado até aqui, então esse é o sinal real que o
-    // sistema consegue usar (a mensagem do fluxo já pede pra responder com o número).
+    // Voto de enquete (texto exato da opção, já decifrado pela Evolution API) tem prioridade;
+    // se não for um voto, cai pra palavra-chave/número reconhecido no texto digitado.
     const stripAccents = (text: string) => text.normalize("NFD").replace(new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g"), "");
     const normalizedChoice = stripAccents(choice).trim().toLowerCase();
 
@@ -5000,12 +4995,13 @@ export async function registerRoutes(
       if (activeFlow?.buttons) {
         try {
           const options = JSON.parse(activeFlow.buttons as string) as { text: string; responseMessage?: string }[];
-          const byPosition = /^[1-9]$/.test(normalizedChoice) ? options[Number(normalizedChoice) - 1] : undefined;
-          const byKeyword = byPosition ? undefined : options.find(opt => {
+          const byVote = pollVoteOption ? options.find(opt => opt.text === pollVoteOption) : undefined;
+          const byPosition = byVote ? undefined : (/^[1-9]$/.test(normalizedChoice) ? options[Number(normalizedChoice) - 1] : undefined);
+          const byKeyword = (byVote || byPosition) ? undefined : options.find(opt => {
             const keyword = stripAccents(opt.text).toLowerCase().replace(/^[^a-z]+/, "").split(/\s+/).find(word => word.length > 3);
             return keyword ? normalizedChoice.includes(keyword) : false;
           });
-          matchedOption = byPosition || byKeyword;
+          matchedOption = byVote || byPosition || byKeyword;
           matchedFlowName = activeFlow.name;
         } catch {}
       }
@@ -5042,21 +5038,6 @@ export async function registerRoutes(
   app.post("/api/webhooks/evolution/inbound", async (req, res) => {
     try {
       if (!(await checkN8nWebhookSecret(req, res))) return;
-      // TEMPORÁRIO: captura o payload bruto de todo evento recebido, pra investigar o formato
-      // real que a Evolution API manda quando alguém vota numa enquete (não documentado com
-      // clareza, e o formato pode variar por versão). Remover depois de confirmar o parsing
-      // correto do voto.
-      try {
-        await storage.createWhatsappSendLog({
-          flowName: "DEBUG_RAW_PAYLOAD",
-          phone: String(req.body?.data?.key?.remoteJid || "desconhecido"),
-          message: JSON.stringify(req.body).slice(0, 4000),
-          status: "sent",
-          errorMessage: null,
-          channel: "debug",
-          direction: "entrada",
-        } as any);
-      } catch {}
       const parsed = parseEvolutionInboundPayload(req.body);
       if (parsed.fromMe || parsed.isGroup || !parsed.phone) {
         return res.json({ ok: true, skipped: true });
@@ -5066,6 +5047,7 @@ export async function registerRoutes(
         name: parsed.pushName,
         buttonId: parsed.buttonId,
         freeText: parsed.freeText,
+        pollVoteOption: parsed.pollVoteOption,
       });
       res.json({ ok: true, ...result });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
