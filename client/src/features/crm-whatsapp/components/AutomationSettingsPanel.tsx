@@ -45,7 +45,6 @@ function CopyField({ label, value }: { label: string; value: string }) {
 export function AutomationSettingsPanel() {
   const { toast } = useToast();
   const { data, isLoading } = useQuery<AutomationSettings>({ queryKey: ["/api/automation-settings"] });
-  const [webhookUrl, setWebhookUrl] = useState("");
   const [enabled, setEnabled] = useState(false);
   const [freshSecret, setFreshSecret] = useState<string | null>(null);
   const [evolutionApiUrl, setEvolutionApiUrl] = useState("");
@@ -54,7 +53,6 @@ export function AutomationSettingsPanel() {
 
   useEffect(() => {
     if (data) {
-      setWebhookUrl(data.n8nWebhookUrl || "");
       setEnabled(data.whatsappAutoSendEnabled);
       setEvolutionApiUrl(data.evolutionApiUrl || "");
       setEvolutionApiKey(data.evolutionApiKey || "");
@@ -64,7 +62,6 @@ export function AutomationSettingsPanel() {
 
   const saveMutation = useMutation({
     mutationFn: () => apiRequest("PUT", "/api/automation-settings", {
-      n8nWebhookUrl: webhookUrl,
       whatsappAutoSendEnabled: enabled,
       evolutionApiUrl,
       evolutionApiKey,
@@ -90,7 +87,7 @@ export function AutomationSettingsPanel() {
     onError: (e: any) => toast({ title: "Erro ao gerar segredo", description: e.message, variant: "destructive" }),
   });
 
-  const incomingWebhookUrl = `${window.location.origin}/api/webhooks/n8n/whatsapp-status`;
+  const incomingWebhookBaseUrl = `${window.location.origin}/api/webhooks/evolution/inbound`;
 
   if (isLoading) {
     return <Card><CardContent className="flex items-center justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></CardContent></Card>;
@@ -101,30 +98,19 @@ export function AutomationSettingsPanel() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Bot className="h-5 w-5 text-violet-600" /> Automação via n8n
+            <Bot className="h-5 w-5 text-violet-600" /> Envio Automático por Status
           </CardTitle>
           <p className="text-sm text-gray-500">
-            O n8n fica no meio entre o ERP e o WhatsApp: o ERP manda a mensagem pro webhook do n8n, o n8n envia de verdade e avisa o ERP de volta.
+            Quando o status de um orçamento ou obra muda pra um status marcado como "enviar automaticamente", o ERP manda a mensagem direto pela Evolution API configurada abaixo — sem n8n nem nenhum intermediário no meio.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
             <div>
               <p className="text-sm font-semibold text-slate-800">Ativar mensagem automática ao mudar status de orçamento/obra</p>
-              <p className="text-xs text-slate-500">Controla só o envio automático quando um status marcado como "enviar automaticamente" muda. O envio manual (botão WhatsApp nos cards) usa a Evolution API abaixo, direto.</p>
+              <p className="text-xs text-slate-500">Controla só o envio automático quando um status marcado como "enviar automaticamente" muda. O envio manual (botão WhatsApp nos cards) usa a Evolution API abaixo, direto, independente desse interruptor.</p>
             </div>
             <Switch checked={enabled} onCheckedChange={setEnabled} data-testid="switch-auto-send" />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>1. URL do Webhook do n8n (saída)</Label>
-            <Input
-              placeholder="https://seu-n8n.exemplo.com/webhook/whatsapp-enviar"
-              value={webhookUrl}
-              onChange={event => setWebhookUrl(event.target.value)}
-              data-testid="input-n8n-webhook-url"
-            />
-            <p className="text-xs text-gray-400">Cole aqui a URL do webhook (nó "Webhook") do fluxo do n8n que envia a mensagem.</p>
           </div>
 
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="gap-2">
@@ -137,28 +123,26 @@ export function AutomationSettingsPanel() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <KeyRound className="h-5 w-5 text-amber-600" /> 2. Webhook de entrada (o n8n chama o ERP)
+            <KeyRound className="h-5 w-5 text-amber-600" /> Webhook de Entrada (a Evolution API chama o ERP direto)
           </CardTitle>
           <p className="text-sm text-gray-500">
-            Configure no n8n um passo (HTTP Request) que chame essa URL pra confirmar a entrega, ou registrar a resposta do cliente.
+            Cole essa URL completa no Manager da Evolution API, na sua instância, em Events → Webhook, marcando o evento MESSAGES_UPSERT. O segredo já vem embutido na própria URL — a Evolution API não precisa mandar header nem corpo especial.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <CopyField label="URL do webhook de entrada" value={incomingWebhookUrl} />
-
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
             <div className="flex items-start gap-2">
               <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
               <p>
-                Essa URL só aceita chamadas com o segredo correto (enviado no header <code className="rounded bg-white px-1">x-erp-webhook-secret</code> ou no campo <code className="rounded bg-white px-1">secret</code> do corpo). Sem isso, qualquer pessoa poderia forjar confirmações de envio.
+                Essa URL só processa mensagens se o segredo na query (<code className="rounded bg-white px-1">?secret=...</code>) bater com o gerado aqui. Sem isso, qualquer pessoa poderia forjar mensagens de cliente.
               </p>
             </div>
           </div>
 
           {freshSecret ? (
             <div className="space-y-2 rounded-lg border-2 border-green-300 bg-green-50 p-3">
-              <p className="text-xs font-semibold text-green-800">Copie agora — esse segredo não será mostrado inteiro de novo:</p>
-              <CopyField label="Segredo do webhook" value={freshSecret} />
+              <p className="text-xs font-semibold text-green-800">Copie agora e cole no Manager da Evolution API — esse segredo não será mostrado inteiro de novo:</p>
+              <CopyField label="URL do webhook (colar em Events → Webhook na Evolution API)" value={`${incomingWebhookBaseUrl}?secret=${freshSecret}`} />
               <Button variant="outline" size="sm" onClick={() => setFreshSecret(null)}>Já copiei, fechar</Button>
             </div>
           ) : (
@@ -178,7 +162,7 @@ export function AutomationSettingsPanel() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <QrCode className="h-5 w-5 text-emerald-600" /> 3. Evolution API (conexão do WhatsApp)
+            <QrCode className="h-5 w-5 text-emerald-600" /> Evolution API (conexão do WhatsApp)
           </CardTitle>
           <p className="text-sm text-gray-500">
             Cole aqui a mesma URL e chave que você já usa no Manager da Evolution API — é o que permite ver o status e reconectar sem sair do ERP.
