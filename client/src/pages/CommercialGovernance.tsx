@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -156,7 +157,17 @@ export default function CommercialGovernance() {
         )}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <Tabs defaultValue="policies" className="space-y-4">
+        <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
+          <TabsTrigger value="policies">Políticas</TabsTrigger>
+          <TabsTrigger value="discounts">Descontos</TabsTrigger>
+          <TabsTrigger value="commissions">Comissões</TabsTrigger>
+          <TabsTrigger value="logistics">Logística</TabsTrigger>
+          <TabsTrigger value="versions">Versões</TabsTrigger>
+          <TabsTrigger value="scopeChanges">Aditivos</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="policies">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><ClipboardCheck className="h-4 w-4" /> Políticas Comerciais</CardTitle>
@@ -187,7 +198,9 @@ export default function CommercialGovernance() {
             </div>
           </CardContent>
         </Card>
+        </TabsContent>
 
+        <TabsContent value="discounts">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><Scale className="h-4 w-4" /> Descontos e Alçadas</CardTitle>
@@ -219,7 +232,9 @@ export default function CommercialGovernance() {
             </div>
           </CardContent>
         </Card>
+        </TabsContent>
 
+        <TabsContent value="commissions">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><WalletCards className="h-4 w-4" /> Comissões</CardTitle>
@@ -245,7 +260,9 @@ export default function CommercialGovernance() {
             </div>
           </CardContent>
         </Card>
+        </TabsContent>
 
+        <TabsContent value="logistics">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><Route className="h-4 w-4" /> Logística</CardTitle>
@@ -274,7 +291,9 @@ export default function CommercialGovernance() {
             </div>
           </CardContent>
         </Card>
+        </TabsContent>
 
+        <TabsContent value="versions">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><FilePlus2 className="h-4 w-4" /> Versões de Orçamento</CardTitle>
@@ -298,7 +317,9 @@ export default function CommercialGovernance() {
             </div>
           </CardContent>
         </Card>
+        </TabsContent>
 
+        <TabsContent value="scopeChanges">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="h-4 w-4" /> Aditivos e Alterações de Escopo</CardTitle>
@@ -330,7 +351,8 @@ export default function CommercialGovernance() {
             </div>
           </CardContent>
         </Card>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
