@@ -87,7 +87,7 @@ export function FlowCard({ flow, onEdit, onDelete, onSend, onSendButton }: FlowC
                     <MessageCircle className="h-3 w-3" />Responder
                   </Button>
                 </div>
-                {button.responseMessage && <div className="line-clamp-2 border-t border-gray-100 bg-green-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-green-900/10 dark:text-gray-400">→ {button.responseMessage}</div>}
+                {button.responseMessage && <div className="whitespace-pre-wrap border-t border-gray-100 bg-green-50 px-3 py-2 text-xs text-gray-600 dark:border-gray-700 dark:bg-green-900/10 dark:text-gray-400">→ {button.responseMessage}</div>}
               </div>
             ))}
           </div>
