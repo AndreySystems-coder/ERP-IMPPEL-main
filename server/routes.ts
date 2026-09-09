@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import { storage, COMPLETE_BACKUP_MODULE_TABLES, type CompleteBackupModule } from "./storage";
+import { pool } from "./db";
 import {
   buildRestorePreview,
   buildCompleteBackupPackage,
@@ -1124,6 +1125,22 @@ export async function registerRoutes(
       if (!updated) return res.status(404).json({ message: "Usuário não encontrado" });
       res.json({ message: "Título atualizado" });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
+  });
+
+  // TEMPORÁRIO: roda a migração 0014 (bloqueio de login por tentativas). Rodar UMA VEZ,
+  // manualmente pelo administrador, ANTES do deploy do código que usa essas colunas —
+  // mesma disciplina das migrações anteriores (0012/0013). Remover depois de rodar uma vez.
+  app.post("/api/admin/run-migration-0014", requireAdmin, async (_req, res) => {
+    try {
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_login_attempts integer NOT NULL DEFAULT 0;`);
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until timestamp;`);
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login_lock_stage integer NOT NULL DEFAULT 0;`);
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS permanently_locked boolean NOT NULL DEFAULT false;`);
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_failed_login_at timestamp;`);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // ─── Roles / Cargos ───────────────────────────────────────────────────────
