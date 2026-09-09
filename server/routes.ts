@@ -2448,6 +2448,34 @@ export async function registerRoutes(
     return { ok: log.status === "sent", log };
   };
 
+  // Manda o conteúdo de um fluxo em DUAS mensagens quando ele tem opções: primeiro o texto
+  // principal puro (sem nada colado), depois a enquete separada só com as opções — em vez de
+  // uma única mensagem de enquete com o texto principal + opções tudo junto. Sem opções, manda
+  // só o texto normal.
+  const sendFlowMessage = async ({
+    phone, flow, flowNameOverride,
+  }: { phone: string; flow: any; flowNameOverride?: string }) => {
+    let pollOptions: string[] = [];
+    if (flow.buttons) {
+      try { pollOptions = (JSON.parse(flow.buttons as string) as any[]).map((b: any) => b.text).filter(Boolean); } catch {}
+    }
+    const flowName = flowNameOverride || flow.name;
+    if (pollOptions.length === 0) {
+      return sendViaEvolution({ phone, message: flow.message, flowId: flow.id, flowName });
+    }
+    const textResult = await sendViaEvolution({ phone, message: flow.message, flowId: flow.id, flowName });
+    if (!textResult.log) return textResult; // não configurado — nem tenta a enquete
+    const pollResult = await sendViaEvolution({
+      phone,
+      message: "Selecione uma opção:",
+      isPoll: true,
+      pollOptions,
+      flowId: flow.id,
+      flowName: `${flowName} — opções`,
+    });
+    return { ok: textResult.ok && pollResult.ok, log: pollResult.log || textResult.log, message: (pollResult as any).message };
+  };
+
   // Resolve o telefone de contato de um orçamento: cliente vinculado, lead vinculado, ou o
   // primeiro contato salvo no próprio orçamento (mesma ordem de prioridade usada manualmente
   // em Jobs.tsx:handleEnviarWhatsApp).
@@ -2895,20 +2923,9 @@ export async function registerRoutes(
 
       // Manda como enquete sempre que o fluxo tiver opções cadastradas (mesmo fluxos antigos
       // marcados como "botões" — botões não renderizam de forma confiável no WhatsApp, então
-      // qualquer opção cadastrada vira enquete de verdade).
-      let pollOptions: string[] = [];
-      if (flow.buttons) {
-        try { pollOptions = (JSON.parse(flow.buttons as string) as any[]).map(b => b.text).filter(Boolean); } catch {}
-      }
-
-      const result = await sendViaEvolution({
-        phone: lead.phone,
-        message,
-        isPoll: pollOptions.length > 0,
-        pollOptions,
-        flowId: flow.id,
-        flowName: flow.name,
-      });
+      // qualquer opção cadastrada vira enquete de verdade). Texto principal e enquete saem como
+      // duas mensagens separadas (sendFlowMessage), não uma única mensagem com tudo junto.
+      const result = await sendFlowMessage({ phone: lead.phone, flow: { ...flow, message } });
       if (!result.log) return res.status(400).json({ message: result.message });
       // Move o lead pra coluna do fluxo enviado no quadro da aba Pipeline — sem isso, mandar um
       // fluxo manual não refletia em qual etapa de atendimento o lead está de verdade.
@@ -4949,18 +4966,7 @@ export async function registerRoutes(
         const flows = await storage.getWhatsappFlows();
         const greetingFlow = flows.find(f => f.trigger === "atendimento_inicial" && f.active !== false);
         if (greetingFlow) {
-          let pollOptions: string[] = [];
-          if (greetingFlow.buttons) {
-            try { pollOptions = (JSON.parse(greetingFlow.buttons as string) as any[]).map((b: any) => b.text).filter(Boolean); } catch {}
-          }
-          await sendViaEvolution({
-            phone: lead.phone,
-            message: greetingFlow.message,
-            isPoll: pollOptions.length > 0,
-            pollOptions,
-            flowId: greetingFlow.id,
-            flowName: greetingFlow.name,
-          });
+          await sendFlowMessage({ phone: lead.phone, flow: greetingFlow });
         }
       } catch (greetErr: any) {
         console.error("Falha ao enviar saudação automática de primeiro contato:", greetErr?.message || greetErr);
@@ -5036,6 +5042,21 @@ export async function registerRoutes(
   app.post("/api/webhooks/evolution/inbound", async (req, res) => {
     try {
       if (!(await checkN8nWebhookSecret(req, res))) return;
+      // TEMPORÁRIO: captura o payload bruto de todo evento recebido, pra investigar o formato
+      // real que a Evolution API manda quando alguém vota numa enquete (não documentado com
+      // clareza, e o formato pode variar por versão). Remover depois de confirmar o parsing
+      // correto do voto.
+      try {
+        await storage.createWhatsappSendLog({
+          flowName: "DEBUG_RAW_PAYLOAD",
+          phone: String(req.body?.data?.key?.remoteJid || "desconhecido"),
+          message: JSON.stringify(req.body).slice(0, 4000),
+          status: "sent",
+          errorMessage: null,
+          channel: "debug",
+          direction: "entrada",
+        } as any);
+      } catch {}
       const parsed = parseEvolutionInboundPayload(req.body);
       if (parsed.fromMe || parsed.isGroup || !parsed.phone) {
         return res.json({ ok: true, skipped: true });
