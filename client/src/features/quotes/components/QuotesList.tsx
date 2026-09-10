@@ -260,10 +260,10 @@ export function QuotesList({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="truncate font-bold text-slate-900">{maskText(job.clientName, "Cliente ••••")}</h3>
                   <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                     #{formatQuoteNumber(job)}
                   </span>
+                  <h3 className="truncate font-bold text-slate-900">{maskText(job.clientName, "Cliente ••••")}</h3>
                   <WorkOrderLinkBadge job={job} workOrders={workOrders} />
                 </div>
                 <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
@@ -322,10 +322,10 @@ export function QuotesList({
                 <tr key={job.id} className="transition-colors hover:bg-slate-50/70">
                   <td className="p-4 pl-6">
                     <div className="flex items-center gap-2">
-                      <p className="text-base font-bold text-slate-900">{maskText(job.clientName, "Cliente ••••")}</p>
                       <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                         #{formatQuoteNumber(job)}
                       </span>
+                      <p className="text-base font-bold text-slate-900">{maskText(job.clientName, "Cliente ••••")}</p>
                       <WorkOrderLinkBadge job={job} workOrders={workOrders} />
                     </div>
                     <div className="mt-1 flex items-center text-sm text-slate-500">

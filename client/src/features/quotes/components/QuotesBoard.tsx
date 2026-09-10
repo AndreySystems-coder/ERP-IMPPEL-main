@@ -51,10 +51,10 @@ export function QuotesBoard({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5">
-                <h3 className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">{job.clientName}</h3>
                 <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                   #{formatQuoteNumber(job)}
                 </span>
+                <h3 className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">{job.clientName}</h3>
               </div>
               <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
                 <Tag className="h-3 w-3" />

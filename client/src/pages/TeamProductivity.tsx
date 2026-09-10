@@ -318,7 +318,7 @@ export default function TeamProductivity() {
                 <option value="">— Selecionar da base de dados (opcional) —</option>
                 {jobsList.map(job => (
                   <option key={job.id} value={job.id}>
-                    {job.clientName} {job.orcamentoNumero ? `— Orçamento #${String(job.orcamentoNumero).padStart(4, "0")}` : `— #${job.id}`} — {job.serviceType}
+                    #{String(job.orcamentoNumero ?? job.id).padStart(4, "0")} — {job.clientName} — {job.serviceType}
                   </option>
                 ))}
               </select>
