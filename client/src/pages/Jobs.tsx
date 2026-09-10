@@ -224,10 +224,14 @@ export default function Jobs() {
     };
   }, [multiItems, distKm, servicesList, costConfig, regionalAdjustmentPercent]);
 
-  const filteredJobs = jobsWithScores.filter(j => 
-    j.clientName.toLowerCase().includes(search.toLowerCase()) || 
-    j.serviceType.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredJobs = jobsWithScores
+    .filter(j =>
+      j.clientName.toLowerCase().includes(search.toLowerCase()) ||
+      j.serviceType.toLowerCase().includes(search.toLowerCase())
+    )
+    // Orçamento mais recente (maior número) primeiro — sem isso a lista seguia a ordem de
+    // criação no banco, que ficou fora de ordem depois de importações em lotes separados.
+    .sort((a: any, b: any) => (b.orcamentoNumero ?? b.id ?? 0) - (a.orcamentoNumero ?? a.id ?? 0));
 
   // Margin evaluation based on multi-service totals
   const directCostNum = multiCostAnalysis?.directCost || 0;

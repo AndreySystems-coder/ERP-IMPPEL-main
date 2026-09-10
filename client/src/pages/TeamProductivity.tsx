@@ -23,6 +23,9 @@ type ProductionLog = {
   createdAt: string;
 };
 
+type JobOption = { id: number; clientName: string; serviceType: string; orcamentoNumero?: number | null; squareMeters?: number | null };
+type UserOption = { id: number; fullName?: string | null; username: string };
+
 const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("pt-BR") : "—";
 
 type ProductivityTarget = { id: number; label: string; serviceType?: string | null; targetValue: number; unit: string; active: boolean };
@@ -32,8 +35,14 @@ export default function TeamProductivity() {
   const qc = useQueryClient();
   const { data: logs = [], isLoading } = useQuery<ProductionLog[]>({ queryKey: ["/api/production-logs"] });
   const { data: targets = [] } = useQuery<ProductivityTarget[]>({ queryKey: ["/api/productivity-targets"] });
+  const { data: jobs = [] } = useQuery<JobOption[]>({ queryKey: ["/api/jobs"] });
+  const { data: users = [] } = useQuery<UserOption[]>({ queryKey: ["/api/users"] });
+  const { data: services = [] } = useQuery<{ id: number; name: string }[]>({ queryKey: ["/api/services"] });
   const logsList = asArray<ProductionLog>(logs);
   const targetsList = asArray<ProductivityTarget>(targets).filter(t => t.active);
+  const jobsList = asArray<JobOption>(jobs).sort((a, b) => (b.orcamentoNumero ?? b.id) - (a.orcamentoNumero ?? a.id));
+  const usersList = asArray<UserOption>(users);
+  const servicesList = asArray<{ id: number; name: string }>(services);
 
   const [tab, setTab]   = useState<"registros" | "resumo">("registros");
   const [isModal, setModal] = useState(false);
@@ -41,7 +50,9 @@ export default function TeamProductivity() {
 
   const [form, setForm] = useState({
     technicianName: "",
+    userId: "",
     clientName: "",
+    jobId: "",
     serviceType: "",
     date: new Date().toISOString().split("T")[0],
     hoursWorked: "",
@@ -70,14 +81,16 @@ export default function TeamProductivity() {
 
   const openNew = () => {
     setEditing(null);
-    setForm({ technicianName: "", clientName: "", serviceType: "", date: new Date().toISOString().split("T")[0], hoursWorked: "", squareMeters: "", notes: "" });
+    setForm({ technicianName: "", userId: "", clientName: "", jobId: "", serviceType: "", date: new Date().toISOString().split("T")[0], hoursWorked: "", squareMeters: "", notes: "" });
     setModal(true);
   };
   const openEdit = (log: ProductionLog) => {
     setEditing(log);
     setForm({
       technicianName: log.technicianName,
+      userId: log.userId ? String(log.userId) : "",
       clientName: log.clientName || "",
+      jobId: log.jobId ? String(log.jobId) : "",
       serviceType: log.serviceType || "",
       date: log.date,
       hoursWorked: log.hoursWorked ? String(log.hoursWorked) : "",
@@ -88,10 +101,29 @@ export default function TeamProductivity() {
   };
   const closeModal = () => { setModal(false); setEditing(null); };
 
+  // Selecionar a obra já preenche cliente/serviço/m² a partir do orçamento real — antes era
+  // tudo texto livre, sem nenhuma ligação com o que já está cadastrado no sistema.
+  const handleJobSelect = (jobId: string) => {
+    const job = jobsList.find(j => String(j.id) === jobId);
+    setForm(f => ({
+      ...f,
+      jobId,
+      clientName: job?.clientName || f.clientName,
+      serviceType: job?.serviceType || f.serviceType,
+      squareMeters: job?.squareMeters ? String(job.squareMeters) : f.squareMeters,
+    }));
+  };
+  const handleTechnicianSelect = (userId: string) => {
+    const user = usersList.find(u => String(u.id) === userId);
+    setForm(f => ({ ...f, userId, technicianName: user ? (user.fullName || user.username) : f.technicianName }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const payload = {
       ...form,
+      userId: form.userId ? Number(form.userId) : undefined,
+      jobId: form.jobId ? Number(form.jobId) : undefined,
       hoursWorked: form.hoursWorked ? Number(form.hoursWorked) : 0,
       squareMeters: form.squareMeters ? Number(form.squareMeters) : 0,
     };
@@ -280,10 +312,30 @@ export default function TeamProductivity() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
+              <label className="text-sm font-semibold text-slate-700 block mb-1">Obra / Orçamento</label>
+              <select value={form.jobId} onChange={e => handleJobSelect(e.target.value)}
+                className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50" data-testid="select-prod-job">
+                <option value="">— Selecionar da base de dados (opcional) —</option>
+                {jobsList.map(job => (
+                  <option key={job.id} value={job.id}>
+                    {job.clientName} {job.orcamentoNumero ? `— Orçamento #${String(job.orcamentoNumero).padStart(4, "0")}` : `— #${job.id}`} — {job.serviceType}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-400 mt-1">Selecionar preenche cliente, serviço e m² automaticamente — ainda dá pra ajustar os campos depois.</p>
+            </div>
+            <div className="col-span-2">
               <label className="text-sm font-semibold text-slate-700 block mb-1">Técnico *</label>
+              <select value={form.userId} onChange={e => handleTechnicianSelect(e.target.value)}
+                className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50 mb-2" data-testid="select-prod-technician">
+                <option value="">— Selecionar da equipe (opcional) —</option>
+                {usersList.map(user => (
+                  <option key={user.id} value={user.id}>{user.fullName || user.username}</option>
+                ))}
+              </select>
               <input value={form.technicianName} onChange={e => setField("technicianName", e.target.value)} required
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50"
-                placeholder="Nome do técnico" data-testid="input-prod-technician" />
+                placeholder="Nome do técnico (ou digite se não estiver na lista)" data-testid="input-prod-technician" />
             </div>
             <div>
               <label className="text-sm font-semibold text-slate-700 block mb-1">Data *</label>
@@ -292,15 +344,18 @@ export default function TeamProductivity() {
             </div>
             <div>
               <label className="text-sm font-semibold text-slate-700 block mb-1">Tipo de Serviço</label>
-              <input value={form.serviceType} onChange={e => setField("serviceType", e.target.value)}
+              <input value={form.serviceType} onChange={e => setField("serviceType", e.target.value)} list="prod-service-options"
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50"
-                placeholder="Ex: Manta Asfáltica" />
+                placeholder="Selecione a obra acima ou digite" />
+              <datalist id="prod-service-options">
+                {servicesList.map(s => <option key={s.id} value={s.name} />)}
+              </datalist>
             </div>
             <div>
               <label className="text-sm font-semibold text-slate-700 block mb-1">Cliente / Obra</label>
               <input value={form.clientName} onChange={e => setField("clientName", e.target.value)}
                 className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary bg-slate-50"
-                placeholder="Nome do cliente ou obra" />
+                placeholder="Preenchido ao selecionar a obra, ou digite" />
             </div>
             <div>
               <label className="text-sm font-semibold text-slate-700 block mb-1">m² Executados</label>
