@@ -49,7 +49,7 @@ export function useCreateJob() {
 export function useUpdateJob() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: number } & z.infer<typeof api.jobs.update.input>) => {
+    mutationFn: async ({ id, ...updates }: { id: number; skipAutoWhatsapp?: boolean } & z.infer<typeof api.jobs.update.input>) => {
       const url = buildUrl(api.jobs.update.path, { id });
       const res = await fetch(url, {
         method: api.jobs.update.method,

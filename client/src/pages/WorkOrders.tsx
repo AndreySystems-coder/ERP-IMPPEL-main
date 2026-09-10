@@ -41,8 +41,13 @@ export default function WorkOrders() {
     queryKey: ["/api/jobs"],
     queryFn: () => apiRequest("GET", "/api/jobs"),
   });
+  const { data: workOrderStatuses = [] } = useQuery({
+    queryKey: ["/api/work-order-statuses"],
+    queryFn: () => apiRequest("GET", "/api/work-order-statuses"),
+  });
   const workOrdersList = asArray<any>(workOrders);
   const jobsList = asArray<any>(jobs);
+  const workOrderStatusesList = asArray<any>(workOrderStatuses);
 
   const createWO = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/work-orders", data),
@@ -64,7 +69,13 @@ export default function WorkOrders() {
       if (!reason || !reason.trim()) return; // cancelado ou vazio: não move o card
       refusalReason = reason.trim();
     }
-    updateWO.mutate({ id: workOrder.id, status: newStatus, refusalReason });
+    // Esse status manda mensagem automática pro cliente por WhatsApp — confirma antes, pra dar
+    // controle em casos como importação de obra antiga ou engano ao marcar o status.
+    const statusConfig = workOrderStatusesList.find(s => s.name === newStatus);
+    const skipAutoWhatsapp = statusConfig?.autoSendWhatsapp
+      ? !window.confirm(`Mudar para "${newStatus}" normalmente manda uma mensagem automática de WhatsApp pro cliente agora. Enviar a mensagem?`)
+      : false;
+    updateWO.mutate({ id: workOrder.id, status: newStatus, refusalReason, skipAutoWhatsapp });
   };
 
   const deleteWO = useMutation({
@@ -246,8 +257,16 @@ export default function WorkOrders() {
       photos: photos.length > 0 ? JSON.stringify(photos) : null,
       notes,
     };
-    if (editingWO) await updateWO.mutateAsync({ id: editingWO.id, ...payload });
-    else await createWO.mutateAsync(payload);
+    if (editingWO) {
+      const statusChanged = editingWO.status !== status;
+      const targetStatusConfig = workOrderStatusesList.find(s => s.name === status);
+      const skipAutoWhatsapp = statusChanged && targetStatusConfig?.autoSendWhatsapp
+        ? !window.confirm(`Mudar para "${status}" normalmente manda uma mensagem automática de WhatsApp pro cliente agora. Enviar a mensagem?`)
+        : false;
+      await updateWO.mutateAsync({ id: editingWO.id, ...payload, skipAutoWhatsapp });
+    } else {
+      await createWO.mutateAsync(payload);
+    }
     setIsModalOpen(false);
   };
 
@@ -290,12 +309,18 @@ export default function WorkOrders() {
     setSavingObra(true);
     try {
       const updatedStatus = serviceProgress.every(sp => sp.finished) ? "Concluída" : serviceProgress.some(sp => sp.started) ? "Em Andamento" : detailWO.status;
+      const statusChanged = detailWO.status !== updatedStatus;
+      const targetStatusConfig = workOrderStatusesList.find(s => s.name === updatedStatus);
+      const skipAutoWhatsapp = statusChanged && targetStatusConfig?.autoSendWhatsapp
+        ? !window.confirm(`Marcar como "${updatedStatus}" normalmente manda uma mensagem automática de WhatsApp pro cliente agora. Enviar a mensagem?`)
+        : false;
       await updateWO.mutateAsync({
         id: detailWO.id,
         serviceProgress: JSON.stringify(serviceProgress),
         obraObservations,
         checklistDone: JSON.stringify(checklistDone),
         status: updatedStatus,
+        skipAutoWhatsapp,
       });
       setDetailWO((prev: any) => ({ ...prev, serviceProgress: JSON.stringify(serviceProgress), obraObservations, checklistDone: JSON.stringify(checklistDone), status: updatedStatus }));
       toast({ title: "Registro de obra salvo!" });

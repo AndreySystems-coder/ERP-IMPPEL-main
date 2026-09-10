@@ -3019,7 +3019,12 @@ export async function registerRoutes(
         await reconcileLeadOperationalStatus(Number(previousJob.leadId));
       }
       await ensureWorkOrderFlowForJob(job);
-      if (previousJob && previousJob.status !== job.status) {
+      // Permite pular o envio automático nesta troca de status específica — usado, por exemplo,
+      // ao importar orçamentos antigos (o cliente já sabe do orçamento há meses, não faz
+      // sentido mandar "seu orçamento foi aprovado!" de novo) ou quando alguém marca o status
+      // errado sem querer disparar mensagem ainda.
+      const skipAutoWhatsapp = Boolean(req.body?.skipAutoWhatsapp);
+      if (previousJob && previousJob.status !== job.status && !skipAutoWhatsapp) {
         try {
           const statusConfig = (await storage.getJobStatuses()).find(s => s.name === job.status);
           if (statusConfig?.autoSendWhatsapp && statusConfig.message) {
@@ -3118,7 +3123,8 @@ export async function registerRoutes(
       const job = order.jobId ? await storage.getJob(Number(order.jobId)) : undefined;
       await ensureObraRecordForWorkOrder(order, job);
     }
-    if (order && previousOrder && previousOrder.status !== order.status) {
+    const skipAutoWhatsappOrder = Boolean(req.body?.skipAutoWhatsapp);
+    if (order && previousOrder && previousOrder.status !== order.status && !skipAutoWhatsappOrder) {
       try {
         const statusConfig = (await storage.getWorkOrderStatuses()).find(s => s.name === order.status);
         if (statusConfig?.autoSendWhatsapp && statusConfig.message) {

@@ -433,7 +433,14 @@ export default function Jobs() {
       pdfOptions: JSON.stringify({ materialDisplayMode, showMaterialsToClient }),
     };
     if (editingJob) {
-      await updateJob.mutateAsync({ id: editingJob.id, ...payload });
+      // Igual ao troca-rápida de status: se o status novo dispara mensagem automática e é
+      // diferente do que já estava salvo, confirma antes de mandar de verdade.
+      const statusChanged = editingJob.status !== status;
+      const targetStatusConfig = jobStatuses.find((s: any) => s.name === status);
+      const skipAutoWhatsapp = statusChanged && targetStatusConfig?.autoSendWhatsapp
+        ? !window.confirm(`Mudar para "${status}" normalmente manda uma mensagem automática de WhatsApp pro cliente agora. Enviar a mensagem?`)
+        : false;
+      await updateJob.mutateAsync({ id: editingJob.id, ...payload, skipAutoWhatsapp });
     } else {
       await createJob.mutateAsync(payload);
     }
@@ -694,8 +701,14 @@ export default function Jobs() {
 
   const handleInlineStatusChange = async (job: any, newStatus: string) => {
     if (job.status === newStatus) return;
+    // Esse status manda mensagem automática pro cliente por WhatsApp — confirma antes, pra dar
+    // controle em casos como importação de orçamento antigo ou engano ao marcar o status.
+    const statusConfig = jobStatuses.find((s: any) => s.name === newStatus);
+    const skipAutoWhatsapp = statusConfig?.autoSendWhatsapp
+      ? !window.confirm(`Mudar para "${newStatus}" normalmente manda uma mensagem automática de WhatsApp pro cliente agora. Enviar a mensagem?`)
+      : false;
     try {
-      await updateJob.mutateAsync({ id: job.id, status: newStatus });
+      await updateJob.mutateAsync({ id: job.id, status: newStatus, skipAutoWhatsapp });
       queryClient.invalidateQueries({ queryKey: ["/api/work-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/obra-registros"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
