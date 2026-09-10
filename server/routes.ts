@@ -2362,6 +2362,31 @@ export async function registerRoutes(
     if (job?.leadId) await reconcileLeadOperationalStatus(Number(job.leadId));
   };
 
+  // Une o status do orçamento (Estimando/Aprovado/Agendada/Em Progresso/Concluída/Faturada) com
+  // o mesmo Pipeline de fluxos de WhatsApp usado pelo atendimento — cada status vira uma coluna
+  // própria no quadro, ao lado de "Aguardando Orçamento"/"Aguardando Atendente"/etc. O envio da
+  // mensagem continua controlado pelo autoSendWhatsapp de cada status (não muda aqui); isso só
+  // atualiza QUAL fluxo aparece pro lead no Pipeline, pra dar visibilidade unificada.
+  const JOB_STATUS_TO_FLOW_TRIGGER: Record<string, string> = {
+    "Estimando": "orcamento_estimando",
+    "Aprovado": "orcamento_aprovado",
+    "Agendada": "orcamento_agendada",
+    "Em Progresso": "orcamento_em_progresso",
+    "Concluída": "orcamento_concluida",
+    "Faturada": "orcamento_faturada",
+  };
+  const syncLeadFlowWithJobStatus = async (job: any) => {
+    if (!job?.leadId) return;
+    const flowTrigger = JOB_STATUS_TO_FLOW_TRIGGER[job.status];
+    if (!flowTrigger) return;
+    const flows = await storage.getWhatsappFlows();
+    if (!flows.some(f => f.trigger === flowTrigger)) return; // fluxo ainda não configurado — não força um trigger inexistente
+    const lead = await storage.getLead(Number(job.leadId));
+    if (lead && lead.currentFlowTrigger !== flowTrigger) {
+      await storage.updateLead(lead.id, { currentFlowTrigger: flowTrigger } as any);
+    }
+  };
+
   const updateLeadForWorkOrderFlow = async (workOrder: any) => {
     if (!workOrder?.jobId) return;
     const job = await storage.getJob(Number(workOrder.jobId));
@@ -3019,6 +3044,9 @@ export async function registerRoutes(
         await reconcileLeadOperationalStatus(Number(previousJob.leadId));
       }
       await ensureWorkOrderFlowForJob(job);
+      if (previousJob && previousJob.status !== job.status) {
+        await syncLeadFlowWithJobStatus(job).catch(err => console.error("Falha ao sincronizar fluxo do lead com status do orçamento:", err?.message || err));
+      }
       // Permite pular o envio automático nesta troca de status específica — usado, por exemplo,
       // ao importar orçamentos antigos (o cliente já sabe do orçamento há meses, não faz
       // sentido mandar "seu orçamento foi aprovado!" de novo) ou quando alguém marca o status

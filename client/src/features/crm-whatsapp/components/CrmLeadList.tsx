@@ -12,9 +12,12 @@ type CrmLeadListProps = {
   flows: WhatsappFlow[];
   isLoading?: boolean;
   onContactLead?: (lead: LeadWithOperationalLinks) => void;
+  title?: string;
+  subtitle?: string;
+  hideMetrics?: boolean;
 };
 
-export function CrmLeadList({ leads, flows, isLoading = false, onContactLead }: CrmLeadListProps) {
+export function CrmLeadList({ leads, flows, isLoading = false, onContactLead, title, subtitle, hideMetrics = false }: CrmLeadListProps) {
   const leadsList = asArray<LeadWithOperationalLinks>(leads);
   const activeFlows = asArray<WhatsappFlow>(flows)
     .filter(flow => flow.active)
@@ -23,24 +26,26 @@ export function CrmLeadList({ leads, flows, isLoading = false, onContactLead }: 
 
   return (
     <section className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <MetricCard icon={Users} label="Total" value={leadsList.length} />
-        <MetricCard icon={Workflow} label="Sem fluxo" value={semFluxoCount} />
-        {activeFlows.slice(0, 4).map(flow => (
-          <MetricCard
-            key={flow.id}
-            icon={Workflow}
-            label={flow.name}
-            value={leadsList.filter(lead => lead.currentFlowTrigger === flow.trigger).length}
-          />
-        ))}
-      </div>
+      {!hideMetrics && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+          <MetricCard icon={Users} label="Total" value={leadsList.length} />
+          <MetricCard icon={Workflow} label="Sem fluxo" value={semFluxoCount} />
+          {activeFlows.slice(0, 4).map(flow => (
+            <MetricCard
+              key={flow.id}
+              icon={Workflow}
+              label={flow.name}
+              value={leadsList.filter(lead => lead.currentFlowTrigger === flow.trigger).length}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Lista principal</h2>
-            <p className="text-sm text-slate-500">Leads, contatos e próximas ações em uma visão rápida.</p>
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">{title ?? "Lista principal"}</h2>
+            <p className="text-sm text-slate-500">{subtitle ?? "Leads, contatos e próximas ações em uma visão rápida."}</p>
           </div>
           <span className="text-xs font-semibold text-slate-400">{leadsList.length} registro(s)</span>
         </div>

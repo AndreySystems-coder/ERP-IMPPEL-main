@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bot, ClipboardList, LayoutList, MessageCircle, Users, Zap } from "lucide-react";
+import { ArrowLeft, Bot, ClipboardList, LayoutList, MessageCircle, Users, Zap } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ import { CrmWhatsappHeader } from "@/features/crm-whatsapp/components/CrmWhatsap
 import { FlowLibrary } from "@/features/crm-whatsapp/components/FlowLibrary";
 import { FlowModal } from "@/features/crm-whatsapp/components/FlowModal";
 import { FlowStageBoard } from "@/features/crm-whatsapp/components/FlowStageBoard";
+import { FlowStageChart, SEM_FLUXO_TRIGGER } from "@/features/crm-whatsapp/components/FlowStageChart";
 import { SendModal } from "@/features/crm-whatsapp/components/SendModal";
 import type { ButtonItem, CrmLeadOperationalLinks, SendTarget } from "@/features/crm-whatsapp/types";
 import type { Client, Job, Lead, MaintenanceReminder, NpsResponse, Warranty, WhatsappFlow, WhatsappSendLog, WorkOrder } from "@shared/schema";
@@ -31,6 +32,7 @@ export default function CrmWhatsapp() {
   const [crmSearch, setCrmSearch] = useState("");
   const [crmStatus, setCrmStatus] = useState("all");
   const [crmSource, setCrmSource] = useState("all");
+  const [flowDetail, setFlowDetail] = useState<{ trigger: string; label: string } | null>(null);
   const [logsViewMode, setLogsViewMode] = useState<"lista" | "conversa">("lista");
 
   const { data: flows = [], isLoading: flowsLoading } = useQuery<WhatsappFlow[]>({ queryKey: ["/api/whatsapp-flows"] });
@@ -228,17 +230,39 @@ export default function CrmWhatsapp() {
             onStatusChange={setCrmStatus}
             onSourceChange={setCrmSource}
           />
-          <CrmLeadList
+          <FlowStageChart
             leads={filteredCrmLeads}
             flows={flowsList}
             isLoading={leadsLoading || clientsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading}
-            onContactLead={openSendLead}
+            onSelectFlow={(trigger, label) => { setFlowDetail({ trigger, label }); setTab("fluxo-detalhe"); }}
           />
           <FlowStageBoard
             leads={filteredCrmLeads}
             flows={flowsList}
             isLoading={leadsLoading || flowsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading}
             onContactLead={openSendLead}
+          />
+        </TabsContent>
+
+        {/* Aba só alcançável clicando numa barra do gráfico acima — mostra a lista completa
+            (sem corte de "+N mais") de todos os leads daquele fluxo específico. */}
+        <TabsContent value="fluxo-detalhe" className="mt-4 space-y-4">
+          <button
+            type="button"
+            onClick={() => setTab("kanban")}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Voltar pro Pipeline
+          </button>
+          <CrmLeadList
+            leads={flowDetail ? crmLeads.filter(lead => flowDetail.trigger === SEM_FLUXO_TRIGGER ? !lead.currentFlowTrigger : lead.currentFlowTrigger === flowDetail.trigger) : []}
+            flows={flowsList}
+            isLoading={leadsLoading || clientsLoading || jobsLoading || workOrdersLoading || warrantiesLoading || npsLoading || maintenanceLoading}
+            onContactLead={openSendLead}
+            title={flowDetail ? `Fluxo: ${flowDetail.label}` : "Fluxo"}
+            subtitle="Lista completa, sem corte — todos os leads deste fluxo."
+            hideMetrics
           />
         </TabsContent>
 
