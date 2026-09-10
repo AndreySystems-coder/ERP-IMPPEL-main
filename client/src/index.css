@@ -45,6 +45,17 @@
     --ring: 224 45% 20%;
 
     --radius: 0.5rem; /* Slightly smaller radius for a cleaner corporate look */
+
+    /* Tokens do BarChart (client/src/components/ui/bar-chart.tsx) — usados direto como
+       valor de cor (fill/stroke de SVG), por isso já vêm com hsl() aplicado. */
+    --chart-background: hsl(0 0% 100%);
+    --chart-foreground: hsl(222 47% 11%);
+    --chart-foreground-muted: hsl(215 16% 47%);
+    --chart-label: hsl(215 16% 47%);
+    --chart-line-primary: hsl(224 45% 20%);
+    --chart-line-secondary: hsl(25 95% 53%);
+    --chart-crosshair: hsl(224 45% 20% / 0.35);
+    --chart-grid: hsl(214 32% 91%);
   }
 
   * {
