@@ -4898,13 +4898,16 @@ export async function registerRoutes(
         return res.status(400).json({ message: "URL da Evolution API inválida." });
       }
       const current = await storage.getAutomationSettings();
+      // Atualização parcial de verdade: um campo omitido no corpo da requisição mantém o valor
+      // atual em vez de ser zerado — antes, mandar só "whatsappAutoSendEnabled" por exemplo
+      // apagava a URL/instância da Evolution API já configuradas.
       const updated = await storage.updateAutomationSettings({
-        n8nWebhookUrl: n8nWebhookUrl || null,
-        whatsappAutoSendEnabled: Boolean(whatsappAutoSendEnabled),
-        evolutionApiUrl: evolutionApiUrl || null,
+        n8nWebhookUrl: n8nWebhookUrl === undefined ? current.n8nWebhookUrl : (n8nWebhookUrl || null),
+        whatsappAutoSendEnabled: whatsappAutoSendEnabled === undefined ? current.whatsappAutoSendEnabled : Boolean(whatsappAutoSendEnabled),
+        evolutionApiUrl: evolutionApiUrl === undefined ? current.evolutionApiUrl : (evolutionApiUrl || null),
         // Campo mascarado ("••••1234") voltando sem alteração não deve sobrescrever a chave real.
         evolutionApiKey: evolutionApiKey === undefined ? current.evolutionApiKey : (evolutionApiKey?.startsWith("•") ? current.evolutionApiKey : (evolutionApiKey || null)),
-        evolutionInstanceName: evolutionInstanceName || "imppel",
+        evolutionInstanceName: evolutionInstanceName === undefined ? current.evolutionInstanceName : (evolutionInstanceName || "imppel"),
       });
       res.json(maskAutomationSettings(updated));
     } catch (err: any) { res.status(500).json({ message: err.message }); }
