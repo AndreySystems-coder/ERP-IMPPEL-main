@@ -2612,7 +2612,7 @@ export async function registerRoutes(
     return result;
   };
 
-  const normalizeJobFinancials = async (input: any) => {
+  const normalizeJobFinancials = async (input: any, opts: { skipMarginGuard?: boolean } = {}) => {
     const config = await storage.getCostConfig() || await storage.updateCostConfig(getDefaultCostConfig() as any);
     const [servicesList, settings] = await Promise.all([storage.getServices(), storage.getSettings()]);
     const settingMap = new Map(settings.map(setting => [setting.key, Number(setting.value)]));
@@ -2674,7 +2674,7 @@ export async function registerRoutes(
     const margin = effectivePrice > 0 ? normalizeMoneyReais((effectivePrice - pricing.costBase) / effectivePrice) : 0;
     const profit = normalizeMoneyReais(effectivePrice - pricing.costBase);
 
-    if (effectivePrice > 0 && pricing.costBase > 0) {
+    if (!opts.skipMarginGuard && effectivePrice > 0 && pricing.costBase > 0) {
       const marginPercent = (effectivePrice - pricing.costBase) / effectivePrice;
       if (marginPercent < config.prohibitedMarginPercent) {
         throw new Error(`Margem de ${(marginPercent * 100).toFixed(1)}% abaixo do limite proibido de ${(config.prohibitedMarginPercent * 100).toFixed(0)}%.`);
@@ -3010,7 +3010,7 @@ export async function registerRoutes(
   app.post(api.jobs.create.path, async (req, res) => {
     try {
       const input = api.jobs.create.input.parse(req.body);
-      const pricedInput = await normalizeJobFinancials(input);
+      const pricedInput = await normalizeJobFinancials(input, { skipMarginGuard: Boolean(req.body?.skipMarginGuard) });
       const relatedInput = await ensureJobCustomerRelations(pricedInput);
       const job = await storage.createJob(relatedInput);
       await updateLeadForJobFlow(job);
@@ -3030,7 +3030,10 @@ export async function registerRoutes(
     try {
       const input = api.jobs.update.input.parse(req.body);
       const previousJob = await storage.getJob(Number(req.params.id));
-      const pricedInput = await normalizeJobFinancials({ ...previousJob, ...input });
+      // skipMarginGuard: usado no backfill de orçamentos históricos, onde o preço já foi cobrado
+      // há meses/anos com custos diferentes dos atuais — não faz sentido bloquear a atualização
+      // de metadados (m², serviço, local) por uma margem calculada contra a tabela de custo de hoje.
+      const pricedInput = await normalizeJobFinancials({ ...previousJob, ...input }, { skipMarginGuard: Boolean(req.body?.skipMarginGuard) });
       const relations = await ensureJobCustomerRelations(pricedInput);
       const { id: _jobId, createdAt: _createdAt, ...safePricedInput } = pricedInput;
       const job = await storage.updateJob(Number(req.params.id), {
