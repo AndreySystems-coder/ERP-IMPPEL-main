@@ -5031,7 +5031,12 @@ export async function registerRoutes(
     // exato da opção (o mesmo texto mandado em "values" ao criar a enquete) — confirmado
     // inspecionando um payload real de voto, não documentação.
     const pollVoteOption = String(data?.message?.pollUpdateMessage?.vote?.selectedOptions?.[0] || "");
-    return { fromMe, isGroup, phone, pushName, buttonId, freeText, pollVoteOption };
+    // Id da mensagem da enquete original — o WhatsApp permite o cliente trocar o voto depois
+    // (limitação da plataforma, não dá pra travar isso no app dele), mas cada troca gera um novo
+    // evento de webhook com esse MESMO id. Usado pra ignorar qualquer voto repetido na mesma
+    // enquete, deixando só o primeiro valer de verdade.
+    const pollMessageKeyId = String(data?.message?.pollUpdateMessage?.pollCreationMessageKey?.id || "");
+    return { fromMe, isGroup, phone, pushName, buttonId, freeText, pollVoteOption, pollMessageKeyId };
   };
 
   // Núcleo do processamento de uma mensagem recebida no WhatsApp: cria/encontra o lead, manda
@@ -5039,8 +5044,8 @@ export async function registerRoutes(
   // resposta bater com uma opção do fluxo ativo — manda a resposta automática configurada.
   // Compartilhado entre o endpoint direto da Evolution API e o antigo endpoint via n8n.
   const handleInboundWhatsappMessage = async ({
-    phone, name, buttonId, freeText, pollVoteOption,
-  }: { phone: string; name?: string; buttonId?: string; freeText?: string; pollVoteOption?: string }) => {
+    phone, name, buttonId, freeText, pollVoteOption, pollMessageKeyId,
+  }: { phone: string; name?: string; buttonId?: string; freeText?: string; pollVoteOption?: string; pollMessageKeyId?: string }) => {
     const leads = await storage.getLeads();
     let lead = leads.find(l => String(l.phone || "").replace(/\D/g, "") === phone);
     let isNew = false;
@@ -5068,14 +5073,26 @@ export async function registerRoutes(
       }
     }
 
+    // O WhatsApp deixa o cliente trocar o voto numa enquete já respondida — a plataforma não
+    // oferece um jeito de travar isso do lado de fora. O que dá pra garantir é o ERP ignorar
+    // qualquer voto repetido na MESMA enquete (mesmo pollMessageKeyId): só o primeiro toque conta,
+    // trocar de opção depois não muda nada nem manda mensagem de novo.
+    const isDuplicatePollVote = Boolean(pollMessageKeyId) &&
+      (await storage.getCompleteTableRows("crmInteractions")).some(
+        (i: any) => i.leadId === lead!.id && i.externalMessageId === pollMessageKeyId
+      );
+
     const choice = String(pollVoteOption || buttonId || freeText || "").trim();
-    const summary = choice ? `Cliente respondeu no WhatsApp: "${choice}"` : "Cliente mandou mensagem no WhatsApp.";
+    const summary = isDuplicatePollVote
+      ? `Cliente tentou trocar o voto na enquete já respondida (ignorado): "${choice}"`
+      : choice ? `Cliente respondeu no WhatsApp: "${choice}"` : "Cliente mandou mensagem no WhatsApp.";
     await storage.createCompleteTableRow("crmInteractions", {
       leadId: lead.id,
       channel: "whatsapp",
       direction: "entrada",
       summary,
       status: lead.status,
+      externalMessageId: pollMessageKeyId || undefined,
       createdByUsername: "sistema",
     });
 
@@ -5089,7 +5106,7 @@ export async function registerRoutes(
     let matchedFlowName: string | undefined;
     const flows = await storage.getWhatsappFlows();
 
-    if (lead.currentFlowTrigger && normalizedChoice) {
+    if (!isDuplicatePollVote && lead.currentFlowTrigger && normalizedChoice) {
       const activeFlow = flows.find(f => f.trigger === lead!.currentFlowTrigger);
       if (activeFlow?.buttons) {
         try {
@@ -5108,7 +5125,8 @@ export async function registerRoutes(
 
     if (matchedOption) {
       nextAction = `Cliente escolheu: "${matchedOption.text}"`;
-    } else if (normalizedChoice.includes("orcamento") || normalizedChoice === "1") nextAction = "Cliente quer orçamento — iniciar atendimento.";
+    } else if (isDuplicatePollVote) { /* voto repetido ignorado — não reavalia nextAction */ }
+    else if (normalizedChoice.includes("orcamento") || normalizedChoice === "1") nextAction = "Cliente quer orçamento — iniciar atendimento.";
     else if (normalizedChoice.includes("atendente") || normalizedChoice === "2") nextAction = "Cliente pediu para falar com atendente.";
     else if (normalizedChoice.includes("duvida") || normalizedChoice === "3") nextAction = "Cliente tem dúvida técnica.";
     if (nextAction) await storage.updateLead(lead.id, { nextAction } as any);
@@ -5162,6 +5180,7 @@ export async function registerRoutes(
         buttonId: parsed.buttonId,
         freeText: parsed.freeText,
         pollVoteOption: parsed.pollVoteOption,
+        pollMessageKeyId: parsed.pollMessageKeyId,
       });
       res.json({ ok: true, ...result });
     } catch (err: any) { res.status(500).json({ message: err.message }); }
