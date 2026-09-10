@@ -45,7 +45,10 @@ export default function ContageEmFisica() {
         const newQty = Math.max(0, Math.round(Number(counts[id])));
         const item = allItems.find(i => i.id === id);
         if (!item) continue;
-        await apiCall("PUT", `/api/inventory/${id}`, { ...item, quantity: newQty });
+        // Cria um movimento de estoque de verdade (ENTRADA/SAÍDA) em vez de sobrescrever o
+        // saldo direto — assim a contagem física entra na mesma trilha de auditoria que
+        // qualquer outra movimentação de material.
+        await apiCall("POST", `/api/inventory/${id}/count-adjustment`, { countedQuantity: newQty });
         setSavedIds(prev => new Set(prev).add(id));
         ok++;
       }

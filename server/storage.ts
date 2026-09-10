@@ -174,7 +174,7 @@ function quoteIdentifier(value: string) {
 
 export interface IStorage {
   getCompleteBackupData(): Promise<CompleteBackupData>;
-  restoreCompleteBackup(data: CompleteBackupData, modules: CompleteBackupModule[], mode: CompleteRestoreMode): Promise<{ tables: Record<string, number>; total: number }>;
+  restoreCompleteBackup(data: CompleteBackupData, modules: CompleteBackupModule[], mode: CompleteRestoreMode): Promise<{ tables: Record<string, number>; total: number; safetySnapshot?: CompleteBackupData }>;
   getCompleteTableRows(tableKey: string): Promise<any[]>;
   createCompleteTableRow(tableKey: string, row: any): Promise<any>;
   updateCompleteTableRow(tableKey: string, id: number, updates: any): Promise<any | undefined>;
@@ -1332,15 +1332,27 @@ export class DatabaseStorage implements IStorage {
     data: CompleteBackupData,
     modules: CompleteBackupModule[],
     mode: CompleteRestoreMode,
-  ): Promise<{ tables: Record<string, number>; total: number }> {
+  ): Promise<{ tables: Record<string, number>; total: number; safetySnapshot?: CompleteBackupData }> {
     const tableKeys = selectedCompleteTables(modules);
     const client = await pool.connect();
     const restored: Record<string, number> = {};
+    // Modo "Substituir" apaga 100% das linhas das tabelas afetadas antes de inserir o backup —
+    // se o arquivo restaurado for o errado (antigo, corrompido, do módulo errado), essas linhas
+    // se perdem. Por isso, ANTES de qualquer DELETE, captura-se um snapshot de segurança das
+    // mesmas tabelas dentro da própria transação: se a restauração se mostrar um engano, esse
+    // snapshot pode ser restaurado de volta (mesmo endpoint, mesmos módulos) pra desfazer.
+    let safetySnapshot: CompleteBackupData | undefined;
 
     try {
       await client.query("BEGIN");
 
       if (mode === "replace") {
+        safetySnapshot = {};
+        for (const key of tableKeys) {
+          const config = COMPLETE_TABLES[key];
+          const { rows } = await client.query(`SELECT * FROM ${quoteIdentifier(config.dbName)}`);
+          safetySnapshot[key] = rows;
+        }
         for (const key of [...tableKeys].reverse()) {
           const config = COMPLETE_TABLES[key];
           await client.query(`DELETE FROM ${quoteIdentifier(config.dbName)}`);
@@ -1382,7 +1394,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       await client.query("COMMIT");
-      return { tables: restored, total: Object.values(restored).reduce((sum, count) => sum + count, 0) };
+      return { tables: restored, total: Object.values(restored).reduce((sum, count) => sum + count, 0), safetySnapshot };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -1635,6 +1647,11 @@ export function createMemoryStorage(): IStorage {
     updateCompleteTableRow: async (tableKey: string, id: number, updates: any) => updateById(tableKey, id, updates || {}),
     restoreCompleteBackup: async (backupData: CompleteBackupData, modules: CompleteBackupModule[], mode: CompleteRestoreMode) => {
       const restored: Record<string, number> = {};
+      let safetySnapshot: CompleteBackupData | undefined;
+      if (mode === "replace") {
+        safetySnapshot = {};
+        for (const key of selectedCompleteTables(modules)) safetySnapshot[key] = structuredClone(data[key] || []);
+      }
       for (const key of selectedCompleteTables(modules)) {
         const rows = Array.isArray(backupData[key]) ? structuredClone(backupData[key]) : [];
         if (mode === "replace") data[key] = [];
@@ -1647,7 +1664,7 @@ export function createMemoryStorage(): IStorage {
         ids[key] = Math.max(0, ...data[key].map(row => Number(row.id) || 0)) + 1;
         restored[key] = rows.length;
       }
-      return { tables: restored, total: Object.values(restored).reduce((sum, count) => sum + count, 0) };
+      return { tables: restored, total: Object.values(restored).reduce((sum, count) => sum + count, 0), safetySnapshot };
     },
     getUserByUsername: async (username: string) => data.users.find(user => user.username === username),
     updateUserPassword: async (id: number, password: string) => updateById("users", id, { password }),

@@ -271,7 +271,24 @@ export function CompleteBackupRestore({ isAdmin, onRestored }: { isAdmin: boolea
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "A restauração completa falhou.");
-      setMessage(`${result.message} ${result.total} registro(s) processado(s).`);
+      // Modo "Substituir" apaga as tabelas antes de restaurar — o servidor manda de volta um
+      // snapshot de como elas estavam um instante antes do apagão. Baixa esse snapshot na hora
+      // como rede de segurança: se a restauração se mostrar um engano, esses dados brutos ainda
+      // existem em algum lugar (não é um botão de desfazer com 1 clique, mas evita perda total).
+      let safetyNote = "";
+      if (result.safetySnapshot) {
+        const blob = new Blob([JSON.stringify(result.safetySnapshot, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `backup-seguranca-antes-substituir-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        safetyNote = " Um backup de segurança com os dados de antes da substituição foi baixado automaticamente.";
+      }
+      setMessage(`${result.message} ${result.total} registro(s) processado(s).${safetyNote}`);
       setPreview(null);
       onRestored();
     } catch (error: any) {
@@ -1144,7 +1161,20 @@ export function ModularBackupRestore({ isAdmin, onRestored }: { isAdmin: boolean
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.message || "A importação modular falhou.");
-      setMessage(`${result.message} ${result.total} registro(s) processado(s).`);
+      let safetyNote = "";
+      if (result.safetySnapshot) {
+        const blob = new Blob([JSON.stringify(result.safetySnapshot, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `backup-seguranca-antes-substituir-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        safetyNote = " Um backup de segurança com os dados de antes da substituição foi baixado automaticamente.";
+      }
+      setMessage(`${result.message} ${result.total} registro(s) processado(s).${safetyNote}`);
       setPreview(null);
       onRestored();
     } catch (error: any) {

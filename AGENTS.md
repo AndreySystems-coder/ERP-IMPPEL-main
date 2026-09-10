@@ -5,14 +5,14 @@
 - **Produto:** ERP operacional interno da IMPPEL Impermeabilização — orçamento, obras, controle de materiais, estoque, ferramentas retornáveis, usuários/permissões, backup/restauração e operação diária da equipe.
 - **Usuário principal:** equipe interna da IMPPEL (administrativo, técnicos de campo, gestão de obras) — não é produto voltado a clientes externos.
 - **Objetivo:** substituir controle manual/planilhas pela operação diária da empresa em um único sistema, com trilha de auditoria para materiais, ferramentas e finanças.
-- **Estado:** versão 1.0 congelada para implantação no Replit oficial da empresa (conforme `README.md`). Tecnicamente funcional (build, typecheck e testes automatizados passam), mas **nunca validado contra PostgreSQL real nem em produção** — ver `KNOWN_ISSUES.md` (KI-003, KI-004, KI-009, KI-016).
+- **Estado:** **em produção real** desde 2026, deployado no Vercel contra PostgreSQL real (não Replit) — uso diário confirmado (orçamentos, obras, materiais, CRM/WhatsApp). `KNOWN_ISSUES.md`, `PRODUCTION_READINESS.md` e `CHECKPOINT-ERP-IMPPEL.md` descrevem uma fase anterior (pré-produção, Replit) e estão desatualizados nesse ponto — não confiar neles para o estado atual sem reconferir; a fonte viva do estado real é a memória de sessão `[[project-erp-imppel]]`.
 
 ## Fonte da verdade
 
 - **Código:** `https://github.com/AndreySystems-coder/ERP-IMPPEL-main.git`, branch `main`.
 - **Dados:** PostgreSQL, schema Drizzle em `shared/schema.ts`. Nenhum banco de desenvolvimento/produção está acessível neste ambiente local de trabalho — qualquer comando de schema/migração precisa de confirmação explícita do ambiente alvo antes de rodar.
 - **Configuração:** variáveis documentadas em `.env.example` (`DATABASE_URL`, `SESSION_SECRET`, `DEFAULT_ADMIN_USERNAME`, `DEFAULT_ADMIN_PASSWORD`, `PORT`, `NODE_ENV`). Nunca commitar `.env` com valores reais.
-- **Documentação oficial:** `PROMPT_MESTRE.md`, `BACKLOG.md`, `CHANGELOG.md`, `KNOWN_ISSUES.md`, `ROADMAP.md`, `DEPLOYMENT.md`, `AI_CONTEXT.md`, `docs/erp_role_based_navigation.md`. `KNOWN_ISSUES.md` é a lista viva de riscos/pendências — consultar antes de assumir que algo está pronto.
+- **Documentação oficial:** `PROMPT_MESTRE.md`, `BACKLOG.md`, `CHANGELOG.md`, `KNOWN_ISSUES.md`, `ROADMAP.md`, `DEPLOYMENT.md`, `AI_CONTEXT.md`, `docs/erp_role_based_navigation.md` — todos escritos numa fase anterior (pré-produção) e não atualizados desde a virada pra produção real; tratar como histórico, não como estado atual. Deploy real: Vercel (`vercel.json`, cron em `/api/cron/daily-followups`), banco Postgres de produção (não Replit).
 
 ## Estrutura principal
 
@@ -24,8 +24,9 @@
 | `server/routes.ts` | Todas as rotas da API — inclui o middleware de permissão real (server-side) |
 | `server/storage.ts` | Camada de acesso a dados (Drizzle) — inclui `restoreCompleteBackup` real (Postgres) e `createMemoryStorage` (usado só nos testes) |
 | `server/complete-backup.ts`, `server/material-restore-service.ts`, `server/user-restore-service.ts`, `server/pdf-restore.ts` | Sistema de backup completo e restauração por PDF |
-| `shared/schema.ts` | 67 tabelas Drizzle — fonte única de verdade do modelo de dados |
-| `migrations/` | Migrações SQL incrementais por etapa (0001–0006) |
+| `shared/schema.ts` | Tabelas Drizzle — fonte única de verdade do modelo de dados |
+| `migrations/` | Migrações SQL incrementais (0001–0014 até o momento) — rodar sempre sozinhas em produção antes do código dependente, nunca por mim mesmo via curl |
+| `client/src/pages/CrmWhatsapp.tsx`, `server/routes.ts` (`handleInboundWhatsappMessage`, `sendViaEvolution`) | CRM + automação de WhatsApp direto via Evolution API (sem n8n) — fluxos configuráveis em `whatsapp_flows`, pipeline por `lead.currentFlowTrigger` |
 | `script/test-complete-backup.ts`, `script/test-operational-flows.ts` | Testes automatizados (scripts próprios com `node:assert`, não Jest/Vitest) |
 
 ## Comandos

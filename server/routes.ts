@@ -808,6 +808,37 @@ export async function registerRoutes(
   
   await seedDatabase();
 
+  // ─── Proteção CSRF (verificação de Origin/Referer) ────────────────────────────
+  // Em vez de token CSRF por cabeçalho (exigiria tocar em ~25 arquivos do cliente que chamam
+  // fetch() direto, alto risco de quebrar alguma tela), a defesa aqui é a técnica recomendada
+  // pela OWASP pra APIs autenticadas por cookie de sessão: todo POST/PUT/PATCH/DELETE precisa
+  // ter Origin (ou Referer, como fallback) apontando pro MESMO host desta própria requisição.
+  // Um site malicioso forjando uma requisição pro ERP sempre manda o Origin dele mesmo, nunca o
+  // do ERP — então essa checagem bloqueia CSRF sem exigir nenhuma mudança no front-end. Rotas
+  // chamadas por servidores externos (Evolution API, Vercel Cron) ficam de fora porque usam
+  // segredo próprio como autenticação, não cookie de sessão, e nunca mandam Origin de navegador.
+  const CSRF_EXEMPT_PREFIXES = ["/api/webhooks/", "/api/cron/"];
+  const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+  app.use((req, res, next) => {
+    if (!MUTATING_METHODS.has(req.method)) return next();
+    if (CSRF_EXEMPT_PREFIXES.some(prefix => req.path.startsWith(prefix))) return next();
+    const sourceHeader = req.get("origin") || req.get("referer");
+    if (!sourceHeader) {
+      // Fetch/XHR de navegador real sempre manda Origin ou Referer. A ausência só é normal em
+      // dev local via curl/Postman — não travar isso fora de produção.
+      if (process.env.NODE_ENV === "production") {
+        return res.status(403).json({ message: "Requisição bloqueada: origem não identificada." });
+      }
+      return next();
+    }
+    let sourceHost: string;
+    try { sourceHost = new URL(sourceHeader).host; } catch { return res.status(403).json({ message: "Requisição bloqueada: origem inválida." }); }
+    if (sourceHost !== req.get("host")) {
+      return res.status(403).json({ message: "Requisição bloqueada: origem não confere com este servidor." });
+    }
+    next();
+  });
+
   const toPublicUser = (user: any, extras: Record<string, unknown> = {}) => {
     const { password: _password, ...publicUser } = user || {};
     return { ...publicUser, ...extras };
@@ -886,9 +917,18 @@ export async function registerRoutes(
       if (Number(uAny.failedLoginAttempts) > 0 || Number(uAny.loginLockStage) > 0) {
         await storage.updateUser(user.id, { failedLoginAttempts: 0, loginLockStage: 0, lockedUntil: null } as any);
       }
-      req.session.userId = user.id;
-      req.session.userRole = user.role;
-      res.status(200).json(toPublicUser(user));
+      // Regenera o ID da sessão no login (não só troca os dados dela) — impede ataque de fixação
+      // de sessão, onde alguém força a vítima a usar um ID de sessão conhecido de antemão e
+      // depois assume a sessão já autenticada. regenerate() limpa os dados, por isso userId/
+      // userRole são setados DEPOIS, dentro do callback.
+      req.session.regenerate(regenerateErr => {
+        if (regenerateErr) {
+          return res.status(500).json({ message: "Erro ao iniciar sessão. Tente novamente." });
+        }
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+        res.status(200).json(toPublicUser(user));
+      });
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(401).json({ message: err.errors[0].message });
@@ -3322,6 +3362,34 @@ export async function registerRoutes(
       res.status(500).json({ message: "Internal Error" });
     }
   });
+  // Ajuste por contagem física (tela "Contagem Física Rápida") — diferente do PUT genérico
+  // acima, este endpoint NÃO sobrescreve o saldo direto: cria um inventoryMovement de verdade
+  // (ENTRADA se contou a mais, SAÍDA se contou a menos) igual a qualquer outra movimentação,
+  // pra contagem entrar na mesma trilha de auditoria de estoque em vez de pular ela.
+  app.post("/api/inventory/:id/count-adjustment", async (req, res) => {
+    try {
+      const inventoryId = Number(req.params.id);
+      const countedQuantity = Math.max(0, Math.round(Number(req.body?.countedQuantity)));
+      if (!Number.isFinite(countedQuantity)) return res.status(400).json({ message: "Quantidade contada inválida." });
+      const current = (await storage.getInventoryItems()).find(item => Number(item.id) === inventoryId);
+      if (!current) return res.status(404).json({ message: "Item não encontrado." });
+      const delta = countedQuantity - Number(current.quantity || 0);
+      if (delta === 0) return res.json(current);
+      const movement = await storage.createInventoryMovement({
+        inventoryId,
+        productName: current.name,
+        type: delta > 0 ? "ENTRADA" : "SAÍDA",
+        quantity: Math.abs(delta),
+        date: new Date().toISOString().split("T")[0],
+        notes: `Origem: CONTAGEM_FISICA - ajuste de ${current.quantity} para ${countedQuantity} na contagem física`,
+      }, { allowNegativeStock: true });
+      const updated = (await storage.getInventoryItems()).find(item => Number(item.id) === inventoryId);
+      res.json({ item: updated, movement });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   app.delete(api.inventory.delete.path, async (req, res) => {
     await storage.deleteInventoryItem(Number(req.params.id));
     res.status(204).end();
