@@ -282,7 +282,7 @@ export function QuotesList({
               <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
                 <p className="text-xs font-medium text-slate-500">Valor vendido</p>
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-slate-800">{maskMoney(job.realPriceSold)}</p>
+                  <p className="min-w-[92px] text-right font-semibold tabular-nums text-slate-800">{maskMoney(job.realPriceSold)}</p>
                   {!privacyMaskEnabled && <MarginBadge job={job} services={services} costConfig={costConfig} />}
                 </div>
               </div>
@@ -340,7 +340,7 @@ export function QuotesList({
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900">{maskMoney(job.realPriceSold)}</span>
+                      <span className="min-w-[92px] text-right font-bold tabular-nums text-slate-900">{maskMoney(job.realPriceSold)}</span>
                       {!privacyMaskEnabled && <MarginBadge job={job} services={services} costConfig={costConfig} />}
                     </div>
                   </td>

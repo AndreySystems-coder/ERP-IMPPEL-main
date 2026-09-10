@@ -121,7 +121,7 @@ export function WorkOrderDetailModal({
       <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:max-h-[90vh]">
         <header className="flex items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4 sm:items-center sm:px-6">
           <div className="min-w-0">
-            <h2 className="truncate text-lg font-bold text-slate-900 sm:text-xl">OS #{workOrder.id} - {workOrder.clientName}</h2>
+            <h2 className="truncate text-lg font-bold text-slate-900 sm:text-xl">#{workOrder.id} - {workOrder.clientName}</h2>
             <p className="mt-0.5 line-clamp-2 text-sm text-slate-500">{workOrder.serviceType}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">

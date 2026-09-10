@@ -66,7 +66,7 @@ export function QuotesBoard({
           <div className="mt-2 flex items-center justify-between text-xs">
             <WorkOrderLinkBadge job={job} workOrders={workOrders} />
             <div className="ml-auto flex items-center gap-1.5">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{formatMoney(job.realPriceSold)}</span>
+              <span className="min-w-[76px] text-right font-semibold tabular-nums text-slate-800 dark:text-slate-200">{formatMoney(job.realPriceSold)}</span>
               <MarginBadge job={job} services={services} costConfig={costConfig} />
             </div>
           </div>

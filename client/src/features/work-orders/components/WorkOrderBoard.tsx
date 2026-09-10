@@ -48,7 +48,7 @@ export function WorkOrderBoard({
         <article className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-950">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">OS #{workOrder.id}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">#{workOrder.id}</p>
               <h3 className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">{workOrder.clientName}</h3>
               <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{workOrder.serviceType}</p>
             </div>

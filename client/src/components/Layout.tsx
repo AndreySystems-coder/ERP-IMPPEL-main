@@ -273,9 +273,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen flex-col overflow-hidden bg-background font-sans">
       <header className="relative z-50 flex h-14 shrink-0 items-center justify-between bg-primary px-4 text-primary-foreground shadow-sm sm:px-6">
         <div className="flex items-center gap-4">
-          <div className="font-display flex items-center gap-1 text-lg font-bold tracking-tight">
-            <span className="text-white">IMPP</span>
-            <span className="text-accent">EL</span>
+          <div className="flex items-center gap-2 text-lg font-black tracking-tight" style={{ fontFamily: "'Inter', sans-serif" }}>
+            <img src="/logo-imppel.png" alt="IMPPEL" className="h-8 w-auto sm:h-9" />
+            <span>
+              <span className="text-white">IMPP</span>
+              <span className="text-accent">EL</span>
+            </span>
           </div>
         </div>
 

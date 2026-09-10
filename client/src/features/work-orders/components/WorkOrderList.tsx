@@ -124,7 +124,7 @@ export function WorkOrderList({ workOrders, isLoading = false, search, statusCol
             <Card key={workOrder.id} className="p-4" data-testid={`card-wo-${workOrder.id}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">OS #{workOrder.id}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">#{workOrder.id}</p>
                   <h3 className="truncate text-base font-bold text-slate-900">{workOrder.clientName}</h3>
                   <p className="mt-0.5 line-clamp-2 text-sm text-slate-500">{workOrder.serviceType}</p>
                 </div>
