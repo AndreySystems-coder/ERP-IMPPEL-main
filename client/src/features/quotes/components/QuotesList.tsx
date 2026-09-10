@@ -1,4 +1,4 @@
-import { Briefcase, Edit2, FileText, Map, Tag, Trash2 } from "lucide-react";
+import { Edit2, FileText, Map, Tag, Trash2 } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 
 import { Button } from "@/components/Button";
@@ -44,23 +44,6 @@ export function formatQuoteNumber(job: any) {
 
 export function formatMoney(value: number | null | undefined) {
   return (value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function getLinkedWorkOrders(job: any, workOrders: any[] = []) {
-  return workOrders.filter(workOrder => Number(workOrder.jobId) === Number(job.id));
-}
-
-export function WorkOrderLinkBadge({ job, workOrders = [] }: { job: any; workOrders?: any[] }) {
-  const linkedWorkOrders = getLinkedWorkOrders(job, workOrders);
-  if (linkedWorkOrders.length === 0) return null;
-  const latest = linkedWorkOrders[0];
-
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-      <Briefcase className="h-3 w-3" />
-      OS #{latest.id}{linkedWorkOrders.length > 1 ? ` +${linkedWorkOrders.length - 1}` : ""}
-    </span>
-  );
 }
 
 export function RecommendationBadge({ job, jobsWithScores, services, costConfig }: Pick<QuotesListProps, "jobsWithScores" | "services" | "costConfig"> & { job: any }) {
@@ -264,7 +247,6 @@ export function QuotesList({
                     #{formatQuoteNumber(job)}
                   </span>
                   <h3 className="truncate font-bold text-slate-900">{maskText(job.clientName, "Cliente ••••")}</h3>
-                  <WorkOrderLinkBadge job={job} workOrders={workOrders} />
                 </div>
                 <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
                   <Tag className="h-3.5 w-3.5" />
@@ -326,7 +308,6 @@ export function QuotesList({
                         #{formatQuoteNumber(job)}
                       </span>
                       <p className="text-base font-bold text-slate-900">{maskText(job.clientName, "Cliente ••••")}</p>
-                      <WorkOrderLinkBadge job={job} workOrders={workOrders} />
                     </div>
                     <div className="mt-1 flex items-center text-sm text-slate-500">
                       <Tag className="mr-1.5 h-3.5 w-3.5" /> {maskText(job.serviceType, "Serviço ••••")}

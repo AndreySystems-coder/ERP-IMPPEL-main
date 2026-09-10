@@ -10,7 +10,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
-import { Plus, Search, Briefcase, FileText, X, Users, Hash, CreditCard, LayoutList, LayoutGrid } from "lucide-react";
+import { Plus, Search, Briefcase, FileText, X, Users, Hash, CreditCard } from "lucide-react";
 import { SiWhatsapp } from "react-icons/si";
 import { gerarOrcamentoPDF, mergeQuoteTemplateConfig } from "@/lib/orcamentoPDF";
 import type { MaterialDisplayMode, QuoteTemplateConfig, OrcamentoPDFData } from "@/lib/orcamentoPDF";
@@ -22,7 +22,6 @@ import { QuoteFinancialAnalysis } from "@/features/quotes/components/QuoteFinanc
 import { QuoteForm } from "@/features/quotes/components/QuoteForm";
 import { QuoteServiceItems } from "@/features/quotes/components/QuoteServiceItems";
 import { QuotesList } from "@/features/quotes/components/QuotesList";
-import { QuotesBoard } from "@/features/quotes/components/QuotesBoard";
 import { evaluateMargin, validateDiscount, calculateTotalCost, calculateOfficialPriceFromTotals, getCombinedRecommendation } from "@shared/marginEngine";
 import { calculateScore } from "@shared/scoringEngine";
 import { usePriorityRules } from "@/hooks/use-priority-rules";
@@ -105,7 +104,6 @@ export default function Jobs() {
   const deleteJob = useDeleteJob();
 
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"lista" | "quadro">("lista");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
   const [discountPercent, setDiscountPercent] = useState("");
@@ -772,24 +770,6 @@ export default function Jobs() {
           <span className="text-sm text-slate-500">
             {filteredJobs.length} de {jobsList.length} orçamento{jobsList.length === 1 ? "" : "s"}
           </span>
-          <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5">
-            <button
-              type="button"
-              onClick={() => setViewMode("lista")}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${viewMode === "lista" ? "bg-primary text-white" : "text-slate-500 hover:text-slate-700"}`}
-              data-testid="button-view-lista"
-            >
-              <LayoutList className="h-4 w-4" /> Lista
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("quadro")}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${viewMode === "quadro" ? "bg-primary text-white" : "text-slate-500 hover:text-slate-700"}`}
-              data-testid="button-view-quadro"
-            >
-              <LayoutGrid className="h-4 w-4" /> Quadro
-            </button>
-          </div>
         </div>
       </div>
 
@@ -807,22 +787,6 @@ export default function Jobs() {
             <Button onClick={openNew}><Plus className="w-4 h-4 mr-2" /> Novo orçamento</Button>
           </div>
         </div>
-      ) : viewMode === "quadro" ? (
-        <QuotesBoard
-          jobs={filteredJobs}
-          jobsWithScores={jobsWithScores}
-          services={servicesList}
-          costConfig={costConfig}
-          jobStatusConfigs={jobStatuses}
-          workOrders={workOrdersList}
-          onStatusChange={handleInlineStatusChange}
-          onSendWhatsApp={handleEnviarWhatsApp}
-          onGeneratePdf={handleGerarPDF}
-          onEdit={openEdit}
-          onDelete={(jobId) => {
-            if (confirm("Tem certeza?")) deleteJob.mutate(jobId);
-          }}
-        />
       ) : (
         <QuotesList
           jobs={filteredJobs}

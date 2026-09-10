@@ -59,8 +59,9 @@ export function FlowStageChart({ leads, flows, isLoading = false, onSelectFlow }
         onBarClick={(item) => onSelectFlow(item.trigger as string, item.name as string)}
       >
         <Grid horizontal fadeHorizontal={false} />
-        <Bar dataKey="count" fill={chartCssVars.linePrimary} lineCap="round" />
+        <Bar dataKey="count" fill={chartCssVars.linePrimary} lineCap="round" minBarSize={4} />
         <ChartTooltip
+          showCrosshair={false}
           showDots={false}
           rows={(point) => [
             { color: point.trigger === SEM_FLUXO_TRIGGER ? chartCssVars.foregroundMuted : chartCssVars.linePrimary, label: "Leads", value: point.count as number },

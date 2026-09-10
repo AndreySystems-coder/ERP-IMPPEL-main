@@ -939,6 +939,9 @@ export interface BarProps {
   fadedOpacity?: number;
   staggerDelay?: number;
   stackGap?: number;
+  /** Altura/largura mínima em px pra categorias com valor zero — sem isso elas somem do
+   * gráfico (nem barra nem hover), o que esconde categorias reais que só não têm dado ainda. */
+  minBarSize?: number;
 }
 
 function resolveRadius(
@@ -959,6 +962,7 @@ export function Bar({
   animationType = "grow",
   fadedOpacity = 0.3,
   staggerDelay,
+  minBarSize = 0,
 }: BarProps) {
   const {
     data,
@@ -1017,6 +1021,7 @@ export function Bar({
             barX += stackGap;
             barW = Math.max(0, barW - stackGap);
           }
+          if (!stacked && barW < minBarSize) barW = minBarSize;
         } else {
           const scaledY = yScale(value) ?? innerHeight;
           barX = bandStart + (stacked ? 0 : barIndex * singleBarWidth);
@@ -1026,6 +1031,10 @@ export function Bar({
           if (stacked && stackGap > 0 && barIndex > 0) {
             barY += stackGap;
             barH = Math.max(0, barH - stackGap);
+          }
+          if (!stacked && barH < minBarSize) {
+            barY -= minBarSize - barH;
+            barH = minBarSize;
           }
         }
 
