@@ -4,7 +4,7 @@ import { localPoint } from "@visx/event";
 import { LinearGradient as VisxLinearGradient } from "@visx/gradient";
 import { GridColumns, GridRows } from "@visx/grid";
 import { ParentSize } from "@visx/responsive";
-import { scaleBand, scaleLinear } from "@visx/scale";
+import { scaleBand, scaleLinear, scaleSqrt } from "@visx/scale";
 import { AnimatePresence, motion, useSpring } from "framer-motion";
 import {
   Children,
@@ -1165,6 +1165,10 @@ export interface BarChartProps {
   stackGap?: number;
   className?: string;
   onBarClick?: (item: Record<string, unknown>, index: number) => void;
+  /** "sqrt" comprime valores grandes e da mais espaco visual pros pequenos -- use quando
+   * um valor muito maior que os outros (ex.: um fluxo com 228 leads vs outros com 0-3)
+   * deixaria tudo mais achatado numa escala linear normal. */
+  yScaleType?: "linear" | "sqrt";
   children: ReactNode;
 }
 
@@ -1183,6 +1187,7 @@ interface BarChartInnerProps {
   stacked: boolean;
   stackGap: number;
   onBarClick?: (item: Record<string, unknown>, index: number) => void;
+  yScaleType: "linear" | "sqrt";
   children: ReactNode;
   containerRef: RefObject<HTMLDivElement | null>;
 }
@@ -1200,6 +1205,7 @@ function BarChartInner({
   stacked,
   stackGap,
   onBarClick,
+  yScaleType,
   children,
   containerRef,
 }: BarChartInnerProps) {
@@ -1251,12 +1257,13 @@ function BarChartInner({
 
     if (maxValue === 0) maxValue = 100;
 
-    return scaleLinear<number>({
+    const scaleFn = yScaleType === "sqrt" ? scaleSqrt<number> : scaleLinear<number>;
+    return scaleFn({
       range: isHorizontal ? [innerWidth, 0] : [innerHeight, 0],
       domain: [0, maxValue * 1.1],
       nice: true,
     });
-  }, [data, bars, innerWidth, innerHeight, stacked, isHorizontal]);
+  }, [data, bars, innerWidth, innerHeight, stacked, isHorizontal, yScaleType]);
 
   const stackOffsets = useMemo(() => {
     if (!stacked) return new Map<number, Map<string, number>>();
@@ -1466,6 +1473,7 @@ export function BarChart({
   stackGap = 0,
   className = "",
   onBarClick,
+  yScaleType = "linear",
   children,
 }: BarChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1493,6 +1501,7 @@ export function BarChart({
             stackGap={stackGap}
             width={width}
             xDataKey={xDataKey}
+            yScaleType={yScaleType}
           >
             {children}
           </BarChartInner>

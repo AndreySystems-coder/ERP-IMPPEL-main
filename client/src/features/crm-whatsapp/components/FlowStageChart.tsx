@@ -57,9 +57,10 @@ export function FlowStageChart({ leads, flows, isLoading = false, onSelectFlow }
         margin={{ top: 24, right: 16, bottom: 16, left: 16 }}
         barGap={0.35}
         onBarClick={(item) => onSelectFlow(item.trigger as string, item.name as string)}
+        yScaleType="sqrt"
       >
         <Grid horizontal fadeHorizontal={false} />
-        <Bar dataKey="count" fill={chartCssVars.linePrimary} lineCap="round" minBarSize={4} />
+        <Bar dataKey="count" fill={chartCssVars.linePrimary} lineCap="round" minBarSize={6} />
         <ChartTooltip
           showCrosshair={false}
           showDots={false}
