@@ -104,6 +104,8 @@ export default function Jobs() {
   const deleteJob = useDeleteJob();
 
   const [search, setSearch] = useState("");
+  const JOBS_PAGE_SIZE = 30;
+  const [jobsPage, setJobsPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
   const [discountPercent, setDiscountPercent] = useState("");
@@ -222,14 +224,29 @@ export default function Jobs() {
     };
   }, [multiItems, distKm, servicesList, costConfig, regionalAdjustmentPercent]);
 
-  const filteredJobs = jobsWithScores
-    .filter(j =>
-      j.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      j.serviceType.toLowerCase().includes(search.toLowerCase())
-    )
-    // Orçamento mais recente (maior número) primeiro — sem isso a lista seguia a ordem de
-    // criação no banco, que ficou fora de ordem depois de importações em lotes separados.
-    .sort((a: any, b: any) => (b.orcamentoNumero ?? b.id ?? 0) - (a.orcamentoNumero ?? a.id ?? 0));
+  // Memoizado -- com centenas de orçamentos, refazer filter+sort a cada render (qualquer
+  // digitação, abrir modal, etc.) fica perceptível. Só recalcula quando os dados ou a busca mudam.
+  const filteredJobs = useMemo(() => {
+    const term = search.toLowerCase();
+    return jobsWithScores
+      .filter(j =>
+        j.clientName.toLowerCase().includes(term) ||
+        j.serviceType.toLowerCase().includes(term)
+      )
+      // Orçamento mais recente (maior número) primeiro — sem isso a lista seguia a ordem de
+      // criação no banco, que ficou fora de ordem depois de importações em lotes separados.
+      .sort((a: any, b: any) => (b.orcamentoNumero ?? b.id ?? 0) - (a.orcamentoNumero ?? a.id ?? 0));
+  }, [jobsWithScores, search]);
+
+  // Paginação -- renderizar todos os orçamentos de uma vez (centenas de linhas, cada uma com
+  // badges/botões próprios) era o principal motivo da tela ficar pesada. Só monta no DOM a
+  // página atual.
+  const jobsTotalPages = Math.max(1, Math.ceil(filteredJobs.length / JOBS_PAGE_SIZE));
+  const jobsPageSafe = Math.min(jobsPage, jobsTotalPages);
+  const pagedJobs = useMemo(
+    () => filteredJobs.slice((jobsPageSafe - 1) * JOBS_PAGE_SIZE, jobsPageSafe * JOBS_PAGE_SIZE),
+    [filteredJobs, jobsPageSafe],
+  );
 
   // Margin evaluation based on multi-service totals
   const directCostNum = multiCostAnalysis?.directCost || 0;
@@ -758,10 +775,10 @@ export default function Jobs() {
             placeholder="Pesquisar orçamentos..."
             className="w-full bg-transparent border-none focus:outline-none text-slate-900 placeholder:text-slate-400"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setJobsPage(1); }}
           />
           {search && (
-            <button type="button" onClick={() => setSearch("")} className="text-xs font-semibold text-slate-400 hover:text-primary">
+            <button type="button" onClick={() => { setSearch(""); setJobsPage(1); }} className="text-xs font-semibold text-slate-400 hover:text-primary">
               Limpar
             </button>
           )}
@@ -788,26 +805,46 @@ export default function Jobs() {
           </div>
         </div>
       ) : (
-        <QuotesList
-          jobs={filteredJobs}
-          jobsWithScores={jobsWithScores}
-          services={servicesList}
-          costConfig={costConfig}
-          jobStatusConfigs={jobStatuses}
-          workOrders={workOrdersList}
-          statusColors={statusColors}
-          onStatusChange={handleInlineStatusChange}
-          onSendWhatsApp={handleEnviarWhatsApp}
-          onGeneratePdf={handleGerarPDF}
-          onEdit={openEdit}
-          onDelete={(jobId) => {
-            if (confirm("Tem certeza?")) deleteJob.mutate(jobId);
-          }}
-          privacyMaskEnabled={privacyMaskEnabled}
-          maskText={maskText}
-          maskMoney={maskMoney}
-          maskNumber={maskNumber}
-        />
+        <>
+          <QuotesList
+            jobs={pagedJobs}
+            services={servicesList}
+            costConfig={costConfig}
+            jobStatusConfigs={jobStatuses}
+            workOrders={workOrdersList}
+            statusColors={statusColors}
+            onStatusChange={handleInlineStatusChange}
+            onSendWhatsApp={handleEnviarWhatsApp}
+            onGeneratePdf={handleGerarPDF}
+            onEdit={openEdit}
+            onDelete={(jobId) => {
+              if (confirm("Tem certeza?")) deleteJob.mutate(jobId);
+            }}
+            privacyMaskEnabled={privacyMaskEnabled}
+            maskText={maskText}
+            maskMoney={maskMoney}
+            maskNumber={maskNumber}
+          />
+          {jobsTotalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Button
+                variant="outline"
+                disabled={jobsPageSafe <= 1}
+                onClick={() => setJobsPage(p => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="text-sm text-slate-500">Página {jobsPageSafe} de {jobsTotalPages}</span>
+              <Button
+                variant="outline"
+                disabled={jobsPageSafe >= jobsTotalPages}
+                onClick={() => setJobsPage(p => Math.min(jobsTotalPages, p + 1))}
+              >
+                Próxima
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       <Modal

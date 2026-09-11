@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Outfit:wght@100..900&family=Inter:wght@400..900&display=swap');
+/* Fontes carregadas via <link> em client/index.html (mais rápido que @import, que bloqueia
+   o CSS até baixar e só então descobre a fonte — o navegador já descobre o <link> ao ler o
+   <head>, em paralelo com o resto). Não duplicar o import aqui. */
 
 @tailwind base;
 @tailwind components;

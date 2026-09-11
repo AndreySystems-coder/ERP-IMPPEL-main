@@ -149,10 +149,25 @@ export default function WorkOrders() {
   const [postSaleCreated, setPostSaleCreated] = useState<any>(null);
   const [ignorePendingMaterials, setIgnorePendingMaterials] = useState(false);
 
-  const filteredWO = workOrdersList.filter(
-    (w: any) =>
-      w.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      w.serviceType.toLowerCase().includes(search.toLowerCase())
+  // Memoizado -- com centenas de OS, refazer o filter a cada render fica perceptível.
+  const filteredWO = useMemo(() => {
+    const term = search.toLowerCase();
+    return workOrdersList.filter(
+      (w: any) =>
+        w.clientName.toLowerCase().includes(term) ||
+        w.serviceType.toLowerCase().includes(term)
+    );
+  }, [workOrdersList, search]);
+
+  // Paginação só na Lista (o Quadro já agrupa por coluna) -- evita montar centenas de cards
+  // de uma vez, que é o que deixava a tela pesada com muitas ordens.
+  const WO_PAGE_SIZE = 30;
+  const [woPage, setWoPage] = useState(1);
+  const woTotalPages = Math.max(1, Math.ceil(filteredWO.length / WO_PAGE_SIZE));
+  const woPageSafe = Math.min(woPage, woTotalPages);
+  const pagedWO = useMemo(
+    () => filteredWO.slice((woPageSafe - 1) * WO_PAGE_SIZE, woPageSafe * WO_PAGE_SIZE),
+    [filteredWO, woPageSafe],
   );
 
   const openNew = () => {
@@ -550,23 +565,36 @@ export default function WorkOrders() {
           }}
         />
       ) : (
-        <WorkOrderList
-          workOrders={filteredWO}
-          isLoading={isLoadingWorkOrders}
-          search={search}
-          statusColors={STATUS_COLORS}
-          onSearchChange={setSearch}
-          onWhatsApp={openWAModal}
-          onDetail={wo => {
-            setDetailWO(wo);
-            openDetail(wo);
-            setIsDetailOpen(true);
-          }}
-          onEdit={openEdit}
-          onDelete={wo => {
-            if (confirm("Deletar ordem?")) deleteWO.mutate(wo.id);
-          }}
-        />
+        <>
+          <WorkOrderList
+            workOrders={pagedWO}
+            isLoading={isLoadingWorkOrders}
+            search={search}
+            statusColors={STATUS_COLORS}
+            onSearchChange={value => { setSearch(value); setWoPage(1); }}
+            onWhatsApp={openWAModal}
+            onDetail={wo => {
+              setDetailWO(wo);
+              openDetail(wo);
+              setIsDetailOpen(true);
+            }}
+            onEdit={openEdit}
+            onDelete={wo => {
+              if (confirm("Deletar ordem?")) deleteWO.mutate(wo.id);
+            }}
+          />
+          {woTotalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <Button variant="outline" disabled={woPageSafe <= 1} onClick={() => setWoPage(p => Math.max(1, p - 1))}>
+                Anterior
+              </Button>
+              <span className="text-sm text-slate-500">Página {woPageSafe} de {woTotalPages}</span>
+              <Button variant="outline" disabled={woPageSafe >= woTotalPages} onClick={() => setWoPage(p => Math.min(woTotalPages, p + 1))}>
+                Próxima
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       <WorkOrderDetailModal

@@ -36,9 +36,11 @@ export function useJobScoring(jobs: Job[] = []) {
     });
   }, [jobs, rules]);
 
-  const highPriority = jobsWithScores.filter(j => j.priority === "ALTA");
-  const mediumPriority = jobsWithScores.filter(j => j.priority === "MÉDIA");
-  const lowPriority = jobsWithScores.filter(j => j.priority === "BAIXA");
+  const { highPriority, mediumPriority, lowPriority } = useMemo(() => ({
+    highPriority: jobsWithScores.filter(j => j.priority === "ALTA"),
+    mediumPriority: jobsWithScores.filter(j => j.priority === "MÉDIA"),
+    lowPriority: jobsWithScores.filter(j => j.priority === "BAIXA"),
+  }), [jobsWithScores]);
 
   return {
     jobsWithScores,

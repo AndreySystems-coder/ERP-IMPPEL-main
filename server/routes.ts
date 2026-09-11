@@ -2998,14 +2998,23 @@ export async function registerRoutes(
   });
 
   // Jobs
+  // pricingSnapshot é só um registro de auditoria (nunca lido de volta pelo cliente, nem
+  // aqui no servidor fora de onde é gravado) — mas em orçamentos com muitos itens de serviço
+  // ele sozinho responde por quase metade do peso da lista (confirmado: 220KB de 523KB com os
+  // 278 orçamentos reais). Removido das respostas HTTP pra aliviar toda tela que carrega jobs;
+  // continua gravado no banco normalmente.
+  const stripPricingSnapshot = (job: any) => {
+    const { pricingSnapshot, ...rest } = job;
+    return rest;
+  };
   app.get(api.jobs.list.path, async (req, res) => {
     const jobs = await storage.getJobs();
-    res.json(jobs);
+    res.json(jobs.map(stripPricingSnapshot));
   });
   app.get(api.jobs.get.path, async (req, res) => {
     const job = await storage.getJob(Number(req.params.id));
     if (!job) return res.status(404).json({ message: "Not found" });
-    res.json(job);
+    res.json(stripPricingSnapshot(job));
   });
   app.post(api.jobs.create.path, async (req, res) => {
     try {

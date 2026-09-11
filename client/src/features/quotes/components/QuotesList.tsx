@@ -21,7 +21,6 @@ export function quoteStatusVariant(status: string): StatusPillVariant {
 
 export interface QuotesListProps {
   jobs: any[];
-  jobsWithScores: any[];
   services: any[];
   costConfig: any;
   jobStatusConfigs: any[];
@@ -46,11 +45,14 @@ export function formatMoney(value: number | null | undefined) {
   return (value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function RecommendationBadge({ job, jobsWithScores, services, costConfig }: Pick<QuotesListProps, "jobsWithScores" | "services" | "costConfig"> & { job: any }) {
+export function RecommendationBadge({ job, services, costConfig }: Pick<QuotesListProps, "services" | "costConfig"> & { job: any }) {
   if (!costConfig) return <span className="text-slate-400 text-xs">-</span>;
 
   const svc = services.find((s: any) => s.name === job.serviceType);
-  const jobScore = jobsWithScores.find((j: any) => j.id === job.id);
+  // `job` já vem de jobsWithScores (useJobScoring), então score/recommendation/priority já
+  // estão nele -- evita um find() redundante por linha (O(n) por card, com centenas de
+  // orçamentos isso somava rápido em toda renderização da lista).
+  const jobScore = job.recommendation ? job : null;
 
   if (!svc || !job.realPriceSold) {
     if (!jobScore) return <span className="text-slate-400 text-xs">-</span>;
@@ -211,7 +213,6 @@ export function QuoteActions({
 
 export function QuotesList({
   jobs,
-  jobsWithScores,
   services,
   costConfig,
   jobStatusConfigs,
@@ -253,7 +254,7 @@ export function QuotesList({
                   <span className="truncate">{maskText(job.serviceType, "Serviço ••••")}</span>
                 </p>
               </div>
-              <RecommendationBadge job={job} jobsWithScores={jobsWithScores} services={services} costConfig={costConfig} />
+              <RecommendationBadge job={job} services={services} costConfig={costConfig} />
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -326,7 +327,7 @@ export function QuotesList({
                     </div>
                   </td>
                   <td className="p-4">
-                    <RecommendationBadge job={job} jobsWithScores={jobsWithScores} services={services} costConfig={costConfig} />
+                    <RecommendationBadge job={job} services={services} costConfig={costConfig} />
                   </td>
                   <td className="p-4">
                     <StatusPillSelect
